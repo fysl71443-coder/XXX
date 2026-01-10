@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "pos:regression": "node scripts/test-draft-items-regression.js",
+    "lint": "npm run lint:frontend",
+    "lint:frontend": "cd frontend && npm run lint"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.4.22",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.17"
+  }
+}
