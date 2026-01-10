@@ -9,7 +9,8 @@ services:
     plan: starter
     buildCommand: |
       cd frontend && npm install && npm run build
-    startCommand: cd backend && npm install && npm start
+      cd backend && npm install
+    startCommand: cd backend && npm start
     rootDirectory: .
     envVars:
       - key: DATABASE_URL
