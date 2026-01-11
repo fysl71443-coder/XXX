@@ -7,17 +7,11 @@ services:
     env: node
     branch: full-original
     plan: starter
-<<<<<<< HEAD
-    buildCommand: cd ../frontend && npm install && npm run build
-    startCommand: npm start
-    rootDirectory: backend
-=======
     buildCommand: |
       cd frontend && npm install && npm run build
       cd backend && npm install
-    startCommand: cd backend && npm start
+    startCommand: cd backend && node server.js
     rootDirectory: .
->>>>>>> full-original
     envVars:
       - key: DATABASE_URL
         fromDatabase:
