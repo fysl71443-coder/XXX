@@ -4,3 +4,5 @@ frontend_old/
 dist/
 build/
 .env
+db.sqlite
+frontend/test-results/
