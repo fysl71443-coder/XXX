@@ -3,21 +3,13 @@ databases:
 
 services:
   - type: web
-    name: XXX
+    name: xxx-app
     env: node
-    branch: full-original
-    plan: starter
-<<<<<<< HEAD
-    buildCommand: cd ../frontend && npm install && npm run build
-    startCommand: npm start
-    rootDirectory: backend
-=======
+    plan: free
     buildCommand: |
-      cd frontend && npm install && npm run build
       cd backend && npm install
-    startCommand: cd backend && npm start
-    rootDirectory: .
->>>>>>> full-original
+      cd ../frontend && npm install && npm run build
+    startCommand: cd backend && npm run start
     envVars:
       - key: DATABASE_URL
         fromDatabase:

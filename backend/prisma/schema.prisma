@@ -1,0 +1,53 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../prisma-client"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Account {
+  id              Int       @id @default(autoincrement())
+  account_number  String    @unique
+  name            String
+  type            String
+  nature          String
+  parent_id       Int?
+  parent          Account?  @relation("AccountToChildren", fields: [parent_id], references: [id])
+  opening_balance Decimal   @default(0)
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  children        Account[] @relation("AccountToChildren")
+  JournalPosting  JournalPosting[]
+}
+
+model JournalEntry {
+  id            Int       @id @default(autoincrement())
+  entry_number  Int       @unique
+  description   String
+  date          DateTime
+  reference_type String?
+  reference_id   Int?
+  created_at    DateTime  @default(now())
+
+  postings      JournalPosting[]
+}
+
+model JournalPosting {
+  id               Int          @id @default(autoincrement())
+  journal_entry_id Int
+  account_id       Int
+  debit            Decimal      @default(0)
+  credit           Decimal      @default(0)
+
+  journal JournalEntry @relation(fields: [journal_entry_id], references: [id])
+  account Account      @relation(fields: [account_id], references: [id])
+}
