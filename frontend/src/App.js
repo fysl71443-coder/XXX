@@ -1,7 +1,7 @@
 import './App.css';
 import { motion } from 'framer-motion';
 import { useEffect, useState } from 'react';
-import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { FaUsers, FaTruck, FaUserTie, FaReceipt, FaBox, FaCashRegister, FaShoppingCart, FaChartPie, FaCog } from 'react-icons/fa';
 import { GiMoneyStack } from 'react-icons/gi';
 import { settings as apiSettings } from './services/api';
@@ -169,11 +169,21 @@ function Dashboard() {
 }
 
 function App() {
+  function RequireAuth({ children }) {
+    const { isLoggedIn, loading } = useAuth();
+    if (loading) return null;
+    if (!isLoggedIn) return <Navigate to="/login" replace />;
+    return children;
+  }
+  function RootRoute() {
+    const { isLoggedIn } = useAuth();
+    return isLoggedIn ? <Dashboard /> : <Login />;
+  }
   return (
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<RootRoute />} />
         <Route path="/login" element={<Login />} />
         <Route path="/accounts" element={<Accounts />} />
         <Route path="/accounting" element={<AccountsScreen />} />
@@ -224,7 +234,7 @@ function App() {
         <Route path="/reports/business-day-sales" element={<BusinessDaySalesReport />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/debug/receipt-preview" element={<PrintPreview />} />
-        <Route path="/settings" element={<Settings />} />
+        <Route path="/settings" element={<RequireAuth><Settings /></RequireAuth>} />
         
       </Routes>
     </BrowserRouter>

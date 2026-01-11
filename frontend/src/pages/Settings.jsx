@@ -10,6 +10,7 @@ export default function Settings(){
   const [activeTab, setActiveTab] = useState('general')
   const [users, setUsers] = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
+  const [editUser, setEditUser] = useState({ name: '', role: 'user' })
   const [actions, setActions] = useState([])
   const [screens, setScreens] = useState([])
   const [branches, setBranches] = useState([])
@@ -22,6 +23,8 @@ export default function Settings(){
   
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState({ type: '', message: '' })
+  const [newUser, setNewUser] = useState({ name: '', email: '', password: '', role: 'user' })
+  const [resetPassword, setResetPassword] = useState('')
   const companyValid = useMemo(()=>{
     const nameOk = !!((company.name_ar||'').trim() || (company.name_en||'').trim())
     const vatRegex = /^\d{15}$/
@@ -62,6 +65,10 @@ export default function Settings(){
     } catch {}
   })() },[])
 
+  useEffect(()=>{
+    const u = (users||[]).find(x => x.id === selectedUserId)
+    setEditUser({ name: u?.name || '', role: String(u?.role||'user') })
+  },[selectedUserId, users])
   useEffect(()=>{ return ()=>{ try { clearImpersonation() } catch {} } },[clearImpersonation])
 
   useEffect(()=>{ (async()=>{
@@ -162,6 +169,7 @@ export default function Settings(){
           <div className="mt-4 flex flex-wrap gap-2">
             {[
               { k:'permissions', t:'صلاحيات المستخدمين' },
+              { k:'users', t:'إدارة المستخدمين' },
               { k:'general', t:'إعدادات عامة' },
               { k:'branches', t:'إعدادات الفروع' },
               { k:'branding', t:'العلامة التجارية' },
@@ -182,6 +190,97 @@ export default function Settings(){
                 <FormField label="الهاتف" required value={company.phone||''} onChange={e=>setCompany({ ...company, phone: e.target.value })} placeholder="05XXXXXXXX" validate={(v)=> (/^(\+?\d{8,15}|05\d{8})$/.test(String(v||''))?'' : 'رقم هاتف غير صحيح')} />
                 <FormField label="العنوان بالعربية" value={company.address_ar||''} onChange={e=>setCompany({ ...company, address_ar: e.target.value })} placeholder="العنوان بالعربية" />
                 <FormField label="العنوان بالإنجليزية" value={company.address_en||''} onChange={e=>setCompany({ ...company, address_en: e.target.value })} placeholder="Address (EN)" />
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab==='users' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border rounded p-4">
+              <div className="font-semibold mb-3">إضافة مستخدم</div>
+              <div className="grid grid-cols-1 gap-3">
+                <FormField label="الاسم" value={newUser.name} onChange={e=>setNewUser({ ...newUser, name: e.target.value })} placeholder="الاسم" />
+                <FormField label="البريد الإلكتروني" value={newUser.email} onChange={e=>setNewUser({ ...newUser, email: e.target.value })} placeholder="email@example.com" />
+                <FormField label="كلمة المرور" type="password" value={newUser.password} onChange={e=>setNewUser({ ...newUser, password: e.target.value })} placeholder="********" />
+                <div>
+                  <label className="block text-sm mb-1">الدور</label>
+                  <select className="border rounded px-3 py-2 w-full" value={newUser.role} onChange={e=>setNewUser({ ...newUser, role: e.target.value })}>
+                    <option value="user">مستخدم</option>
+                    <option value="admin">مدير</option>
+                  </select>
+                </div>
+                <Button variant="primary" onClick={async()=>{ 
+                  try { 
+                    const created = await apiUsers.create(newUser); 
+                    setUsers(prev => Array.isArray(prev) ? [...prev, created] : [created]); 
+                    setNewUser({ name: '', email: '', password: '', role: 'user' }); 
+                    setToast({ type: 'success', message: 'تم إضافة المستخدم بنجاح' }); 
+                  } catch { setToast({ type: 'error', message: 'فشل إضافة المستخدم' }) } 
+                }}>إضافة</Button>
+              </div>
+            </div>
+            <div className="bg-white border rounded p-4">
+              <div className="font-semibold mb-3">تغيير كلمة المرور</div>
+              <div className="grid grid-cols-1 gap-3">
+                <div>
+                  <label className="block text-sm mb-1">المستخدم المحدد</label>
+                  <select className="border rounded px-3 py-2 w-full" value={selectedUserId||''} onChange={e=>setSelectedUserId(Number(e.target.value)||null)}>
+                    {users.map(u => (<option key={u.id} value={u.id}>{u.name} — {u.email}</option>))}
+                  </select>
+                </div>
+                <FormField label="كلمة المرور الجديدة" type="password" value={resetPassword} onChange={e=>setResetPassword(e.target.value)} placeholder="********" />
+                <div className="flex gap-2">
+                  <Button variant="primary" onClick={async()=>{ 
+                    if (!selectedUserId) return; 
+                    try { 
+                      await apiUsers.resetPassword(selectedUserId, resetPassword); 
+                      setResetPassword(''); 
+                      setToast({ type: 'success', message: 'تم تغيير كلمة المرور بنجاح' }); 
+                    } catch { setToast({ type: 'error', message: 'فشل تغيير كلمة المرور' }) } 
+                  }}>حفظ كلمة المرور</Button>
+                  <Button variant="danger" onClick={async()=>{ 
+                    if (!selectedUserId) return; 
+                    try { 
+                      await apiUsers.toggle(selectedUserId); 
+                      setUsers(prev => (prev||[]).filter(u => u.id !== selectedUserId)); 
+                      setSelectedUserId(null); 
+                      setToast({ type: 'success', message: 'تم حذف/تعطيل المستخدم بنجاح' }); 
+                    } catch { setToast({ type: 'error', message: 'فشل حذف/تعطيل المستخدم' }) } 
+                  }}>حذف المستخدم</Button>
+                </div>
+              </div>
+            </div>
+            <div className="bg-white border rounded p-4 md:col-span-2">
+              <div className="font-semibold mb-3">تعديل بيانات المستخدم</div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-1">
+                  <label className="block text-sm mb-1">المستخدم المحدد</label>
+                  <select className="border rounded px-3 py-2 w-full" value={selectedUserId||''} onChange={e=>setSelectedUserId(Number(e.target.value)||null)}>
+                    {users.map(u => (<option key={u.id} value={u.id}>{u.name} — {u.email}</option>))}
+                  </select>
+                </div>
+                <div className="md:col-span-1">
+                  <FormField label="الاسم" value={editUser.name} onChange={e=>setEditUser({ ...editUser, name: e.target.value })} placeholder="الاسم" />
+                </div>
+                <div className="md:col-span-1">
+                  <label className="block text-sm mb-1">الدور</label>
+                  <select className="border rounded px-3 py-2 w-full" value={editUser.role} onChange={e=>setEditUser({ ...editUser, role: e.target.value })}>
+                    <option value="user">مستخدم</option>
+                    <option value="admin">مدير</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button variant="primary" onClick={async()=>{
+                  if (!selectedUserId) return
+                  try {
+                    const updated = await apiUsers.update(selectedUserId, { name: editUser.name, role: editUser.role })
+                    setUsers(prev => (prev||[]).map(u => u.id === selectedUserId ? { ...u, ...(updated||{ name: editUser.name, role: editUser.role }) } : u))
+                    setToast({ type: 'success', message: 'تم تعديل بيانات المستخدم بنجاح' })
+                  } catch {
+                    setToast({ type: 'error', message: 'فشل تعديل بيانات المستخدم' })
+                  }
+                }}>حفظ التعديلات</Button>
               </div>
             </div>
           </div>
