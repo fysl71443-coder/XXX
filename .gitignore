@@ -1,0 +1,8 @@
+node_modules/
+frontend_old/
+.cache/
+dist/
+build/
+.env
+db.sqlite
+frontend/test-results/
