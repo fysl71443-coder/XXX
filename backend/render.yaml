@@ -3,16 +3,13 @@ databases:
 
 services:
   - type: web
-    name: XXX
+    name: xxx-app
     env: node
-    branch: full-original
-    plan: starter
+    plan: free
     buildCommand: |
-      git submodule update --init --recursive
-      cd frontend && npm install && npm run build
       cd backend && npm install
-    startCommand: cd backend && node server.js
-    rootDirectory: .
+      cd ../frontend && npm install && npm run build
+    startCommand: cd backend && npm run start
     envVars:
       - key: DATABASE_URL
         fromDatabase:

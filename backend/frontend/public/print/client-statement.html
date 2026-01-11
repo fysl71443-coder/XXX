@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>كشف حساب عميل</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --border:#222; --muted:#555; }
+  @page { margin: 18mm 15mm; }
+  body { font-family: 'Cairo', sans-serif; direction: rtl; margin: 0; }
+  .header { display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; margin-bottom:14px; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand img { height:56px; max-width:200px; object-fit:contain; display:none; }
+  .brand .name { font-weight:700; }
+  .brand .vat { color:var(--muted); font-size:13px; }
+  .doc .title { font-size:20px; font-weight:700; }
+  .doc .meta { color:var(--muted); font-size:13px; text-align:left; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  thead th { background: #f2f2f2; }
+  th, td { border: 1px solid #000; padding: 8px; text-align: right; font-size: 13px; }
+  tbody tr:nth-child(even){ background:#fafafa }
+  .summary { margin-top: 12px; font-weight: 600; display:flex; gap:16px; justify-content:flex-end; }
+  .chip { background:#f5f7fa; border:1px solid #e3e7ee; border-radius:8px; padding:6px 10px; font-size:13px; }
+  .totals { margin-top: 8px; text-align: left; font-weight: 700; }
+  @media print { .no-print { display: none; } }
+</style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:8px; display:flex; gap:8px; align-items:center;">
+  <button onclick="window.print()" style="padding:6px 10px;">طباعة</button>
+  <button onclick="window.close()" style="padding:6px 10px;">إغلاق</button>
+  <div style="margin-inline-start:12px; font-size:13px; color:#555;">لن تظهر هذه الأزرار في الطباعة</div>
+</div>
+<div class="header">
+  <div class="brand">
+    <img id="logo" alt="" />
+    <div>
+      <div class="name" id="companyName"></div>
+      <div class="vat" id="companyVat"></div>
+    </div>
+  </div>
+  <div class="doc">
+    <div class="title">كشف حساب عميل</div>
+    <div class="meta" id="meta"></div>
+  </div>
+</div>
+
+<table id="tbl">
+  <thead>
+    <tr>
+      <th>رقم الفاتورة</th>
+      <th>التاريخ</th>
+      <th>الخصم</th>
+      <th>الخصم %</th>
+      <th>الإجمالي</th>
+      <th>المدفوع</th>
+      <th>المتبقي</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+  <tfoot>
+    <tr>
+      <td colspan="7" class="totals" id="totals"></td>
+    </tr>
+  </tfoot>
+</table>
+
+<script>
+  const API_BASE = (window.__API__||'http://localhost:4000/api')
+  function qp(k){ return new URLSearchParams(location.search).get(k) }
+  function fmt(n){ try { return Number(n||0).toFixed(2) } catch { return '0.00' } }
+  function currency(n){ return `﷼ ${fmt(n)}` }
+  async function authFetch(url){ const token = localStorage.getItem('token'); const h = token? { Authorization: `Bearer ${token}` } : {}; const r = await fetch(url, { headers: h }); if(!r.ok) throw new Error('request_failed'); return r.json() }
+
+  async function load(){
+    let company = null, branding = null
+    try { company = await authFetch(`${API_BASE}/settings/settings_company`) } catch {}
+    try { branding = await authFetch(`${API_BASE}/settings/settings_branding`) } catch {}
+    if (company) { const name = company.name_ar || company.name_en || ''; const vat = company.vat_number ? `الرقم الضريبي: ${company.vat_number}` : ''; document.getElementById('companyName').textContent = name; document.getElementById('companyVat').textContent = vat }
+    if (branding && branding.logo) { const img=document.getElementById('logo'); img.src=branding.logo; img.style.display='block' }
+
+    const partnerId = qp('partner_id')
+    const from = qp('from') || ''
+    const to = qp('to') || ''
+    let partnerName = ''
+    let partnerPhone = ''
+    let partnerTax = ''
+    try {
+      const partner = partnerId ? await authFetch(`${API_BASE}/partners/${partnerId}`) : null
+      partnerName = partner?.name || ''
+      partnerPhone = partner?.phone ? String(partner.phone) : ''
+      partnerTax = partner?.tax_id ? `الرقم الضريبي للعميل: ${partner.tax_id}` : ''
+    } catch {}
+    const metaBits = []
+    if (partnerName) metaBits.push(`العميل: ${partnerName}${partnerPhone?` • الهاتف: ${partnerPhone}`:''}`)
+    if (partnerTax) metaBits.push(partnerTax)
+    if (from) metaBits.push(`من: ${from}`)
+    if (to) metaBits.push(`إلى: ${to}`)
+    document.getElementById('meta').textContent = metaBits.join(' • ')
+
+    const invQ = new URLSearchParams()
+    if (partnerId) invQ.set('partner_id', partnerId)
+    if (from) invQ.set('from', from)
+    if (to) invQ.set('to', to)
+    invQ.set('type', 'sale')
+    const payQ = new URLSearchParams()
+    if (partnerId) payQ.set('partner_id', partnerId)
+    if (from) payQ.set('from', from)
+    if (to) payQ.set('to', to)
+
+    const invRes = await authFetch(`${API_BASE}/invoices?${invQ.toString()}`)
+    const payRes = await authFetch(`${API_BASE}/payments?${payQ.toString()}`)
+    const invs = (invRes.items||invRes||[]).filter(x => !['draft','cancelled','reversed'].includes(String(x.status||'').toLowerCase()))
+    const paidByInv = new Map()
+    ;(payRes.items||payRes||[]).forEach(p => { const k = Number(p.invoice_id||0); const prev = paidByInv.get(k)||0; paidByInv.set(k, prev + Number(p.amount||0)) })
+
+    const tbody = document.querySelector('#tbl tbody'); tbody.innerHTML = ''
+    let total = 0, totalPaid = 0, totalRem = 0, totalDisc = 0, pctSum = 0, pctCount = 0
+    invs.forEach(inv => {
+      const amt = Number(inv.total||0)
+      const disc = Number(((typeof inv.discount_amount!=='undefined' && inv.discount_amount!==null)?inv.discount_amount:inv.discount_total)||0)
+      const tax = Number(inv.tax||0)
+      const untaxed = Math.max(0, amt - tax + disc)
+      const pct = untaxed>0 ? (disc/untaxed)*100 : 0
+      const paid = Number(paidByInv.get(Number(inv.id||0))||0)
+      const rem = Math.max(0, amt - paid)
+      total += amt; totalPaid += paid; totalRem += rem; totalDisc += disc
+      const tr = document.createElement('tr')
+      ;[String(inv.invoice_number||inv.id), String(inv.date||'').slice(0,10), currency(disc), `${fmt(pct)}%`, currency(amt), currency(paid), currency(rem)].forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) })
+      tbody.appendChild(tr)
+      if (untaxed>0) { pctSum += pct; pctCount += 1 }
+    })
+    document.getElementById('totals').textContent = `الإجمالي: ${currency(total)} • الخصم: ${currency(totalDisc)} • المدفوع: ${currency(totalPaid)} • المتبقي: ${currency(totalRem)}`
+    const summary = document.createElement('div')
+    summary.className = 'summary'
+    const chips = [
+      `الفواتير: ${invs.length}`,
+      `إجمالي الفواتير: ${currency(total)}`,
+      `إجمالي الخصومات: ${currency(totalDisc)}`,
+      `إجمالي المدفوعات: ${currency(totalPaid)}`,
+      `المتبقي: ${currency(totalRem)}`,
+      `متوسط نسبة الخصم: ${(pctCount>0?fmt(pctSum/pctCount):'0.00')}%`,
+    ]
+    chips.forEach(t=>{ const s=document.createElement('div'); s.className='chip'; s.textContent=t; summary.appendChild(s) })
+    document.body.appendChild(summary)
+    setTimeout(()=>window.print(), 200)
+  }
+  load().catch(()=>{ alert('فشل الطباعة. يرجى المحاولة مرة أخرى.') })
+</script>
+</body>
+</html>

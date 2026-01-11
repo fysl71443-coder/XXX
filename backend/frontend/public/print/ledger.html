@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>دفتر الأستاذ</title>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --border:#222; --soft:#eaeaea; --muted:#555; }
+  @page { margin: 18mm 15mm; }
+  body { font-family: 'Cairo', sans-serif; direction: rtl; margin: 0; }
+  .header { display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:8px; margin-bottom:10px; }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand img { height:48px; max-width:180px; object-fit:contain; display:none; }
+  .brand .name { font-weight:700; }
+  .brand .vat { color:var(--muted); font-size:13px; }
+  .doc .title { font-size:18px; font-weight:700; }
+  .doc .meta { color:var(--muted); font-size:13px; text-align:left; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  thead th { background: #f2f2f2; }
+  th, td { border: 1px solid #000; padding: 6px; text-align: right; font-size: 13px; }
+  tbody tr:nth-child(even){ background:#fafafa }
+  .debit { color: #0d9488; font-weight: 600; }
+  .credit { color: #dc2626; font-weight: 600; }
+  .balance { font-weight: 700; }
+  @media print { .no-print { display: none; } }
+</style>
+</head>
+<body>
+<div class="no-print" style="margin-bottom:8px; display:flex; gap:8px; align-items:center;">
+  <button onclick="prepareAndPrint()" style="padding:6px 10px;">طباعة</button>
+  <button onclick="window.close()" style="padding:6px 10px;">إغلاق</button>
+</div>
+<div class="header">
+  <div class="brand">
+    <img id="logo" alt="" />
+    <div>
+      <div class="name" id="companyName"></div>
+      <div class="vat" id="companyVat"></div>
+    </div>
+  </div>
+  <div class="doc">
+    <div class="title">دفتر الأستاذ</div>
+    <div class="meta" id="meta"></div>
+  </div>
+  </div>
+<table id="tbl">
+  <thead>
+    <tr>
+      <th>الحساب</th>
+      <th>الرصيد الابتدائي</th>
+      <th>القيد</th>
+      <th>مدين</th>
+      <th>دائن</th>
+      <th>الرصيد الحالي</th>
+      <th>ملاحظات</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+<script>
+  const API_BASE = (window.__API__||'http://localhost:4000/api')
+  function qp(k){ return new URLSearchParams(location.search).get(k) }
+  function fmt(n){ try { return Number(n||0).toFixed(2) } catch { return '0.00' } }
+  function prepareAndPrint(){ const bar=document.querySelector('.no-print'); if(bar) bar.style.display='none'; window.print() }
+  function labelOpType(t){ const v=String(t||''); if(v==='invoice') return 'فاتورة بيع'; if(v==='supplier_invoice') return 'فاتورة مشتريات'; if(v==='expense_invoice') return 'مصروف'; if(v==='payment') return 'سداد/تحصيل'; if(v==='payroll_run') return 'مسير رواتب'; return '' }
+  function noteFor(acc, row){
+    const code = String(acc.account_code||'')
+    const name = String(acc.name||'')
+    const desc = String(row.description||'')
+    const rt = String(row.related_type||'')
+    if (code==='1210') {
+      if (rt==='invoice') return 'فاتورة بيع'
+      if (rt==='payment') return 'استلام نقدي من العميل'
+    }
+    if (code==='4130') return 'إيرادات البيع'
+    if (code==='4190') return 'خصم على المبيعات'
+    if (code==='2150') return 'ضريبة مبيعات'
+    if (code==='1110' || /cash/i.test(name)) {
+      if (rt==='payment') {
+        if (/Salary Payment/i.test(desc)) return 'سداد الرواتب'
+        if (/Payment received/i.test(desc)) return 'نقدية من العملاء'
+        return 'تحصيل/سداد'
+      }
+    }
+    if (code==='5210') return 'مصروف الرواتب'
+    if (code==='2430') { if (rt==='payroll_run') return 'التزام مستحق للرواتب'; if (rt==='payment') return 'سداد الرواتب' }
+    if (code==='5110') return 'فاتورة مشتريات'
+    if (code==='1250') return 'ضريبة شراء مستحقة'
+    if (code==='2410') return 'التزام الموردين'
+    const base = labelOpType(rt)
+    return base || ''
+  }
+  async function authFetch(url){ const token = localStorage.getItem('token'); const h = token? { Authorization: `Bearer ${token}` } : {}; const r = await fetch(url, { headers: h }); if(!r.ok) throw new Error('request_failed'); return r.json() }
+  async function load(){
+    let company = null
+    let branding = null
+    try { company = await authFetch(`${API_BASE}/settings/settings_company`) } catch {}
+    try { branding = await authFetch(`${API_BASE}/settings/settings_branding`) } catch {}
+    if (company) { const name = company.name_ar || company.name_en || ''; const vat = company.vat_number ? `الرقم الضريبي: ${company.vat_number}` : ''; document.getElementById('companyName').textContent = name; document.getElementById('companyVat').textContent = vat }
+    if (branding && branding.logo) { const img=document.getElementById('logo'); img.src=branding.logo; img.style.display='block' }
+    const from = qp('from'); const to = qp('to'); const meta = []
+    if (from) meta.push(`من: ${from}`); if (to) meta.push(`إلى: ${to}`)
+    document.getElementById('meta').textContent = meta.join(' • ')
+    const paramsTB = new URLSearchParams(); if (from) paramsTB.set('from', from); if (to) paramsTB.set('to', to)
+    const tb = await authFetch(`${API_BASE}/reports/trial-balance${paramsTB.toString()?`?${paramsTB.toString()}`:''}`)
+    const accounts = Array.isArray(tb?.items)?tb.items:[]
+    const tbody = document.querySelector('#tbl tbody'); tbody.innerHTML = ''
+    if (!accounts.length){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=7; td.textContent='لا توجد حركات منشورة للفترة المحددة'; tr.appendChild(td); tbody.appendChild(tr); setTimeout(()=>window.print(),200); return }
+    for (const acc of accounts){
+      const paramsDL = new URLSearchParams(); if (from) paramsDL.set('from', from); if (to) paramsDL.set('to', to); paramsDL.set('account_id', acc.account_id||'')
+      let rows = []
+      try { const drill = await authFetch(`${API_BASE}/reports/trial-balance/drilldown${paramsDL.toString()?`?${paramsDL.toString()}`:''}`); rows = Array.isArray(drill?.items)?drill.items:[] } catch {}
+      let running = Number(acc.beginning||0)
+      if (!rows.length) { continue }
+      rows.forEach((r, idx)=>{
+        const debit = Number(r.debit||0)
+        const credit = Number(r.credit||0)
+        running = running + debit - credit
+        const ref = String(r.description||'').trim() || (String(r.related_type||'')==='invoice' ? String(r.related_id||'') : '')
+        const note = noteFor(acc, r)
+        const tr = document.createElement('tr')
+        const cells = [ idx===0 ? (acc.name||'') : '', idx===0 ? fmt(Number(acc.beginning||0)) : '', ref, fmt(debit), fmt(credit), fmt(running), note ]
+        cells.forEach((v, i)=>{ const td=document.createElement('td'); td.textContent=String(v); if (i===3 && Number(debit)>0) td.className='debit'; if (i===4 && Number(credit)>0) td.className='credit'; if (i===5) td.className='balance'; tr.appendChild(td) })
+        tbody.appendChild(tr)
+      })
+    }
+    setTimeout(()=>window.print(), 200)
+  }
+  load().catch(()=>{ alert('فشل الطباعة. يرجى المحاولة مرة أخرى.') })
+</script>
+</body>
+</html>
