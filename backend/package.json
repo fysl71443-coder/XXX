@@ -1,35 +1,13 @@
 {
- full-original
-    "name": "xxx-backend",
+    "name": "backend",
     "version": "1.0.0",
-    "private": true,
+    "main": "server.js",
     "type": "module",
     "scripts": {
         "start": "node server.js"
     },
     "dependencies": {
-        "express": "^4.21.2"
+        "express": "^4.18.2",
+        "cors": "^2.8.5"
     }
-=======
-  "name": "backend",
-  "version": "1.0.0",
-  "private": true,
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "pos:regression": "node scripts/test-draft-items-regression.js",
-    "lint": "npm run lint:frontend",
-    "lint:frontend": "cd frontend && npm run lint"
-  },
-  "dependencies": {
-    "cors": "^2.8.5",
-    "express": "^4.18.2"
-  },
-  "devDependencies": {
-    "autoprefixer": "^10.4.22",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.17"
-  }
- main
 }
