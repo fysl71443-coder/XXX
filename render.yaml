@@ -5,12 +5,10 @@ services:
   - type: web
     name: XXX
     env: node
-    branch: full-original
     plan: starter
     buildCommand: |
-      git submodule update --init --recursive
-      cd frontend && npm install && npm run build
-      cd backend && npm install
+      cd backend/frontend && npm install && npm run build
+      cd ../../backend && npm install
     startCommand: cd backend && node server.js
     rootDirectory: .
     envVars:
