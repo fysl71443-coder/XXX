@@ -31,7 +31,6 @@ export default function Login() {
     try {
       const user = await login(email, password)
       if (remember) try { localStorage.setItem('remember', '1') } catch {}
-      await refresh()
       navigate(next)
     } catch (err) {
       if (err?.code === 'no_users') {
@@ -40,7 +39,6 @@ export default function Login() {
           try { localStorage.setItem('token', reg.token); localStorage.setItem('auth_user', JSON.stringify(reg.user)); } catch {}
           await login(email, password)
           if (remember) try { localStorage.setItem('remember', '1') } catch {}
-          await refresh()
           navigate(next)
           return
         } catch (e2) { setError(lang==='ar'?'فشل إنشاء المدير لأول مرة':'Failed to bootstrap the first admin') }
@@ -53,7 +51,6 @@ export default function Login() {
           const boot = await apiAuth.debugBootstrapAdmin({ email, password, name: 'Admin' })
           await login(email, password)
           if (remember) try { localStorage.setItem('remember', '1') } catch {}
-          await refresh()
           navigate(next)
           return
         } catch (_) { setError(lang==='ar'?'تعذر تسجيل الدخول':'Unable to sign in') }

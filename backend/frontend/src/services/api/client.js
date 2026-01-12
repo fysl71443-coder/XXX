@@ -16,9 +16,6 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[API]', config.method?.toUpperCase(), config.url, config.headers.Authorization ? 'Auth Header Present' : 'NO Auth Header')
-  }
   return config;
 }, (error) => {
   return Promise.reject(error);

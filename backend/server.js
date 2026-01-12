@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT);
 
-const buildPath = path.join(__dirname, "..", "frontend", "build");
+const buildPath = path.join(__dirname, "frontend", "build");
 app.use(express.static(buildPath));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
