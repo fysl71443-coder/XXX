@@ -23,10 +23,12 @@ export async function createAdmin() {
     const password = "StrongPass123";
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    await client.query(
-      "INSERT INTO users (email, password, role) VALUES ($1, $2, $3)",
-      [email, hashedPassword, "admin"]
-    );
+    const { rows: existing } = await client.query('SELECT id FROM "users" WHERE email = $1 LIMIT 1', [email]);
+    if (existing && existing.length > 0) {
+      await client.query('UPDATE "users" SET password = $1, role = $2 WHERE email = $3', [hashedPassword, "admin", email]);
+    } else {
+      await client.query('INSERT INTO "users" (email, password, role) VALUES ($1, $2, $3)', [email, hashedPassword, "admin"]);
+    }
   } finally {
     await client.end();
   }
