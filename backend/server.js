@@ -1,4 +1,7 @@
-import "dotenv/config";
+const isProd = String(process.env.NODE_ENV || "production").toLowerCase() === "production";
+if (!isProd) {
+  await import("dotenv/config");
+}
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
