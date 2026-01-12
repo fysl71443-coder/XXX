@@ -4,8 +4,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
-import { Pool } from "pg";
 import { createAdmin } from "./createAdmin.js";
+import { pool } from "./db.js";
+import { authenticateToken } from "./middleware/auth.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,14 +17,7 @@ const port = Number(process.env.PORT);
 const buildPath = path.join(__dirname, "..", "frontend", "build");
 app.use(express.static(buildPath));
 app.use(express.json());
-
-const DATABASE_URL = process.env.DATABASE_URL || "";
-const pool = DATABASE_URL
-  ? new Pool({
-      connectionString: DATABASE_URL,
-      ssl: { rejectUnauthorized: false },
-    })
-  : null;
+app.use(express.urlencoded({ extended: true }));
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -78,25 +72,8 @@ app.post("/debug/bootstrap-admin", async (req, res) => {
   }
 });
 
-app.get("/api/auth/me", async (req, res) => {
-  try {
-    const auth = req.headers.authorization || "";
-    const m = auth.match(/^Bearer\\s+(.*)$/i);
-    if (!m) return res.status(401).json({ error: "unauthorized" });
-    const token = m[1];
-    const payload = jwt.verify(token, JWT_SECRET);
-    if (!payload?.id) return res.status(401).json({ error: "unauthorized" });
-    if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
-    const { rows } = await pool.query(
-      'SELECT id, email, role, created_at FROM "users" WHERE id = $1 LIMIT 1',
-      [payload.id]
-    );
-    const user = rows && rows[0];
-    if (!user) return res.status(404).json({ error: "not_found" });
-    return res.json({ id: user.id, email: user.email, role: user.role || "user", created_at: user.created_at });
-  } catch (e) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
+app.get("/api/auth/me", authenticateToken, (req, res) => {
+  res.json(req.user);
 });
 
 if (String(process.env.ADMIN_CREATE_ENABLED || "false").toLowerCase() === "true") {
