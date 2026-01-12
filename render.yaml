@@ -4,13 +4,13 @@ databases:
 services:
   - type: web
     name: XXX
-    env: node
+    runtime: node
     plan: starter
+    rootDir: backend
     buildCommand: |
-      cd backend/frontend && npm install && npm run build
-      cd ../../backend && npm install
-    startCommand: cd backend && node server.js
-    rootDirectory: .
+      npm ci
+      cd frontend && npm ci && npm run build
+    startCommand: node server.js
     envVars:
       - key: DATABASE_URL
         fromDatabase:
