@@ -1,26 +1,35 @@
-databases:
-  - name: xxx-db
-
 services:
   - type: web
-    name: XXX
-    runtime: node
-    plan: starter
+    name: china-town-app
+    env: node
+    plan: free
+    region: oregon
+    branch: main
     rootDir: backend
     buildCommand: |
-      npm ci
       cd frontend && npm ci && npm run build
+      cd ../ && npm ci
     startCommand: node server.js
+    healthCheckPath: /health
+    nodeVersion: 18.18.0
     envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: xxx-db
-          property: connectionString
+      - key: ADMIN_CREATE_ENABLED
+        value: "true"
+      - key: NODE_ENV
+        value: "production"
       - key: DB_DIALECT
-        value: postgres
+        value: "postgres"
       - key: DB_SSL
         value: "true"
       - key: DB_SSL_REJECT_UNAUTHORIZED
         value: "false"
-      - key: NODE_ENV
-        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: china-town-db
+          property: connectionString
+databases:
+  - name: china-town-db
+    plan: free
+    region: oregon

@@ -3,9 +3,13 @@ import path from "path";
 import { fileURLToPath } from "url";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
+import cors from "cors";
+import dotenv from "dotenv";
 import { createAdmin } from "./createAdmin.js";
 import { pool } from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +19,7 @@ const port = Number(process.env.PORT || 10000);
 
 const buildPath = path.join(__dirname, "frontend", "build");
 app.use(express.static(buildPath));
+app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -41,7 +46,7 @@ async function handleLogin(req, res) {
     if (!ok) {
       return res.status(401).json({ error: "invalid_credentials" });
     }
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role || "user" }, String(JWT_SECRET), { expiresIn: "7d" });
+    const token = jwt.sign({ id: user.id, email: user.email, role: user.role || "user" }, String(JWT_SECRET), { expiresIn: "12h" });
     return res.json({
       token,
       user: { id: user.id, email: user.email, role: user.role || "user", created_at: user.created_at },
@@ -74,6 +79,9 @@ app.post("/debug/bootstrap-admin", async (req, res) => {
 app.get("/api/auth/me", authenticateToken, (req, res) => {
   res.json(req.user);
 });
+app.get("/auth/me", authenticateToken, (req, res) => {
+  res.json(req.user);
+});
 
 if (String(process.env.ADMIN_CREATE_ENABLED || "false").toLowerCase() === "true") {
   app.get("/create-admin", async (req, res) => {
@@ -88,6 +96,13 @@ if (String(process.env.ADMIN_CREATE_ENABLED || "false").toLowerCase() === "true"
 
 app.get("/health", (req, res) => {
   res.json({ ok: true });
+});
+app.get("/healthz", (req, res) => {
+  res.json({ ok: true });
+});
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(buildPath, "index.html"));
 });
 
 app.get("*", (req, res) => {
