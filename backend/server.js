@@ -772,13 +772,13 @@ app.use("/api/expenses", authenticateToken, async (req, res, next) => {
 app.use("/customers", authenticateToken, async (req, res, next) => {
   try {
     if (req.method === "GET") {
-      return authorize("customers", "view")(req, res, next);
+      return authorize("clients", "view")(req, res, next);
     }
     if (req.method === "POST") {
-      return authorize("customers", "create")(req, res, next);
+      return authorize("clients", "create")(req, res, next);
     }
     if (req.method === "PUT") {
-      return authorize("customers", "edit")(req, res, next);
+      return authorize("clients", "edit")(req, res, next);
     }
     next();
   } catch (e) {
@@ -791,8 +791,14 @@ app.use("/employees", authenticateToken, async (req, res, next) => {
     if (req.method === "GET") {
       return authorize("employees", "view")(req, res, next);
     }
-    if (req.method === "POST" || req.method === "PUT") {
-      return authorize("employees", "manage")(req, res, next);
+    if (req.method === "POST") {
+      return authorize("employees", "create")(req, res, next);
+    }
+    if (req.method === "PUT") {
+      return authorize("employees", "edit")(req, res, next);
+    }
+    if (req.method === "DELETE") {
+      return authorize("employees", "delete")(req, res, next);
     }
     next();
   } catch (e) {
@@ -805,8 +811,14 @@ app.use("/api/employees", authenticateToken, async (req, res, next) => {
     if (req.method === "GET") {
       return authorize("employees", "view")(req, res, next);
     }
-    if (req.method === "POST" || req.method === "PUT") {
-      return authorize("employees", "manage")(req, res, next);
+    if (req.method === "POST") {
+      return authorize("employees", "create")(req, res, next);
+    }
+    if (req.method === "PUT") {
+      return authorize("employees", "edit")(req, res, next);
+    }
+    if (req.method === "DELETE") {
+      return authorize("employees", "delete")(req, res, next);
     }
     next();
   } catch (e) {
@@ -816,7 +828,7 @@ app.use("/api/employees", authenticateToken, async (req, res, next) => {
 
 app.use("/journal", authenticateToken, async (req, res, next) => {
   try {
-    return authorize("accounting", "view")(req, res, next);
+    return authorize("journal", "view")(req, res, next);
   } catch (e) {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
