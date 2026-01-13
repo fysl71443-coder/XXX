@@ -47,10 +47,24 @@ export function AuthProvider({ children }) {
       setToken(tk);
       try { const pm = await apiUsers.permissions(data?.id||data?.user?.id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
     } catch (e) {
-      console.error('Failed to load user', e);
-      setUser(null);
-      setToken(null);
-      setPermissionsMap({})
+      try {
+        const cached = localStorage.getItem('auth_user');
+        if (cached) {
+          const u = JSON.parse(cached);
+          setUser(u);
+          setToken(tk);
+          try { const pm = await apiUsers.permissions(u?.id||u?.user?.id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
+        } else {
+          console.error('Failed to load user', e);
+          setUser(null);
+          setToken(null);
+          setPermissionsMap({})
+        }
+      } catch {
+        setUser(null);
+        setToken(null);
+        setPermissionsMap({})
+      }
     } finally {
       setLoading(false);
     }
@@ -75,6 +89,9 @@ export function AuthProvider({ children }) {
     const tk = r.token || r?.token;
     if (tk) {
       localStorage.setItem('token', tk);
+      try { if (r?.user) localStorage.setItem('auth_user', JSON.stringify(r.user)); } catch {}
+      try { if (Array.isArray(r?.screens)) localStorage.setItem('screens', JSON.stringify(r.screens)); } catch {}
+      try { if (Array.isArray(r?.branches)) localStorage.setItem('branches', JSON.stringify(r.branches)); } catch {}
       setToken(tk);
       try {
         const data = await apiAuth.me();

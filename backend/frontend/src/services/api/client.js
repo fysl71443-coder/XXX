@@ -34,8 +34,9 @@ api.interceptors.response.use(
     // Do NOT logout on 403 (Forbidden) or other errors
     if (status === 401 && hasToken) {
       const isLoginRequest = error.config?.url?.includes('/auth/login');
+      const isMeRequest = error.config?.url?.includes('/auth/me');
       
-      if (!isLoginRequest) {
+      if (!isLoginRequest && !isMeRequest) {
         console.warn('[Auto-Logout] 401 Unauthorized with token present. Redirecting to login.');
         try {
           localStorage.removeItem('token');
