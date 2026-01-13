@@ -5,11 +5,10 @@ services:
     plan: free
     region: oregon
     branch: main
-    rootDir: backend
     buildCommand: |
-      cd frontend && npm ci && npm run build
+      cd backend/frontend && npm ci && npm run build
       cd ../ && npm ci
-    startCommand: node server.js
+    startCommand: cd backend && node server.js
     healthCheckPath: /health
     nodeVersion: 18.18.0
     envVars:
