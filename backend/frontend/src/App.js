@@ -6,6 +6,7 @@ import { FaUsers, FaTruck, FaUserTie, FaReceipt, FaBox, FaCashRegister, FaShoppi
 import { GiMoneyStack } from 'react-icons/gi';
 import { settings as apiSettings } from './services/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import ErrorBoundary from './ErrorBoundary';
 import Clients from './pages/Clients';
 import ClientCreate from './pages/ClientCreate';
 import ClientsCards from './pages/ClientsCards';
@@ -172,6 +173,7 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <ErrorBoundary>
         <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/login" element={<Login />} />
@@ -227,6 +229,7 @@ function App() {
         <Route path="/settings" element={<Settings />} />
         
       </Routes>
+        </ErrorBoundary>
     </BrowserRouter>
     </AuthProvider>
   )
