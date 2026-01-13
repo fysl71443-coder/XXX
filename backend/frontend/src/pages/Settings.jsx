@@ -107,11 +107,24 @@ export default function Settings(){
   async function saveAll(){
     try {
       setSaving(true)
-      const upPayload = userPerms.map(p => ({ user_id: selectedUserId, screen_id: p.screen_id, action_id: p.action_id, branch_id: (p.branch_id===null?null:Number(p.branch_id)), allowed: !!p.allowed }))
+      const actionsByIdLocal = Object.fromEntries(actions.map(a => [a.id, a]))
+      const screensByIdLocal = Object.fromEntries(screens.map(s => [s.id, s]))
+      const branchesByIdLocal = Object.fromEntries(branches.map(b => [b.id, b]))
+      const upPayload = userPerms.map(p => ({
+        screen_code: String(screensByIdLocal[p.screen_id]?.code||'').toLowerCase(),
+        action_code: String(actionsByIdLocal[p.action_id]?.code||'').toLowerCase(),
+        branch_code: (p.branch_id===null ? '' : String(branchesByIdLocal[Number(p.branch_id)]?.code||'').toLowerCase()),
+        allowed: !!p.allowed
+      }))
       await apiUsers.savePermissions(selectedUserId, upPayload)
       try { await refreshPermissions() } catch {}
       setToast({ type: 'success', message: 'تم حفظ صلاحيات المستخدم' })
-    } catch (e) { try { alert('فشل حفظ الصلاحيات') } catch {} } finally { setSaving(false) }
+    } catch (e) {
+      const st = e?.status || e?.response?.status || ''
+      const msg = e?.message || e?.response?.data?.message || e?.response?.data?.details || ''
+      const text = st ? `فشل حفظ الصلاحيات — الحالة ${st}${msg?` — ${msg}`:''}` : 'فشل حفظ الصلاحيات'
+      setToast({ type: 'error', message: text })
+    } finally { setSaving(false) }
   }
   async function saveCompany(){
     try {
@@ -143,6 +156,7 @@ export default function Settings(){
 
   const actionsById = useMemo(()=>{ const m={}; for (const a of actions) m[a.id]=a; return m },[actions])
   const screensById = useMemo(()=>{ const m={}; for (const s of screens) m[s.id]=s; return m },[screens])
+  const branchesById = useMemo(()=>{ const m={}; for (const b of branches) m[b.id]=b; return m },[branches])
 
   return (
     <div className="min-h-screen bg-gray-50">

@@ -107,7 +107,7 @@ export default function Expenses(){
 
   useEffect(()=>{ (async()=>{ try { const t = await apiAccounts.tree(); setTree(t||[]) } catch {} })() },[])
   useEffect(()=>{ const flat = flatten(tree); const allowedTypes = ['expense', 'cash', 'bank', 'equity', 'liability', 'income']; const allowed = flat.filter(a => allowedTypes.includes(String(a.type||'').toLowerCase()) && (a.allow_manual_entry !== false)); setAccounts(allowed) },[tree])
-  useEffect(()=>{ (async()=>{ try { const res = await apiExpenses.list(filters); setList(res||[]) } catch {} })() },[filters])
+  useEffect(()=>{ (async()=>{ try { const res = await apiExpenses.list(filters); setList(res||[]); setError('') } catch (e) { if (e?.status===403) { setError('ليس لديك صلاحية لعرض هذه الشاشة') } else { setError('تعذر تحميل البيانات') } setList([]) } })() },[filters])
   useEffect(()=>{ (async()=>{ try { const d = new Date(); const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; const s = await apiPeriods.get(per); setPeriodStatus(String(s?.status||'open')) } catch {} })() },[])
 
   // Smart Linking Data Fetching

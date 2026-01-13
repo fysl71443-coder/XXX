@@ -67,7 +67,7 @@ export default function Employees(){
   }, [natQuery, natList, lang])
 
   const load = useCallback(async () => {
-    try { const rows = await apiEmployees.list(); setList(Array.isArray(rows)?rows:[]) } catch { setList([]) }
+    try { const rows = await apiEmployees.list(); setList(Array.isArray(rows)?rows:[]); setError('') } catch (e) { if (e?.status===403) { setError('ليس لديك صلاحية لعرض هذه الشاشة') } else { setError('تعذر تحميل البيانات') } setList([]) }
     try { const rs = await apiPayroll.runs(); setRuns(rs) } catch {}
     try { const dues = await apiPayroll.previousDues(); setPrevDues(Array.isArray(dues)?dues:[]) } catch { setPrevDues([]) }
   }, [filters])
@@ -323,6 +323,7 @@ export default function Employees(){
           </div>
         </section>
       </main>
+      {error && (<div className="max-w-7xl mx-auto px-6"><div className="px-4 py-2 rounded bg-red-100 text-red-700 text-sm font-medium">{error}</div></div>)}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/30 flex items-center justify-center">

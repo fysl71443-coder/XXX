@@ -366,14 +366,14 @@ app.post("/api/users/:id/reset-password", authenticateToken, requireAdmin, async
 
 function baseScreens(){
   return [
-    "clients","suppliers","employees","expenses","products","sales","purchases","reports","accounting","journal"
+    "clients","suppliers","employees","expenses","products","sales","purchases","reports","accounting","journal","settings"
   ];
 }
 function defaultPermissions(role){
   const sc = baseScreens();
   const m = {};
   for (const s of sc) {
-    m[s] = { _global: { view: true, create: role === "admin", edit: role === "admin", delete: role === "admin", settings: role === "admin" } };
+    m[s] = { _global: { view: true, create: role === "admin", edit: role === "admin", delete: role === "admin" } };
   }
   return m;
 }
@@ -536,11 +536,11 @@ app.get("/api/screens", authenticateToken, requireAdmin, async (req, res) => {
   res.json(list);
 });
 app.get("/actions", authenticateToken, requireAdmin, async (req, res) => {
-  const actions = ["view", "create", "edit", "delete", "settings"].map((code, i) => ({ id: i + 1, code }));
+  const actions = ["view", "create", "edit", "delete"].map((code, i) => ({ id: i + 1, code }));
   res.json(actions);
 });
 app.get("/api/actions", authenticateToken, requireAdmin, async (req, res) => {
-  const actions = ["view", "create", "edit", "delete", "settings"].map((code, i) => ({ id: i + 1, code }));
+  const actions = ["view", "create", "edit", "delete"].map((code, i) => ({ id: i + 1, code }));
   res.json(actions);
 });
 
@@ -594,7 +594,7 @@ app.get("/users/:id/user-permissions", authenticateToken, requireAdmin, async (r
     const id = Number(req.params.id || 0);
     if (!id) return res.status(400).json({ error: "invalid_payload" });
     const { items: screens } = await (async()=>({ items: baseScreens().map((s, i)=>({ id: i+1, code: s, name: s, has_branches: s==='sales' })) }))();
-    const { items: actions } = await (async()=>({ items: ["view","create","edit","delete","settings"].map((code,i)=>({ id:i+1, code })) }))();
+    const { items: actions } = await (async()=>({ items: ["view","create","edit","delete"].map((code,i)=>({ id:i+1, code })) }))();
     const { items: branches } = await (async()=> {
       const brRes = await (async()=> {
         const map = await loadUserPermissionsMap(id);
@@ -642,7 +642,7 @@ app.get("/api/users/:id/user-permissions", authenticateToken, requireAdmin, asyn
     const id = Number(req.params.id || 0);
     if (!id) return res.status(400).json({ error: "invalid_payload" });
     const { items: screens } = await (async()=>({ items: baseScreens().map((s, i)=>({ id: i+1, code: s, name: s, has_branches: s==='sales' })) }))();
-    const { items: actions } = await (async()=>({ items: ["view","create","edit","delete","settings"].map((code,i)=>({ id:i+1, code })) }))();
+    const { items: actions } = await (async()=>({ items: ["view","create","edit","delete"].map((code,i)=>({ id:i+1, code })) }))();
     const { items: branches } = await (async()=> {
       const brRes = await (async()=> {
         const map = await loadUserPermissionsMap(id);
@@ -850,7 +850,13 @@ app.use("/reports", authenticateToken, async (req, res, next) => {
 
 app.use("/settings", authenticateToken, async (req, res, next) => {
   try {
-    return authorize("settings", "manage")(req, res, next);
+    if (req.method === "GET") {
+      return authorize("settings", "view")(req, res, next);
+    }
+    if (req.method === "PUT" || req.method === "POST" || req.method === "DELETE") {
+      return authorize("settings", "edit")(req, res, next);
+    }
+    return authorize("settings", "view")(req, res, next);
   } catch (e) {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
@@ -1061,7 +1067,7 @@ app.use("/pos", authenticateToken, async (req, res, next) => {
 app.use("/accounting-periods", authenticateToken, async (req, res, next) => {
   try {
     if (req.method === "GET") return authorize("accounting", "view")(req, res, next)
-    return authorize("accounting", "settings")(req, res, next)
+    return authorize("accounting", "edit")(req, res, next)
   } catch (e) {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
@@ -1463,7 +1469,7 @@ app.get("/pos/tables-layout", authenticateToken, async (req, res) => {
     res.json(out);
   } catch (e) { res.json({ rows: [] }); }
 });
-app.put("/pos/tables-layout", authenticateToken, authorize("sales","settings"), async (req, res) => {
+app.put("/pos/tables-layout", authenticateToken, authorize("sales","edit"), async (req, res) => {
   try {
     const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
     const key = `pos_tables_layout_${branch}`;
