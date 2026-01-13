@@ -90,6 +90,69 @@ async function ensureSchema() {
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS supplier_invoices (
+        id SERIAL PRIMARY KEY,
+        number TEXT UNIQUE,
+        date DATE,
+        due_date DATE,
+        supplier_id INTEGER REFERENCES partners(id),
+        lines JSONB,
+        subtotal NUMERIC(18,2) DEFAULT 0,
+        discount_pct NUMERIC(5,2) DEFAULT 0,
+        discount_amount NUMERIC(18,2) DEFAULT 0,
+        tax_pct NUMERIC(5,2) DEFAULT 0,
+        tax_amount NUMERIC(18,2) DEFAULT 0,
+        total NUMERIC(18,2) DEFAULT 0,
+        payment_method TEXT,
+        status TEXT DEFAULT 'draft',
+        branch TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id SERIAL PRIMARY KEY,
+        number TEXT UNIQUE,
+        date DATE,
+        customer_id INTEGER,
+        lines JSONB,
+        subtotal NUMERIC(18,2) DEFAULT 0,
+        discount_pct NUMERIC(5,2) DEFAULT 0,
+        discount_amount NUMERIC(18,2) DEFAULT 0,
+        tax_pct NUMERIC(5,2) DEFAULT 0,
+        tax_amount NUMERIC(18,2) DEFAULT 0,
+        total NUMERIC(18,2) DEFAULT 0,
+        payment_method TEXT,
+        status TEXT DEFAULT 'draft',
+        branch TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        branch TEXT,
+        table_code TEXT,
+        lines JSONB,
+        status TEXT DEFAULT 'DRAFT',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        invoice_id INTEGER,
+        amount NUMERIC(18,2) DEFAULT 0,
+        method TEXT,
+        date DATE,
+        branch TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
   } catch {}
 }
 ensureSchema().catch(()=>{});
@@ -185,7 +248,7 @@ app.get("/users", authenticateToken, requireAdmin, async (req, res) => {
     if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
     const { rows } = await pool.query('SELECT id, email, role, is_active, created_at FROM "users" ORDER BY id DESC');
     const items = Array.isArray(rows) ? rows.map(r => ({ id: r.id, email: r.email, role: r.role || "user", is_active: r.is_active !== false, created_at: r.created_at })) : [];
-    res.json({ items });
+    res.json(items);
   } catch (e) {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
@@ -195,7 +258,7 @@ app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
     if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
     const { rows } = await pool.query('SELECT id, email, role, is_active, created_at FROM "users" ORDER BY id DESC');
     const items = Array.isArray(rows) ? rows.map(r => ({ id: r.id, email: r.email, role: r.role || "user", is_active: r.is_active !== false, created_at: r.created_at })) : [];
-    res.json({ items });
+    res.json(items);
   } catch (e) {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
@@ -449,10 +512,10 @@ app.put("/api/users/:id/permissions", authenticateToken, requireAdmin, async (re
 });
 
 app.get("/roles", authenticateToken, requireAdmin, async (req, res) => {
-  res.json({ items: [{ id: 1, name: "Admin" }, { id: 2, name: "User" }] });
+  res.json([{ id: 1, name: "Admin" }, { id: 2, name: "User" }]);
 });
 app.get("/api/roles", authenticateToken, requireAdmin, async (req, res) => {
-  res.json({ items: [{ id: 1, name: "Admin" }, { id: 2, name: "User" }] });
+  res.json([{ id: 1, name: "Admin" }, { id: 2, name: "User" }]);
 });
 app.get("/screens", authenticateToken, requireAdmin, async (req, res) => {
   const list = baseScreens().map((s, i) => ({
@@ -461,7 +524,7 @@ app.get("/screens", authenticateToken, requireAdmin, async (req, res) => {
     name: s,
     has_branches: s === "sales"
   }));
-  res.json({ items: list });
+  res.json(list);
 });
 app.get("/api/screens", authenticateToken, requireAdmin, async (req, res) => {
   const list = baseScreens().map((s, i) => ({
@@ -470,15 +533,15 @@ app.get("/api/screens", authenticateToken, requireAdmin, async (req, res) => {
     name: s,
     has_branches: s === "sales"
   }));
-  res.json({ items: list });
+  res.json(list);
 });
 app.get("/actions", authenticateToken, requireAdmin, async (req, res) => {
   const actions = ["view", "create", "edit", "delete", "settings"].map((code, i) => ({ id: i + 1, code }));
-  res.json({ items: actions });
+  res.json(actions);
 });
 app.get("/api/actions", authenticateToken, requireAdmin, async (req, res) => {
   const actions = ["view", "create", "edit", "delete", "settings"].map((code, i) => ({ id: i + 1, code }));
-  res.json({ items: actions });
+  res.json(actions);
 });
 
 app.get("/branches", authenticateToken, async (req, res) => {
@@ -498,7 +561,7 @@ app.get("/branches", authenticateToken, async (req, res) => {
       const def = String(req.user?.default_branch || '').trim() || 'china_town';
       arr.push(def);
     }
-    res.json({ items: arr.map((code, idx) => ({ id: idx + 1, code, name: code })) });
+    res.json(arr.map((code, idx) => ({ id: idx + 1, code, name: code })));
   } catch (e) {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
@@ -520,7 +583,7 @@ app.get("/api/branches", authenticateToken, async (req, res) => {
       const def = String(req.user?.default_branch || '').trim() || 'china_town';
       arr.push(def);
     }
-    res.json({ items: arr.map((code, idx) => ({ id: idx + 1, code, name: code })) });
+    res.json(arr.map((code, idx) => ({ id: idx + 1, code, name: code })));
   } catch (e) {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
@@ -1164,6 +1227,247 @@ app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { b
     );
     res.json(rows && rows[0]);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+
+// Supplier Invoices
+app.get("/supplier-invoices", authenticateToken, authorize("purchases","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, number, date, due_date, supplier_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, created_at FROM supplier_invoices ORDER BY id DESC');
+    res.json({ items: rows || [] });
+  } catch (e) { res.json({ items: [] }); }
+});
+app.get("/supplier-invoices/next-number", authenticateToken, authorize("purchases","create"), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT number FROM supplier_invoices ORDER BY id DESC LIMIT 1');
+    const last = rows && rows[0] ? String(rows[0].number||'') : '';
+    const seq = (function(){ const m = /PI\/(\d{4})\/(\d+)/.exec(last); const year = (new Date()).getFullYear(); const nextN = m && Number(m[1])===year ? Number(m[2]||0)+1 : 1; return `PI/${year}/${String(nextN).padStart(10,'0')}` })();
+    res.json({ next: seq });
+  } catch (e) { res.json({ next: null }); }
+});
+app.post("/supplier-invoices", authenticateToken, authorize("purchases","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const subtotal = Number(b.subtotal||0);
+    const discount_pct = Number(b.discount_pct||0);
+    const discount_amount = Number(b.discount_amount||0);
+    const tax_pct = Number(b.tax_pct||0);
+    const tax_amount = Number(b.tax_amount||0);
+    const total = Number(b.total||0);
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const { rows } = await pool.query(
+      'INSERT INTO supplier_invoices(number, date, due_date, supplier_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch',
+      [b.number||null, b.date||null, b.due_date||null, b.supplier_id||null, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, b.payment_method||null, b.status||'draft', branch]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
+});
+app.put("/supplier-invoices/:id", authenticateToken, authorize("purchases","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE supplier_invoices SET number=COALESCE($1,number), date=COALESCE($2,date), due_date=COALESCE($3,due_date), supplier_id=COALESCE($4,supplier_id), lines=COALESCE($5,lines), subtotal=COALESCE($6,subtotal), discount_pct=COALESCE($7,discount_pct), discount_amount=COALESCE($8,discount_amount), tax_pct=COALESCE($9,tax_pct), tax_amount=COALESCE($10,tax_amount), total=COALESCE($11,total), payment_method=COALESCE($12,payment_method), status=COALESCE($13,status), branch=COALESCE($14,branch), updated_at=NOW() WHERE id=$15 RETURNING id, number, status, total, branch',
+      [b.number||null, b.date||null, b.due_date||null, b.supplier_id||null, (Array.isArray(b.lines)?b.lines:null), (b.subtotal!=null?Number(b.subtotal):null), (b.discount_pct!=null?Number(b.discount_pct):null), (b.discount_amount!=null?Number(b.discount_amount):null), (b.tax_pct!=null?Number(b.tax_pct):null), (b.tax_amount!=null?Number(b.tax_amount):null), (b.total!=null?Number(b.total):null), b.payment_method||null, b.status||null, b.branch||null, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.post("/supplier-invoices/:id/post", authenticateToken, authorize("purchases","edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const { rows } = await pool.query('UPDATE supplier_invoices SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING id, number, status', ['posted', id]);
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.delete("/supplier-invoices/:id", authenticateToken, authorize("purchases","delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    await pool.query('DELETE FROM supplier_invoices WHERE id=$1', [id]);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.get("/invoices", authenticateToken, authorize("sales","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, created_at FROM invoices ORDER BY id DESC');
+    res.json({ items: rows || [] });
+  } catch (e) { res.json({ items: [] }); }
+});
+app.get("/invoices/next-number", authenticateToken, authorize("sales","create"), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT number FROM invoices ORDER BY id DESC LIMIT 1');
+    const last = rows && rows[0] ? String(rows[0].number||'') : '';
+    const year = (new Date()).getFullYear();
+    const m = /INV\/(\d{4})\/(\d+)/.exec(last);
+    const nextN = m && Number(m[1])===year ? Number(m[2]||0)+1 : 1;
+    const seq = `INV/${year}/${String(nextN).padStart(10,'0')}`;
+    res.json({ next: seq });
+  } catch (e) { res.json({ next: null }); }
+});
+app.post("/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const { rows } = await pool.query(
+      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, number, status, total, branch',
+      [b.number||null, b.date||null, b.customer_id||null, lines, Number(b.subtotal||0), Number(b.discount_pct||0), Number(b.discount_amount||0), Number(b.tax_pct||0), Number(b.tax_amount||0), Number(b.total||0), b.payment_method||null, String(b.status||'draft'), branch]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.put("/invoices/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE invoices SET number=COALESCE($1,number), date=COALESCE($2,date), customer_id=COALESCE($3,customer_id), lines=COALESCE($4,lines), subtotal=COALESCE($5,subtotal), discount_pct=COALESCE($6,discount_pct), discount_amount=COALESCE($7,discount_amount), tax_pct=COALESCE($8,tax_pct), tax_amount=COALESCE($9,tax_amount), total=COALESCE($10,total), payment_method=COALESCE($11,payment_method), status=COALESCE($12,status), branch=COALESCE($13,branch), updated_at=NOW() WHERE id=$14 RETURNING id, number, status, total, branch',
+      [b.number||null, b.date||null, (b.customer_id!=null?Number(b.customer_id):null), (Array.isArray(b.lines)?b.lines:null), (b.subtotal!=null?Number(b.subtotal):null), (b.discount_pct!=null?Number(b.discount_pct):null), (b.discount_amount!=null?Number(b.discount_amount):null), (b.tax_pct!=null?Number(b.tax_pct):null), (b.tax_amount!=null?Number(b.tax_amount):null), (b.total!=null?Number(b.total):null), b.payment_method||null, b.status||null, b.branch||null, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.delete("/invoices/:id", authenticateToken, authorize("sales","delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    await pool.query('DELETE FROM invoices WHERE id=$1', [id]);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.get("/invoice_items/:id", authenticateToken, authorize("sales","view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const { rows } = await pool.query('SELECT lines FROM invoices WHERE id=$1', [id]);
+    const lines = rows && rows[0] ? (rows[0].lines || []) : [];
+    res.json({ items: Array.isArray(lines) ? lines : [] });
+  } catch (e) { res.json({ items: [] }); }
+});
+app.get("/orders", authenticateToken, authorize("sales","view"), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, created_at FROM orders ORDER BY id DESC');
+    res.json(rows || []);
+  } catch (e) { res.json([]); }
+});
+app.get("/orders/:id", authenticateToken, authorize("sales","view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, created_at FROM orders WHERE id=$1', [id]);
+    res.json(rows && rows[0] || null);
+  } catch (e) { res.json(null); }
+});
+app.post("/orders", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const table_code = String(b.table || b.table_code || '');
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const { rows } = await pool.query('INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status', [branch, table_code, lines, 'DRAFT']);
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.put("/orders/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query('UPDATE orders SET branch=COALESCE($1,branch), table_code=COALESCE($2,table_code), lines=COALESCE($3,lines), status=COALESCE($4,status), updated_at=NOW() WHERE id=$5 RETURNING id, branch, table_code, status', [b.branch||null, (b.table||b.table_code||null), (Array.isArray(b.lines)?b.lines:null), b.status||null, id]);
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.delete("/orders/:id", authenticateToken, authorize("sales","delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    await pool.query('DELETE FROM orders WHERE id=$1', [id]);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.get("/payments", authenticateToken, authorize("sales","view"), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, invoice_id, amount, method, date, branch, created_at FROM payments ORDER BY id DESC');
+    res.json({ items: rows || [] });
+  } catch (e) { res.json({ items: [] }); }
+});
+app.post("/payments", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const { rows } = await pool.query('INSERT INTO payments(invoice_id, amount, method, date, branch) VALUES ($1,$2,$3,$4,$5) RETURNING id, invoice_id, amount, method, date, branch', [b.invoice_id||null, Number(b.amount||0), b.method||'cash', b.date||new Date(), branch]);
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.get("/ar/summary", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    res.json({ items: [] });
+  } catch (e) { res.json({ items: [] }); }
+});
+app.get("/pos/tables-layout", authenticateToken, async (req, res) => {
+  try {
+    const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
+    const key = `pos_tables_layout_${branch}`;
+    const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [key]);
+    const v = rows && rows[0] ? rows[0].value : null;
+    const out = v && v.rows ? v : { rows: [] };
+    res.json(out);
+  } catch (e) { res.json({ rows: [] }); }
+});
+app.put("/pos/tables-layout", authenticateToken, authorize("sales","settings"), async (req, res) => {
+  try {
+    const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
+    const key = `pos_tables_layout_${branch}`;
+    const value = req.body || {};
+    await pool.query('INSERT INTO settings(key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()', [key, value]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.get("/pos/table-state", authenticateToken, async (req, res) => {
+  try {
+    const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
+    const { rows } = await pool.query('SELECT table_code FROM orders WHERE branch = $1 AND status = $2', [branch, 'DRAFT']);
+    const busy = (rows || []).map(r => r.table_code).filter(Boolean);
+    res.json({ busy });
+  } catch (e) { res.json({ busy: [] }); }
+});
+app.post("/pos/verify-cancel", authenticateToken, async (req, res) => {
+  try {
+    const branch = String(req.body?.branch || req.user?.default_branch || 'china_town');
+    const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [`settings_branch_${branch}`]);
+    const v = rows && rows[0] ? rows[0].value : null;
+    const pwd = v && v.cancel_password ? String(v.cancel_password) : '';
+    const ok = !pwd || String(req.body?.password || '') === pwd;
+    res.json(ok);
+  } catch (e) { res.json(true); }
+});
+app.post("/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const table_code = String(b.table || b.table_code || '');
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const { rows } = await pool.query('INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status', [branch, table_code, lines, 'DRAFT']);
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.post("/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const number = b.number || null;
+    const date = b.date || new Date();
+    const customer_id = b.customer_id || null;
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const subtotal = Number(b.subtotal||0);
+    const discount_pct = Number(b.discount_pct||0);
+    const discount_amount = Number(b.discount_amount||0);
+    const tax_pct = Number(b.tax_pct||0);
+    const tax_amount = Number(b.tax_amount||0);
+    const total = Number(b.total||0);
+    const payment_method = b.payment_method || null;
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const status = String(b.status||'posted');
+    const { rows } = await pool.query(
+      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, number, status, total, branch',
+      [number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
 });
 app.get("/", (req, res) => {
   res.sendFile(path.join(buildPath, "index.html"));
