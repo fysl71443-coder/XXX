@@ -40,6 +40,56 @@ async function ensureSchema() {
         PRIMARY KEY (user_id, screen_code, branch_code, action_code)
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        key TEXT PRIMARY KEY,
+        value JSONB,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS partners (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL, -- 'customer' | 'supplier'
+        email TEXT,
+        phone TEXT,
+        customer_type TEXT,
+        contact_info JSONB,
+        tags TEXT[],
+        status TEXT DEFAULT 'active',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS employees (
+        id SERIAL PRIMARY KEY,
+        first_name TEXT,
+        last_name TEXT,
+        employee_number TEXT,
+        status TEXT DEFAULT 'active',
+        phone TEXT,
+        email TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id SERIAL PRIMARY KEY,
+        type TEXT, -- 'expense' | 'payment' | etc.
+        amount NUMERIC(18,2) DEFAULT 0,
+        account_code TEXT,
+        partner_id INTEGER,
+        description TEXT,
+        status TEXT DEFAULT 'draft',
+        branch TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
   } catch {}
 }
 ensureSchema().catch(()=>{});
@@ -140,8 +190,31 @@ app.get("/users", authenticateToken, requireAdmin, async (req, res) => {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
+app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
+    const { rows } = await pool.query('SELECT id, email, role, is_active, created_at FROM "users" ORDER BY id DESC');
+    const items = Array.isArray(rows) ? rows.map(r => ({ id: r.id, email: r.email, role: r.role || "user", is_active: r.is_active !== false, created_at: r.created_at })) : [];
+    res.json({ items });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
 
 app.post("/users", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { email, password, role, default_branch } = req.body || {};
+    if (!email || !password) return res.status(400).json({ error: "invalid_payload" });
+    const hashed = await bcrypt.hash(String(password), 10);
+    const { rows: existing } = await pool.query('SELECT id FROM "users" WHERE email = $1 LIMIT 1', [email]);
+    if (existing && existing.length > 0) return res.status(409).json({ error: "conflict" });
+    const { rows } = await pool.query('INSERT INTO "users" (email, password, role, default_branch) VALUES ($1, $2, $3, $4) RETURNING id, email, role, default_branch, created_at', [email, hashed, role || "user", default_branch || null]);
+    res.json(rows && rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { email, password, role, default_branch } = req.body || {};
     if (!email || !password) return res.status(400).json({ error: "invalid_payload" });
@@ -166,6 +239,17 @@ app.put("/users/:id", authenticateToken, requireAdmin, async (req, res) => {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
+app.put("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const { email, role, default_branch } = req.body || {};
+    if (!id) return res.status(400).json({ error: "invalid_payload" });
+    const { rows } = await pool.query('UPDATE "users" SET email = COALESCE($1, email), role = COALESCE($2, role), default_branch = COALESCE($3, default_branch) WHERE id = $4 RETURNING id, email, role, default_branch, created_at', [email || null, role || null, default_branch || null, id]);
+    res.json(rows && rows[0]);
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
 
 app.post("/users/:id/toggle", authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -179,8 +263,32 @@ app.post("/users/:id/toggle", authenticateToken, requireAdmin, async (req, res) 
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
+app.post("/api/users/:id/toggle", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ error: "invalid_payload" });
+    const { rows: cur } = await pool.query('SELECT is_active FROM "users" WHERE id = $1 LIMIT 1', [id]);
+    const next = !(cur && cur[0] && cur[0].is_active !== false);
+    await pool.query('UPDATE "users" SET is_active = $1 WHERE id = $2', [next, id]);
+    res.json({ ok: true, id, is_active: next });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
 
 app.post("/users/:id/reset-password", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const { password } = req.body || {};
+    if (!id || !password) return res.status(400).json({ error: "invalid_payload" });
+    const hashed = await bcrypt.hash(String(password), 10);
+    await pool.query('UPDATE "users" SET password = $1 WHERE id = $2', [hashed, id]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.post("/api/users/:id/reset-password", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
     const { password } = req.body || {};
@@ -288,8 +396,41 @@ app.get("/users/:id/permissions", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
+app.get("/api/users/:id/permissions", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ error: "invalid_payload" });
+    const { rows } = await pool.query('SELECT role FROM "users" WHERE id = $1 LIMIT 1', [id]);
+    const role = (rows && rows[0] && rows[0].role) ? String(rows[0].role).toLowerCase() : "user";
+    const existing = await loadUserPermissionsMap(id);
+    const hasAny = Object.keys(existing || {}).length > 0;
+    if (hasAny) return res.json(existing);
+    const m = defaultPermissions(role);
+    try { await saveUserPermissions(id, flattenPermissionsMap(m, id)) } catch {}
+    res.json(m);
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
 
 app.put("/users/:id/permissions", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ error: "invalid_payload" });
+    const body = req.body || {};
+    let rows = [];
+    if (Array.isArray(body)) {
+      rows = flattenPermissionsList(body, id);
+    } else {
+      rows = flattenPermissionsMap(body, id);
+    }
+    await saveUserPermissions(id, rows);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.put("/api/users/:id/permissions", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
     if (!id) return res.status(400).json({ error: "invalid_payload" });
@@ -310,6 +451,9 @@ app.put("/users/:id/permissions", authenticateToken, requireAdmin, async (req, r
 app.get("/roles", authenticateToken, requireAdmin, async (req, res) => {
   res.json({ items: [{ id: 1, name: "Admin" }, { id: 2, name: "User" }] });
 });
+app.get("/api/roles", authenticateToken, requireAdmin, async (req, res) => {
+  res.json({ items: [{ id: 1, name: "Admin" }, { id: 2, name: "User" }] });
+});
 app.get("/screens", authenticateToken, requireAdmin, async (req, res) => {
   const list = baseScreens().map((s, i) => ({
     id: i + 1,
@@ -319,7 +463,20 @@ app.get("/screens", authenticateToken, requireAdmin, async (req, res) => {
   }));
   res.json({ items: list });
 });
+app.get("/api/screens", authenticateToken, requireAdmin, async (req, res) => {
+  const list = baseScreens().map((s, i) => ({
+    id: i + 1,
+    code: s,
+    name: s,
+    has_branches: s === "sales"
+  }));
+  res.json({ items: list });
+});
 app.get("/actions", authenticateToken, requireAdmin, async (req, res) => {
+  const actions = ["view", "create", "edit", "delete", "settings"].map((code, i) => ({ id: i + 1, code }));
+  res.json({ items: actions });
+});
+app.get("/api/actions", authenticateToken, requireAdmin, async (req, res) => {
   const actions = ["view", "create", "edit", "delete", "settings"].map((code, i) => ({ id: i + 1, code }));
   res.json({ items: actions });
 });
@@ -346,8 +503,78 @@ app.get("/branches", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
+app.get("/api/branches", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.user?.id || 0);
+    if (!id) return res.status(401).json({ error: "unauthorized" });
+    const map = await loadUserPermissionsMap(id);
+    const set = new Set();
+    for (const [screen, obj] of Object.entries(map || {})) {
+      for (const [b, acts] of Object.entries(obj || {})) {
+        if (b === '_global') continue;
+        if (Object.values(acts || {}).some(Boolean)) set.add(String(b));
+      }
+    }
+    const arr = Array.from(set);
+    if (arr.length === 0) {
+      const def = String(req.user?.default_branch || '').trim() || 'china_town';
+      arr.push(def);
+    }
+    res.json({ items: arr.map((code, idx) => ({ id: idx + 1, code, name: code })) });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
 
 app.get("/users/:id/user-permissions", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    if (!id) return res.status(400).json({ error: "invalid_payload" });
+    const { items: screens } = await (async()=>({ items: baseScreens().map((s, i)=>({ id: i+1, code: s, name: s, has_branches: s==='sales' })) }))();
+    const { items: actions } = await (async()=>({ items: ["view","create","edit","delete","settings"].map((code,i)=>({ id:i+1, code })) }))();
+    const { items: branches } = await (async()=> {
+      const brRes = await (async()=> {
+        const map = await loadUserPermissionsMap(id);
+        const set = new Set();
+        for (const [screen, obj] of Object.entries(map || {})) {
+          for (const [b, acts] of Object.entries(obj || {})) {
+            if (b === '_global') continue;
+            if (Object.values(acts || {}).some(Boolean)) set.add(String(b));
+          }
+        }
+        const arr = Array.from(set);
+        if (arr.length === 0) {
+          const def = String((await pool.query('SELECT default_branch FROM "users" WHERE id = $1', [id]))?.rows?.[0]?.default_branch || '').trim() || 'china_town';
+          arr.push(def);
+        }
+        return arr.map((code, idx) => ({ id: idx + 1, code, name: code }))
+      })();
+      return { items: brRes };
+    })();
+    const screenIdByCode = Object.fromEntries((screens||[]).map(s => [String(s.code).toLowerCase(), s.id]));
+    const actionIdByCode = Object.fromEntries((actions||[]).map(a => [String(a.code).toLowerCase(), a.id]));
+    const branchIdByCode = Object.fromEntries((branches||[]).map(b => [String(b.code).toLowerCase(), b.id]));
+    const { rows } = await pool.query('SELECT screen_code, branch_code, action_code, allowed FROM user_permissions WHERE user_id = $1', [id]);
+    const list = [];
+    for (const r of rows || []) {
+      const sc = String(r.screen_code||'').toLowerCase();
+      const ac = String(r.action_code||'').toLowerCase();
+      const br = String(r.branch_code||'').toLowerCase();
+      list.push({
+        id: 0,
+        user_id: id,
+        screen_id: screenIdByCode[sc] || null,
+        action_id: actionIdByCode[ac] || null,
+        branch_id: br ? (branchIdByCode[br] || null) : null,
+        allowed: !!r.allowed
+      });
+    }
+    res.json(list);
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/api/users/:id/user-permissions", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
     if (!id) return res.status(400).json({ error: "invalid_payload" });
@@ -524,6 +751,107 @@ app.use("/settings", authenticateToken, async (req, res, next) => {
   }
 });
 
+// Settings storage (DB-backed)
+app.get("/settings", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT key, value, updated_at FROM settings ORDER BY key ASC');
+    res.json({ items: rows || [] });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/settings/:key", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const key = String(req.params.key || "");
+    const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [key]);
+    const v = rows && rows[0] ? rows[0].value : null;
+    res.json(v);
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.put("/settings/:key", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const key = String(req.params.key || "");
+    const value = req.body || null;
+    await pool.query('INSERT INTO settings(key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()', [key, value]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.post("/settings/backup", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT key, value FROM settings ORDER BY key ASC');
+    const dump = {};
+    for (const r of rows || []) dump[r.key] = r.value;
+    res.json({ ok: true, data: dump });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.post("/settings/restore", authenticateToken, requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const data = req.body || {};
+    await client.query('BEGIN');
+    for (const [k, v] of Object.entries(data || {})) {
+      await client.query('INSERT INTO settings(key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()', [k, v]);
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    try { await client.query('ROLLBACK') } catch {}
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+// Duplicate under /api for frontend expectations
+app.get("/api/settings", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT key, value, updated_at FROM settings ORDER BY key ASC');
+    res.json({ items: rows || [] });
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); }
+});
+app.get("/api/settings/:key", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const key = String(req.params.key || "");
+    const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [key]);
+    const v = rows && rows[0] ? rows[0].value : null;
+    res.json(v);
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); }
+});
+app.put("/api/settings/:key", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const key = String(req.params.key || "");
+    const value = req.body || null;
+    await pool.query('INSERT INTO settings(key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()', [key, value]);
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); }
+});
+app.post("/api/settings/backup", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT key, value FROM settings ORDER BY key ASC');
+    const dump = {}; for (const r of rows || []) dump[r.key] = r.value;
+    res.json({ ok: true, data: dump });
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); }
+});
+app.post("/api/settings/restore", authenticateToken, requireAdmin, async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const data = req.body || {};
+    await client.query('BEGIN');
+    for (const [k, v] of Object.entries(data || {})) {
+      await client.query('INSERT INTO settings(key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()', [k, v]);
+    }
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    try { await client.query('ROLLBACK') } catch {}
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally { client.release(); }
+});
 app.use("/partners", authenticateToken, async (req, res, next) => {
   try {
     const t = String(req.query?.type || req.body?.type || '').toLowerCase()
@@ -631,90 +959,211 @@ app.use("/preview", authenticateToken, async (req, res, next) => {
 });
 
 // Minimal safe API handlers to prevent UI crashes
-app.get("/partners", async (req, res) => {
+app.get("/partners", authenticateToken, async (req, res) => {
   try {
     const type = String(req.query?.type || "").toLowerCase();
-    const list = [];
-    res.json(Array.isArray(list) ? list.filter(p => !type || String(p.type||"").toLowerCase() === type) : []);
-  } catch (e) {
-    res.json([]);
-  }
+    const { rows } = await pool.query('SELECT id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at FROM partners ORDER BY id DESC');
+    const list = Array.isArray(rows) ? rows.map(r => ({ ...r, contact_info: r.contact_info || null })) : [];
+    const filtered = list.filter(p => !type || String(p.type||"").toLowerCase() === type);
+    res.json(filtered);
+  } catch (e) { res.json([]); }
 });
-app.post("/partners", async (req, res) => {
+app.get("/api/partners", authenticateToken, async (req, res) => {
   try {
-    const body = req.body || {};
-    const created = { id: Date.now(), ...body };
-    res.json(created);
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const type = String(req.query?.type || "").toLowerCase();
+    const { rows } = await pool.query('SELECT id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at FROM partners ORDER BY id DESC');
+    const list = Array.isArray(rows) ? rows.map(r => ({ ...r, contact_info: r.contact_info || null })) : [];
+    const filtered = list.filter(p => !type || String(p.type||"").toLowerCase() === type);
+    res.json(filtered);
+  } catch (e) { res.json([]); }
 });
-app.put("/partners/:id", async (req, res) => {
+app.post("/partners", authenticateToken, authorize("clients","create"), async (req, res) => {
   try {
-    res.json({ ok: true, id: Number(req.params.id||0), ...req.body });
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const b = req.body || {};
+    const name = String(b.name||'').trim(); const type = String(b.type||'customer').toLowerCase();
+    const email = b.email || null; const phone = b.phone || null;
+    const customer_type = b.customer_type || null;
+    const contact_info = b.contact_info ? (typeof b.contact_info === 'object' ? b.contact_info : null) : null;
+    const { rows } = await pool.query(
+      'INSERT INTO partners(name, type, email, phone, customer_type, contact_info) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      [name, type, email, phone, customer_type, contact_info]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
 });
-app.delete("/partners/:id", async (req, res) => {
+app.post("/api/partners", authenticateToken, authorize("clients","create"), async (req, res) => {
   try {
-    res.json({ ok: true, id: Number(req.params.id||0) });
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const b = req.body || {};
+    const name = String(b.name||'').trim(); const type = String(b.type||'customer').toLowerCase();
+    const email = b.email || null; const phone = b.phone || null;
+    const customer_type = b.customer_type || null;
+    const contact_info = b.contact_info ? (typeof b.contact_info === 'object' ? b.contact_info : null) : null;
+    const { rows } = await pool.query(
+      'INSERT INTO partners(name, type, email, phone, customer_type, contact_info) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      [name, type, email, phone, customer_type, contact_info]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
+});
+app.put("/partners/:id", authenticateToken, authorize("clients","edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE partners SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), customer_type=COALESCE($4,customer_type), contact_info=COALESCE($5,contact_info), updated_at=NOW() WHERE id=$6 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      [b.name||null, b.email||null, b.phone||null, b.customer_type||null, (typeof b.contact_info==='object'? b.contact_info : null), id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.put("/api/partners/:id", authenticateToken, authorize("clients","edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE partners SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), customer_type=COALESCE($4,customer_type), contact_info=COALESCE($5,contact_info), updated_at=NOW() WHERE id=$6 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      [b.name||null, b.email||null, b.phone||null, b.customer_type||null, (typeof b.contact_info==='object'? b.contact_info : null), id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.delete("/partners/:id", authenticateToken, authorize("clients","delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    await pool.query('UPDATE partners SET is_active = false, status = $1, updated_at = NOW() WHERE id = $2', ['disabled', id]);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.delete("/api/partners/:id", authenticateToken, authorize("clients","delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    await pool.query('UPDATE partners SET is_active = false, status = $1, updated_at = NOW() WHERE id = $2', ['disabled', id]);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
 
-app.get("/employees", async (req, res) => {
+app.get("/employees", authenticateToken, async (req, res) => {
   try {
-    res.json([]);
-  } catch (e) {
-    res.json([]);
-  }
+    const { rows } = await pool.query('SELECT id, first_name, last_name, employee_number, status, phone, email, created_at FROM employees ORDER BY id DESC');
+    res.json(rows || []);
+  } catch (e) { res.json([]); }
 });
-app.post("/employees", async (req, res) => {
+app.get("/api/employees", authenticateToken, async (req, res) => {
   try {
-    const body = req.body || {};
-    res.json({ id: Date.now(), ...body });
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const { rows } = await pool.query('SELECT id, first_name, last_name, employee_number, status, phone, email, created_at FROM employees ORDER BY id DESC');
+    res.json(rows || []);
+  } catch (e) { res.json([]); }
 });
-app.put("/employees/:id", async (req, res) => {
+app.post("/employees", authenticateToken, authorize("employees","create"), async (req, res) => {
   try {
-    res.json({ ok: true, id: Number(req.params.id||0), ...req.body });
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'INSERT INTO employees(first_name,last_name,employee_number,status,phone,email) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
+      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||'active', b.phone||null, b.email||null]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
-app.delete("/employees/:id", async (req, res) => {
+app.post("/api/employees", authenticateToken, authorize("employees","create"), async (req, res) => {
   try {
-    res.json({ ok: true, id: Number(req.params.id||0) });
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'INSERT INTO employees(first_name,last_name,employee_number,status,phone,email) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
+      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||'active', b.phone||null, b.email||null]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.put("/employees/:id", authenticateToken, authorize("employees","edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE employees SET first_name=COALESCE($1,first_name), last_name=COALESCE($2,last_name), employee_number=COALESCE($3,employee_number), status=COALESCE($4,status), phone=COALESCE($5,phone), email=COALESCE($6,email), updated_at=NOW() WHERE id=$7 RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
+      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||null, b.phone||null, b.email||null, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.put("/api/employees/:id", authenticateToken, authorize("employees","edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE employees SET first_name=COALESCE($1,first_name), last_name=COALESCE($2,last_name), employee_number=COALESCE($3,employee_number), status=COALESCE($4,status), phone=COALESCE($5,phone), email=COALESCE($6,email), updated_at=NOW() WHERE id=$7 RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
+      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||null, b.phone||null, b.email||null, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.delete("/employees/:id", authenticateToken, authorize("employees","delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    await pool.query('UPDATE employees SET status = $1, updated_at = NOW() WHERE id = $2', ['disabled', id]);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.delete("/api/employees/:id", authenticateToken, authorize("employees","delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    await pool.query('UPDATE employees SET status = $1, updated_at = NOW() WHERE id = $2', ['disabled', id]);
+    res.json({ ok: true, id });
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
 
-app.get("/expenses", async (req, res) => {
+app.get("/expenses", authenticateToken, async (req, res) => {
   try {
-    res.json({ items: [] });
-  } catch (e) {
-    res.json({ items: [] });
-  }
+    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, created_at FROM expenses ORDER BY id DESC');
+    res.json({ items: rows || [] });
+  } catch (e) { res.json({ items: [] }); }
 });
-app.post("/expenses", async (req, res) => {
+app.get("/api/expenses", authenticateToken, async (req, res) => {
   try {
-    const body = req.body || {};
-    res.json({ id: Date.now(), ...body });
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, created_at FROM expenses ORDER BY id DESC');
+    res.json({ items: rows || [] });
+  } catch (e) { res.json({ items: [] }); }
 });
-app.put("/expenses/:id", async (req, res) => {
+app.post("/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
   try {
-    res.json({ ok: true, id: Number(req.params.id||0), ...req.body });
-  } catch (e) {
-    res.status(500).json({ error: "server_error" });
-  }
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
+      [b.type||'expense', Number(b.amount||0), b.account_code||null, b.partner_id||null, b.description||null, b.status||'draft', b.branch||req.user?.default_branch||'china_town']
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.post("/api/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
+      [b.type||'expense', Number(b.amount||0), b.account_code||null, b.partner_id||null, b.description||null, b.status||'draft', b.branch||req.user?.default_branch||'china_town']
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.put("/expenses/:id", authenticateToken, authorize("expenses","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), updated_at=NOW() WHERE id=$8 RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
+      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), updated_at=NOW() WHERE id=$8 RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
+      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
 app.get("/", (req, res) => {
   res.sendFile(path.join(buildPath, "index.html"));
