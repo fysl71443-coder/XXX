@@ -47,24 +47,10 @@ export function AuthProvider({ children }) {
       setToken(tk);
       try { const pm = await apiUsers.permissions(data?.id||data?.user?.id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
     } catch (e) {
-      try {
-        const cached = localStorage.getItem('auth_user');
-        if (cached) {
-          const u = JSON.parse(cached);
-          setUser(u);
-          setToken(tk);
-          try { const pm = await apiUsers.permissions(u?.id||u?.user?.id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
-        } else {
-          console.error('Failed to load user', e);
-          setUser(null);
-          setToken(null);
-          setPermissionsMap({})
-        }
-      } catch {
-        setUser(null);
-        setToken(null);
-        setPermissionsMap({})
-      }
+      try { localStorage.removeItem('token'); localStorage.removeItem('auth_user') } catch {}
+      setUser(null);
+      setToken(null);
+      setPermissionsMap({})
     } finally {
       setLoading(false);
     }
@@ -119,6 +105,7 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('remember');
     setUser(null);
     setToken(null);
+    setPermissionsMap({})
     window.location.href = '/login';
   };
 
@@ -127,13 +114,35 @@ export function AuthProvider({ children }) {
     if (user.isSuperAdmin === true) return true;
     if (user.isAdmin === true) return true;
     if (String(user.role).toLowerCase() === 'admin') return true;
-    const perms = Array.isArray(user.permissions)
-      ? user.permissions
-      : (user.user && user.user.permissions && typeof user.user.permissions === 'object'
-          ? Object.keys(user.user.permissions).filter(k => user.user.permissions[k] === true)
-          : []);
-    if (perms.includes('*')) return true;
-    return perms.includes(permission);
+    const raw = String(permission||'').toLowerCase();
+    let screen = '';
+    let action = '';
+    if (raw.includes(':')) {
+      const [s, a] = raw.split(':');
+      screen = s || '';
+      action = a || '';
+    } else if (raw.includes('.')) {
+      const [s, a] = raw.split('.');
+      screen = s || '';
+      action = a || '';
+    } else {
+      screen = raw;
+      action = 'view';
+    }
+    const mapAction = (a) => {
+      const x = String(a||'').toLowerCase();
+      if (x === 'view') return 'view';
+      if (x === 'create') return 'create';
+      if (x === 'edit') return 'edit';
+      if (x === 'delete') return 'delete';
+      if (x === 'settings' || x === 'manage') return 'settings';
+      if (x === 'write') return 'edit';
+      if (x === 'print' || x === 'export') return 'view';
+      if (x === 'post' || x === 'reverse' || x === 'credit_note' || x === 'return') return 'edit';
+      return 'view';
+    };
+    const act = mapAction(action);
+    return canScreen(screen, act);
   };
 
   const canScreen = (screenCode, actionCode, branch = null) => {
@@ -155,7 +164,7 @@ export function AuthProvider({ children }) {
     }
   }
 
-  const isLoggedIn = !!token;
+  const isLoggedIn = !!user && !!token;
 
   async function impersonatePermissionsForUser(id){
     try { const pm = await apiUsers.permissions(id); setPermissionsMap(normalizePerms(pm||{})) } catch {}

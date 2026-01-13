@@ -753,6 +753,22 @@ app.use("/expenses", authenticateToken, async (req, res, next) => {
   }
 });
 
+app.use("/api/expenses", authenticateToken, async (req, res, next) => {
+  try {
+    if (req.method === "GET") {
+      return authorize("expenses", "view", { branchFrom: r => (r.query.branch || null) })(req, res, next);
+    }
+    if (req.method === "POST") {
+      return authorize("expenses", "create", { branchFrom: r => (r.body.branch || null) })(req, res, next);
+    }
+    if (req.method === "PUT") {
+      return authorize("expenses", "edit", { branchFrom: r => (r.body.branch || null) })(req, res, next);
+    }
+    next();
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
 app.use("/customers", authenticateToken, async (req, res, next) => {
   try {
     if (req.method === "GET") {
@@ -771,6 +787,20 @@ app.use("/customers", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/employees", authenticateToken, async (req, res, next) => {
+  try {
+    if (req.method === "GET") {
+      return authorize("employees", "view")(req, res, next);
+    }
+    if (req.method === "POST" || req.method === "PUT") {
+      return authorize("employees", "manage")(req, res, next);
+    }
+    next();
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.use("/api/employees", authenticateToken, async (req, res, next) => {
   try {
     if (req.method === "GET") {
       return authorize("employees", "view")(req, res, next);
@@ -916,6 +946,18 @@ app.post("/api/settings/restore", authenticateToken, requireAdmin, async (req, r
   } finally { client.release(); }
 });
 app.use("/partners", authenticateToken, async (req, res, next) => {
+  try {
+    const t = String(req.query?.type || req.body?.type || '').toLowerCase()
+    if (t === 'customer') return authorize("clients", req.method === "GET" ? "view" : (req.method === "POST" ? "create" : "edit"))(req, res, next)
+    if (t === 'supplier') return authorize("suppliers", req.method === "GET" ? "view" : (req.method === "POST" ? "create" : "edit"))(req, res, next)
+    return authorize("clients", "view")(req, res, next)
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Mirror authorization for /api prefixed endpoints
+app.use("/api/partners", authenticateToken, async (req, res, next) => {
   try {
     const t = String(req.query?.type || req.body?.type || '').toLowerCase()
     if (t === 'customer') return authorize("clients", req.method === "GET" ? "view" : (req.method === "POST" ? "create" : "edit"))(req, res, next)
