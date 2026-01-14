@@ -19,7 +19,17 @@ const app = express();
 const port = Number(process.env.PORT || 10000);
 
 const buildPath = path.join(__dirname, "frontend", "build");
+
+// CRITICAL: Static files MUST be served BEFORE any authentication middleware
+// This ensures React chunks, CSS, images, etc. are served without auth checks
+// Order matters: static first, then auth-protected routes
 app.use(express.static(buildPath));
+
+// Public paths that should never require authentication
+app.get('/favicon.ico', (req, res) => res.status(204).end());
+app.get('/manifest.json', express.static(buildPath));
+app.get('/robots.txt', express.static(buildPath));
+
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

@@ -5,6 +5,40 @@ export async function authenticateToken(req, res, next) {
   try {
     const method = req.method || 'UNKNOWN'
     const path = req.path || req.url || 'UNKNOWN'
+    
+    // CRITICAL: Skip authentication for static assets and public paths
+    // Static files (JS chunks, CSS, images, etc.) should never require authentication
+    // This prevents React from failing to load chunks when navigating to routes
+    const staticPaths = [
+      '/static',
+      '/favicon.ico',
+      '/manifest.json',
+      '/robots.txt',
+      '/logo',
+      '.js',
+      '.css',
+      '.png',
+      '.jpg',
+      '.jpeg',
+      '.gif',
+      '.svg',
+      '.ico',
+      '.woff',
+      '.woff2',
+      '.ttf',
+      '.eot'
+    ];
+    
+    // Check if this is a static file request
+    const isStaticFile = staticPaths.some(staticPath => 
+      path.startsWith(staticPath) || path.endsWith(staticPath)
+    );
+    
+    if (isStaticFile) {
+      // Skip authentication for static files - let express.static handle them
+      return next();
+    }
+    
     const authHeader = req.headers["authorization"] || "";
     const parts = authHeader.split(" ");
     const token = parts.length === 2 && /^Bearer$/i.test(parts[0]) ? parts[1] : null;
