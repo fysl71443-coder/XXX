@@ -51,6 +51,11 @@ export function AuthProvider({ children }) {
       return;
     }
     
+    // CRITICAL: Set loading=true at the start to ensure ProtectedRoute waits
+    // This prevents any content from rendering before auth verification completes
+    setLoading(true);
+    loadingUserRef.current = true;
+    
     const tk = localStorage.getItem('token');
     console.log('[AuthContext] loadUser called', { hasToken: !!tk, tokenLength: tk?.length || 0 });
     
@@ -60,7 +65,7 @@ export function AuthProvider({ children }) {
       setToken(null);
       setPermissionsMap({});
       setPermissionsLoaded(false);
-      setLoading(false);
+      setLoading(false); // Set to false only after clearing state
       loadingUserRef.current = false;
       lastLoadedUserIdRef.current = null;
       return;
