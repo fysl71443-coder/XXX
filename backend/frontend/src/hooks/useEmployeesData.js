@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { employees as apiEmployees, payroll as apiPayroll, settings as apiSettings } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 /**
  * Custom hook for managing employees data, filters, and related state
  * Separates data fetching logic from UI components
  */
 export function useEmployeesData() {
+  const { loading: authLoading, isLoggedIn } = useAuth();
   const [list, setList] = useState([]);
   const [filters, setFilters] = useState({
     saudization: '',
@@ -95,10 +97,14 @@ export function useEmployeesData() {
     ]);
   }, [loadEmployees, loadRuns, loadPrevDues, loadSettings]);
 
-  // Initial load on mount
+  // Initial load on mount - CRITICAL: Wait for auth to be ready
   useEffect(() => {
+    if (authLoading || !isLoggedIn) {
+      console.log('[useEmployeesData] Waiting for auth before loading data...');
+      return;
+    }
     load();
-  }, [load]);
+  }, [load, authLoading, isLoggedIn]);
 
   // Listen for storage events (e.g., when prev_dues_version changes)
   useEffect(() => {

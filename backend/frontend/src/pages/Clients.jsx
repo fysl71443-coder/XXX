@@ -76,14 +76,11 @@ export default function Clients() {
   const [company, setCompany] = useState(null)
   const [footerCfg, setFooterCfg] = useState(null)
   
-  const auth = useAuth()
-  const me = auth?.user
-  const can = auth?.can || (()=>true)
+  // CRITICAL: Single useAuth call - unified auth state
+  const { user: me, can, loading: authLoading, isLoggedIn, isAdmin } = useAuth()
   const [refreshKey, setRefreshKey] = useState(0)
   const [helpOpen, setHelpOpen] = useState(false)
   const [periodStatus, setPeriodStatus] = useState('open')
-
-  
 
   const [error, setError] = useState('')
   
@@ -114,9 +111,6 @@ export default function Clients() {
       setLoading(false)
     }
   }
-
-  // CRITICAL: Wait for auth to be ready before making API calls
-  const { loading: authLoading, isLoggedIn } = useAuth();
   
   useEffect(() => { 
     // Don't make API calls until auth is ready

@@ -85,7 +85,7 @@ export default function Suppliers() {
   const [supPdfLoading, setSupPdfLoading] = useState(false)
   const [branding, setBranding] = useState(null)
   const [footerCfg, setFooterCfg] = useState(null)
-  const { can } = useAuth()
+  const { can, loading: authLoading, isLoggedIn, isAdmin } = useAuth()
 
   const load = useCallback(async function load() {
     setLoading(true)
@@ -206,7 +206,14 @@ export default function Suppliers() {
     })
   }, [supInvActiveTab, agingBucket, supInvRows])
 
-useEffect(() => { load() }, [load])
+// CRITICAL: Wait for auth to be ready before making API calls
+useEffect(() => { 
+  if (authLoading || !isLoggedIn) {
+    console.log('[Suppliers] Waiting for auth before loading data...');
+    return;
+  }
+  load() 
+}, [load, authLoading, isLoggedIn])
   useEffect(() => {
     function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') }
     window.addEventListener('storage', onStorage)

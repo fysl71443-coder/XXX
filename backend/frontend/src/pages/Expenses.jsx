@@ -19,7 +19,7 @@ function labelName(acc, lang){ return lang==='ar'?(acc.name||''):(acc.name_en||a
 export default function Expenses(){
   const navigate = useNavigate()
   const location = useLocation()
-  const { loading: authLoading, isLoggedIn } = useAuth() // CRITICAL: Check auth state before API calls
+  const { loading: authLoading, isLoggedIn, can, isAdmin } = useAuth() // CRITICAL: Check auth state before API calls
   const [lang, setLang] = useState(localStorage.getItem('lang')||'ar')
   const [tree, setTree] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -63,7 +63,6 @@ export default function Expenses(){
   const [error, setError] = useState('')
   const [editingId, setEditingId] = useState(null)
   const [submitting, setSubmitting] = useState(false)
-  const { can } = useAuth()
   const [arType, setArType] = useState('')
   const [arEntities, setArEntities] = useState([])
   const [arEntityId, setArEntityId] = useState('')
