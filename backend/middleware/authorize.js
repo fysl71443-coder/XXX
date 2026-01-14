@@ -78,8 +78,10 @@ export function authorize(screen, action, options = {}) {
       }
       
       // Admin bypass - return immediately, no permission checks needed
-      const role = normalize(req.user.role)
-      if (role === 'admin') {
+      // Use isAdmin flag if available, otherwise check role
+      const isAdmin = req.user?.isAdmin === true || normalize(req.user?.role) === 'admin';
+      
+      if (isAdmin) {
         const userId = req.user?.id || 'anon'
         const sc = normalize(screen)
         const ac = normalize(action)

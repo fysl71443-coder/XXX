@@ -20,21 +20,66 @@ const port = Number(process.env.PORT || 10000);
 
 const buildPath = path.join(__dirname, "frontend", "build");
 
-// CRITICAL: Static files MUST be served BEFORE any authentication middleware
-// This ensures React chunks, CSS, images, etc. are served without auth checks
-// Order matters: static first, then auth-protected routes
+// ============================================
+// CRITICAL: Static Files MUST Come First
+// ============================================
+// Static files (JS chunks, CSS, images) should NEVER pass through auth/authorize
+// They must be served directly without any middleware checks
+// This prevents login loops when React tries to load chunks
+
+// 1️⃣ Static files FIRST - before ANY middleware
 app.use(express.static(buildPath));
 
-// Public paths that should never require authentication
+// 2️⃣ Public paths that never need auth
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/manifest.json', express.static(buildPath));
 app.get('/robots.txt', express.static(buildPath));
 
+// 3️⃣ Middleware for parsing (safe for static files)
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request Logging Middleware
+// 4️⃣ Static file guard - skip ALL middleware for static files
+// This catches any static files that might slip through
+app.use((req, res, next) => {
+  const path = req.path || req.url || '';
+  
+  // Check if this is a static file request
+  const staticPatterns = [
+    '/static/',
+    '/favicon.ico',
+    '/manifest.json',
+    '/robots.txt',
+    '.js',
+    '.css',
+    '.png',
+    '.jpg',
+    '.jpeg',
+    '.gif',
+    '.svg',
+    '.ico',
+    '.woff',
+    '.woff2',
+    '.ttf',
+    '.eot',
+    '.map' // Source maps
+  ];
+  
+  const isStaticFile = staticPatterns.some(pattern => 
+    path.includes(pattern) || path.endsWith(pattern)
+  );
+  
+  if (isStaticFile) {
+    // Static file - let express.static handle it, skip all other middleware
+    return next();
+  }
+  
+  // Not a static file - continue to next middleware
+  next();
+});
+
+// 5️⃣ Request Logging Middleware (only for non-static requests)
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const method = req.method || 'UNKNOWN';
