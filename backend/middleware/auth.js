@@ -25,32 +25,75 @@ export async function authenticateToken(req, res, next) {
       return res.status(500).json({ error: "server_error", details: "db_not_configured" });
     }
     
-    // Load user with role_id from new permission system
-    const { rows } = await pool.query(
-      'SELECT id, email, role, role_id, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', 
-      [payload.id]
-    );
-    const user = rows && rows[0];
+    // Load user - handle role_id column gracefully if it doesn't exist yet
+    let user;
+    try {
+      // Try to load with role_id first (new system)
+      const { rows } = await pool.query(
+        'SELECT id, email, role, role_id, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', 
+        [payload.id]
+      );
+      user = rows && rows[0];
+    } catch (colErr) {
+      // If role_id column doesn't exist, load without it (backward compatibility)
+      if (colErr.message && colErr.message.includes('role_id')) {
+        console.warn(`[AUTH] role_id column not found, loading user without it | userId=${payload.id}`);
+        const { rows } = await pool.query(
+          'SELECT id, email, role, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', 
+          [payload.id]
+        );
+        user = rows && rows[0];
+        if (user) {
+          user.role_id = null; // Set to null if column doesn't exist
+        }
+      } else {
+        throw colErr; // Re-throw if it's a different error
+      }
+    }
     
     if (!user) {
       console.log(`[AUTH] REJECTED: User not found | userId=${payload.id} ${method} ${path}`)
       return res.status(401).json({ error: "unauthorized" });
     }
     
-    // If user has old role but no role_id, try to migrate
+    // If user has old role but no role_id, try to migrate (only if roles table exists)
     if (user.role && !user.role_id) {
       try {
-        const { rows: roleRows } = await pool.query(
-          'SELECT id FROM roles WHERE LOWER(name) = $1 LIMIT 1',
-          [String(user.role).toLowerCase()]
-        );
-        if (roleRows.length > 0) {
-          await pool.query('UPDATE users SET role_id = $1 WHERE id = $2', [roleRows[0].id, user.id]);
-          user.role_id = roleRows[0].id;
-          console.log(`[AUTH] Migrated user role to role_id | userId=${user.id} role_id=${user.role_id}`);
+        // Check if roles table exists first
+        const { rows: tableCheck } = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_name = 'roles'
+          )
+        `);
+        
+        if (tableCheck[0].exists) {
+          // Try to add role_id column if it doesn't exist
+          try {
+            await pool.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS role_id INTEGER REFERENCES roles(id) ON DELETE SET NULL');
+            console.log(`[AUTH] Added role_id column to users table`);
+          } catch (alterErr) {
+            // Column might already exist or migration in progress - ignore
+            if (!alterErr.message.includes('already exists')) {
+              console.warn(`[AUTH] Could not add role_id column: ${alterErr.message}`);
+            }
+          }
+          
+          // Now try to migrate role
+          const { rows: roleRows } = await pool.query(
+            'SELECT id FROM roles WHERE LOWER(name) = $1 LIMIT 1',
+            [String(user.role).toLowerCase()]
+          );
+          if (roleRows.length > 0) {
+            await pool.query('UPDATE users SET role_id = $1 WHERE id = $2', [roleRows[0].id, user.id]);
+            user.role_id = roleRows[0].id;
+            console.log(`[AUTH] Migrated user role to role_id | userId=${user.id} role_id=${user.role_id}`);
+          }
         }
       } catch (migrateErr) {
-        console.error(`[AUTH] Error migrating role: ${migrateErr.message}`);
+        // Migration failure is non-critical - user can still authenticate
+        console.warn(`[AUTH] Role migration failed (non-critical): ${migrateErr.message}`);
       }
     }
     
