@@ -41,18 +41,24 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // 4️⃣ Static file guard - skip ALL middleware for static files
-// This catches any static files that might slip through
+// This catches any static files that might slip through, including nested paths
+// CRITICAL: This must catch paths like /supplier-invoices/static/js/... 
+// React Router lazy loading creates chunks in sub-routes
 app.use((req, res, next) => {
   const path = req.path || req.url || '';
   
   // Check if this is a static file request
+  // Patterns to match:
+  // - /static/... (any path containing /static/)
+  // - /favicon.ico, /manifest.json, etc.
+  // - Any file with static extensions (.js, .css, .png, etc.)
   const staticPatterns = [
-    '/static/',
+    '/static/',           // Matches /static/... and /supplier-invoices/static/...
     '/favicon.ico',
     '/manifest.json',
     '/robots.txt',
-    '.js',
-    '.css',
+    '.js',                // Matches any .js file
+    '.css',               // Matches any .css file
     '.png',
     '.jpg',
     '.jpeg',
@@ -63,15 +69,23 @@ app.use((req, res, next) => {
     '.woff2',
     '.ttf',
     '.eot',
-    '.map' // Source maps
+    '.map'                // Source maps
   ];
   
-  const isStaticFile = staticPatterns.some(pattern => 
-    path.includes(pattern) || path.endsWith(pattern)
-  );
+  // Check if path contains static pattern OR ends with static extension
+  const isStaticFile = staticPatterns.some(pattern => {
+    if (pattern.startsWith('/')) {
+      // For paths like '/static/', check if path includes it anywhere
+      return path.includes(pattern);
+    } else {
+      // For extensions like '.js', check if path ends with it
+      return path.endsWith(pattern);
+    }
+  });
   
   if (isStaticFile) {
     // Static file - let express.static handle it, skip all other middleware
+    // This prevents auth/authorize from blocking static assets
     return next();
   }
   

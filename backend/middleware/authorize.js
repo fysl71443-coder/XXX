@@ -32,14 +32,15 @@ export function authorize(screen, action, options = {}) {
       
       // CRITICAL: Skip authorization for static assets and non-API paths
       // Authorization should ONLY apply to API endpoints, not frontend routes or static files
+      // Must catch paths like /supplier-invoices/static/js/... (React Router lazy loading)
       const staticPaths = [
-        '/static',
+        '/static/',          // Matches /static/... and /supplier-invoices/static/...
         '/favicon.ico',
         '/manifest.json',
         '/robots.txt',
         '/logo',
-        '.js',
-        '.css',
+        '.js',               // Matches any .js file
+        '.css',              // Matches any .css file
         '.png',
         '.jpg',
         '.jpeg',
@@ -49,13 +50,22 @@ export function authorize(screen, action, options = {}) {
         '.woff',
         '.woff2',
         '.ttf',
-        '.eot'
+        '.eot',
+        '.map'               // Source maps
       ];
       
       // Check if this is a static file request
-      const isStaticFile = staticPaths.some(staticPath => 
-        path.startsWith(staticPath) || path.endsWith(staticPath)
-      );
+      // For paths like '/static/', check if path includes it anywhere
+      // For extensions like '.js', check if path ends with it
+      const isStaticFile = staticPaths.some(staticPath => {
+        if (staticPath.startsWith('/')) {
+          // Path pattern - check if path includes it anywhere
+          return path.includes(staticPath);
+        } else {
+          // Extension pattern - check if path ends with it
+          return path.endsWith(staticPath);
+        }
+      });
       
       // CRITICAL: Only apply authorization to API endpoints
       // Frontend routes (like /supplier-invoices/new) should NOT be authorized here

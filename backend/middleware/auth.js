@@ -9,14 +9,15 @@ export async function authenticateToken(req, res, next) {
     // CRITICAL: Skip authentication for static assets and public paths
     // Static files (JS chunks, CSS, images, etc.) should never require authentication
     // This prevents React from failing to load chunks when navigating to routes
+    // Must catch paths like /supplier-invoices/static/js/... (React Router lazy loading)
     const staticPaths = [
-      '/static',
+      '/static/',          // Matches /static/... and /supplier-invoices/static/...
       '/favicon.ico',
       '/manifest.json',
       '/robots.txt',
       '/logo',
-      '.js',
-      '.css',
+      '.js',               // Matches any .js file
+      '.css',              // Matches any .css file
       '.png',
       '.jpg',
       '.jpeg',
@@ -26,13 +27,22 @@ export async function authenticateToken(req, res, next) {
       '.woff',
       '.woff2',
       '.ttf',
-      '.eot'
+      '.eot',
+      '.map'               // Source maps
     ];
     
     // Check if this is a static file request
-    const isStaticFile = staticPaths.some(staticPath => 
-      path.startsWith(staticPath) || path.endsWith(staticPath)
-    );
+    // For paths like '/static/', check if path includes it anywhere
+    // For extensions like '.js', check if path ends with it
+    const isStaticFile = staticPaths.some(staticPath => {
+      if (staticPath.startsWith('/')) {
+        // Path pattern - check if path includes it anywhere
+        return path.includes(staticPath);
+      } else {
+        // Extension pattern - check if path ends with it
+        return path.endsWith(staticPath);
+      }
+    });
     
     if (isStaticFile) {
       // Skip authentication for static files - let express.static handle them
