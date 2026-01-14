@@ -52,6 +52,45 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.get('/manifest.json', express.static(buildPath));
 app.get('/robots.txt', express.static(buildPath));
 
+// 2.5️⃣ CRITICAL: SPA Fallback for Frontend Routes
+// This MUST come before API routes to prevent conflicts
+// Frontend routes like /employees/cards, /clients/create, etc. should serve index.html
+// Only /api/* routes should be handled by backend
+const frontendRoutes = [
+  '/employees/cards', '/employees/new', '/employees/settings',
+  '/clients/cards', '/clients/create', '/clients/cash', '/clients/credit',
+  '/clients/receivables', '/clients/payments', '/clients/statements',
+  '/clients/invoices', '/clients/paid', '/clients/aging', '/clients/due',
+  '/suppliers/cards', '/suppliers/create',
+  '/products/purchase-orders', '/products/sales-orders',
+  '/pos/', '/invoices/new', '/supplier-invoices/new',
+  '/payroll/', '/reports/', '/debug/',
+  '/expenses/invoices', '/orders/'
+];
+
+app.use((req, res, next) => {
+  const reqPath = req.path || '';
+  
+  // Skip API routes
+  if (reqPath.startsWith('/api/')) {
+    return next();
+  }
+  
+  // Check if this is a known frontend route
+  const isFrontendRoute = frontendRoutes.some(route => reqPath.startsWith(route));
+  
+  // Also check for patterns like /employees/:id/edit
+  const isFrontendPattern = /^\/(employees|clients|suppliers|products|orders)\/\d+/.test(reqPath) ||
+                           /^\/(pos|payroll|reports)\//.test(reqPath);
+  
+  if (isFrontendRoute || isFrontendPattern) {
+    console.log(`[SPA FALLBACK] Serving index.html for frontend route: ${reqPath}`);
+    return res.sendFile(path.join(buildPath, 'index.html'));
+  }
+  
+  next();
+});
+
 // 3️⃣ Middleware for parsing (safe for static files)
 app.use(cors());
 app.use(express.json());
@@ -1055,25 +1094,9 @@ app.use("/customers", authenticateToken, async (req, res, next) => {
   }
 });
 
-app.use("/employees", authenticateToken, async (req, res, next) => {
-  try {
-    if (req.method === "GET") {
-      return authorize("employees", "view")(req, res, next);
-    }
-    if (req.method === "POST") {
-      return authorize("employees", "create")(req, res, next);
-    }
-    if (req.method === "PUT") {
-      return authorize("employees", "edit")(req, res, next);
-    }
-    if (req.method === "DELETE") {
-      return authorize("employees", "delete")(req, res, next);
-    }
-    next();
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+// REMOVED: /employees middleware - conflicts with frontend routes
+// All /employees API calls should use /api/employees instead
+// Frontend routes like /employees/cards are handled by SPA fallback
 
 app.use("/api/employees", authenticateToken, async (req, res, next) => {
   try {
