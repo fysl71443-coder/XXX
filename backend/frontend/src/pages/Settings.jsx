@@ -10,17 +10,8 @@ export default function Settings(){
   // Admin has unrestricted access - no permission checks needed
   const { user, refreshPermissions, impersonatePermissionsForUser, clearImpersonation, isAdmin } = useAuth()
   
-  // If not admin, show access denied (though backend requireAdmin should prevent this)
-  if (user && !isAdmin) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-xl font-bold text-red-600 mb-2">غير مصرح</div>
-          <div className="text-gray-600">هذه الصفحة متاحة للمدير فقط</div>
-        </div>
-      </div>
-    );
-  }
+  // CRITICAL: All Hooks MUST be defined before any conditional returns
+  // This follows React Hooks Rules - Hooks must be called in the same order every render
   const [activeTab, setActiveTab] = useState('general')
   const [users, setUsers] = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)
@@ -36,6 +27,7 @@ export default function Settings(){
   
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState({ type: '', message: '' })
+  
   const companyValid = useMemo(()=>{
     const nameOk = !!((company.name_ar||'').trim() || (company.name_en||'').trim())
     const vatRegex = /^\d{15}$/
@@ -171,6 +163,20 @@ export default function Settings(){
   const actionsById = useMemo(()=>{ const m={}; for (const a of actions) m[a.id]=a; return m },[actions])
   const screensById = useMemo(()=>{ const m={}; for (const s of screens) m[s.id]=s; return m },[screens])
   const branchesById = useMemo(()=>{ const m={}; for (const b of branches) m[b.id]=b; return m },[branches])
+
+  // CRITICAL: Conditional return AFTER all Hooks are defined
+  // This follows React Hooks Rules - Hooks must be called before any early returns
+  // If not admin, show access denied (though backend requireAdmin should prevent this)
+  if (user && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl font-bold text-red-600 mb-2">غير مصرح</div>
+          <div className="text-gray-600">هذه الصفحة متاحة للمدير فقط</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
