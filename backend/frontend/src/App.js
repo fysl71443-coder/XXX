@@ -7,7 +7,7 @@ import { GiMoneyStack } from 'react-icons/gi';
 import { settings as apiSettings } from './services/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './ErrorBoundary';
-import ProtectedRoute from './routes/ProtectedRoute';
+import AuthGate from './components/AuthGate';
 import { useLang } from './hooks/useLang';
 import { isAdmin } from './utils/auth.js';
 
@@ -190,64 +190,66 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <ErrorBoundary>
+        {/* AuthGate blocks ALL rendering until auth state is determined */}
+        <AuthGate>
         <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/accounts" element={<Accounts />} />
-            <Route path="/accounting" element={<AccountsScreen />} />
-            <Route path="/journal" element={<Journal />} />
-            <Route path="/clients" element={<ClientsLayout />}>
-              <Route index element={<Clients />} />
-              <Route path="cash" element={<Clients />} />
-              <Route path="credit" element={<Clients />} />
-              <Route path="receivables" element={<Clients />} />
-              <Route path="payments" element={<Clients />} />
-              <Route path="statements" element={<Clients />} />
-              <Route path="invoices" element={<ClientsInvoicesAll />} />
-              <Route path="paid" element={<ClientsInvoicesPaid />} />
-              <Route path="aging" element={<ClientsAging />} />
-              <Route path="due" element={<ClientsDue />} />
-              <Route path="cards" element={<ClientsCards />} />
-              <Route path="create" element={<ClientCreate />} />
-            </Route>
-            <Route path="/suppliers" element={<Suppliers />} />
-            <Route path="/suppliers/cards" element={<SuppliersCards />} />
-            <Route path="/suppliers/create" element={<SupplierCreate />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/products/purchase-orders" element={<PurchaseOrders />} />
-            <Route path="/products/sales-orders" element={<SalesOrders />} />
-            <Route path="/products/sales-orders/:number" element={<SalesOrderDetail />} />
-            <Route path="/products/purchase-orders/:id" element={<PurchaseOrderDetail />} />
-            <Route path="/orders" element={<SalesOrders />} />
-            <Route path="/orders/:id" element={<SalesOrderDetail />} />
-            <Route path="/sales" element={<Sales />} />
-            <Route path="/pos" element={<POSBranch />} />
-            <Route path="/pos/:branch/tables" element={<POSTables />} />
-            <Route path="/pos/:branch/tables/:table" element={<POSInvoice />} />
-            <Route path="/pos/:branch/manage" element={<POSManage />} />
-            <Route path="/invoices/new" element={<CustomerInvoice />} />
-            <Route path="/supplier-invoices/new" element={<SupplierInvoice />} />
-            <Route path="/employees" element={<Employees />} />
-            <Route path="/employees/cards" element={<EmployeesCards />} />
-            <Route path="/employees/new" element={<EmployeeCreate />} />
-            <Route path="/expenses" element={<Expenses />} />
-            <Route path="/expenses/invoices" element={<ExpensesInvoices />} />
-            <Route path="/employees/:id/edit" element={<EmployeeEdit />} />
-            <Route path="/employees/settings" element={<EmployeeSettings />} />
-            <Route path="/payroll/payments" element={<PayrollPayments />} />
-            <Route path="/payroll/statements" element={<PayrollStatements />} />
-            <Route path="/payroll/dues" element={<PayrollDues />} />
-            <Route path="/payroll/run/create" element={<PayrollRunForm />} />
-            <Route path="/payroll/run/:id/edit" element={<PayrollRunForm />} />
-            <Route path="/reports/business-day-sales" element={<BusinessDaySalesReport />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/debug/receipt-preview" element={<PrintPreview />} />
-            <Route path="/settings" element={<Settings />} />
+          {/* All routes below are protected - AuthGate ensures user is authenticated */}
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/accounts" element={<Accounts />} />
+          <Route path="/accounting" element={<AccountsScreen />} />
+          <Route path="/journal" element={<Journal />} />
+          <Route path="/clients" element={<ClientsLayout />}>
+            <Route index element={<Clients />} />
+            <Route path="cash" element={<Clients />} />
+            <Route path="credit" element={<Clients />} />
+            <Route path="receivables" element={<Clients />} />
+            <Route path="payments" element={<Clients />} />
+            <Route path="statements" element={<Clients />} />
+            <Route path="invoices" element={<ClientsInvoicesAll />} />
+            <Route path="paid" element={<ClientsInvoicesPaid />} />
+            <Route path="aging" element={<ClientsAging />} />
+            <Route path="due" element={<ClientsDue />} />
+            <Route path="cards" element={<ClientsCards />} />
+            <Route path="create" element={<ClientCreate />} />
           </Route>
+          <Route path="/suppliers" element={<Suppliers />} />
+          <Route path="/suppliers/cards" element={<SuppliersCards />} />
+          <Route path="/suppliers/create" element={<SupplierCreate />} />
+          <Route path="/products" element={<Products />} />
+          <Route path="/products/purchase-orders" element={<PurchaseOrders />} />
+          <Route path="/products/sales-orders" element={<SalesOrders />} />
+          <Route path="/products/sales-orders/:number" element={<SalesOrderDetail />} />
+          <Route path="/products/purchase-orders/:id" element={<PurchaseOrderDetail />} />
+          <Route path="/orders" element={<SalesOrders />} />
+          <Route path="/orders/:id" element={<SalesOrderDetail />} />
+          <Route path="/sales" element={<Sales />} />
+          <Route path="/pos" element={<POSBranch />} />
+          <Route path="/pos/:branch/tables" element={<POSTables />} />
+          <Route path="/pos/:branch/tables/:table" element={<POSInvoice />} />
+          <Route path="/pos/:branch/manage" element={<POSManage />} />
+          <Route path="/invoices/new" element={<CustomerInvoice />} />
+          <Route path="/supplier-invoices/new" element={<SupplierInvoice />} />
+          <Route path="/employees" element={<Employees />} />
+          <Route path="/employees/cards" element={<EmployeesCards />} />
+          <Route path="/employees/new" element={<EmployeeCreate />} />
+          <Route path="/expenses" element={<Expenses />} />
+          <Route path="/expenses/invoices" element={<ExpensesInvoices />} />
+          <Route path="/employees/:id/edit" element={<EmployeeEdit />} />
+          <Route path="/employees/settings" element={<EmployeeSettings />} />
+          <Route path="/payroll/payments" element={<PayrollPayments />} />
+          <Route path="/payroll/statements" element={<PayrollStatements />} />
+          <Route path="/payroll/dues" element={<PayrollDues />} />
+          <Route path="/payroll/run/create" element={<PayrollRunForm />} />
+          <Route path="/payroll/run/:id/edit" element={<PayrollRunForm />} />
+          <Route path="/reports/business-day-sales" element={<BusinessDaySalesReport />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/debug/receipt-preview" element={<PrintPreview />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
         </Suspense>
+        </AuthGate>
         </ErrorBoundary>
     </BrowserRouter>
     </AuthProvider>

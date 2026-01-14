@@ -254,27 +254,34 @@ export function AuthProvider({ children }) {
     window.location.href = '/login';
   };
 
-  const can = (permission) => {
+  /**
+   * CRITICAL: can() - Check if user has permission
+   * 
+   * Rules:
+   * 1. Admin = ALWAYS true (no exceptions, no checks)
+   * 2. No user = false
+   * 3. Non-admin = check permissionsMap
+   */
+  const can = useCallback((permission) => {
+    // No user = no permission
     if (!user) return false;
     
-    // Admin bypass - return true immediately for any permission
-    if (isAdminUser(user)) {
+    // ADMIN BYPASS: Admin has ALL permissions - no questions asked
+    // This is the ONLY check needed for admin
+    if (user.isAdmin === true || user.role === 'admin' || isAdminUser(user)) {
       return true;
     }
     
     // For non-admin users, parse permission and check via canScreen
     const { screen, action } = parsePermission(permission);
-    return canScreen(screen, action);
-  };
+    return canScreenInternal(screen, action, null);
+  }, [user, permissionsMap]);
 
-  const canScreen = (screenCode, actionCode, branch = null) => {
-    if (!user) return false;
-    
-    // Admin bypass - return true immediately for any screen/action/branch
-    if (isAdminUser(user)) {
-      return true;
-    }
-    
+  /**
+   * Internal canScreen - used by can() and canScreen()
+   * Separated to avoid circular dependency
+   */
+  const canScreenInternal = useCallback((screenCode, actionCode, branch = null) => {
     // For non-admin users, check permissionsMap
     const sc = String(screenCode || '').toLowerCase();
     const ac = String(actionCode || '').toLowerCase();
@@ -289,7 +296,27 @@ export function AuthProvider({ children }) {
       const bp = perms[bkey] || {};
       return bp[ac] === true;
     }
-  }
+  }, [permissionsMap]);
+
+  /**
+   * CRITICAL: canScreen() - Check if user has screen/action permission
+   * 
+   * Rules:
+   * 1. Admin = ALWAYS true (no exceptions, no checks)
+   * 2. No user = false
+   * 3. Non-admin = check permissionsMap
+   */
+  const canScreen = useCallback((screenCode, actionCode, branch = null) => {
+    // No user = no permission
+    if (!user) return false;
+    
+    // ADMIN BYPASS: Admin has ALL permissions - no questions asked
+    if (user.isAdmin === true || user.role === 'admin' || isAdminUser(user)) {
+      return true;
+    }
+    
+    return canScreenInternal(screenCode, actionCode, branch);
+  }, [user, canScreenInternal]);
 
   // CRITICAL: isLoggedIn should ONLY depend on authentication (token + user)
   // NOT on permissions - that's authorization, separate concern

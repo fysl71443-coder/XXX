@@ -33,7 +33,7 @@ export default function Products() {
   const [sectionFilter, setSectionFilter] = useState('all')
   const [openCategory, setOpenCategory] = useState(null)
   const [showDisabled, setShowDisabled] = useState(false)
-  const { can } = useAuth()
+  const { can, loading: authLoading, isLoggedIn, isAdmin } = useAuth()
   const [exportingExcel, setExportingExcel] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
 
@@ -53,7 +53,14 @@ export default function Products() {
     }
   }
 
-  useEffect(() => { load() }, [showDisabled])
+  // CRITICAL: Wait for auth to be ready before making API calls
+  useEffect(() => { 
+    if (authLoading || !isLoggedIn) {
+      console.log('[Products] Waiting for auth before loading data...');
+      return;
+    }
+    load() 
+  }, [showDisabled, authLoading, isLoggedIn])
   
   useEffect(() => {
     function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') }

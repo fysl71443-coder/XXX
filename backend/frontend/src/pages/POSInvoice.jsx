@@ -34,7 +34,7 @@ export default function POSInvoice(){
   const pendingHashRef = useRef(null)
   const saveQueuePendingRef = useRef(false)
   const saveQueueTimerRef = useRef(null)
-  const { user, canScreen } = useAuth()
+  const { user, canScreen, isAdmin } = useAuth()
   const [lang, setLang] = useState(getLang())
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(false)
@@ -49,12 +49,19 @@ export default function POSInvoice(){
   },[])
   useEffect(()=>{ try { const norm = (v)=>{ const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); if (s==='palace_india' || s==='palce_india') return 'place_india'; return s }; if (branch) localStorage.setItem('current_branch', norm(branch)) } catch {} },[branch])
   const toggleLang = ()=>{ const next = (lang==='ar'?'en':'ar'); try { localStorage.setItem('lang', next) } catch {} ; setLang(next) }
+  // Admin bypass: Admin has full access to all branches
   useEffect(()=>{ 
+    if (isAdmin) return; // Admin has full access
     const norm = (v)=>{ const x = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); return (x==='palace_india'||x==='palce_india')?'place_india':x }
     const s = norm(branch)
+<<<<<<< Current (Your changes)
     // REMOVED: Admin blocking check - canScreen() already has admin bypass
     // if (!canScreen('sales','read', s) && !storedOrderId) { try { alert('لا تملك صلاحية الفرع') } catch {} ; navigate('/pos') }
   },[branch, table, orderId, canScreen, navigate, storedOrderId])
+=======
+    if (!canScreen('sales','read', s) && !storedOrderId) { try { alert('لا تملك صلاحية الفرع') } catch {} ; navigate('/pos') }
+  },[branch, table, orderId, canScreen, navigate, storedOrderId, isAdmin])
+>>>>>>> Incoming (Background Agent changes)
   const [date, setDate] = useState(()=> new Date().toISOString().slice(0,10))
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
