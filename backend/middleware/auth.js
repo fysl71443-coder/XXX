@@ -25,7 +25,11 @@ export async function authenticateToken(req, res, next) {
       return res.status(500).json({ error: "server_error", details: "db_not_configured" });
     }
     
-    const { rows } = await pool.query('SELECT id, email, role, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', [payload.id]);
+    // Load user with role_id from new permission system
+    const { rows } = await pool.query(
+      'SELECT id, email, role, role_id, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', 
+      [payload.id]
+    );
     const user = rows && rows[0];
     
     if (!user) {
@@ -33,7 +37,24 @@ export async function authenticateToken(req, res, next) {
       return res.status(401).json({ error: "unauthorized" });
     }
     
-    console.log(`[AUTH] SUCCESS: User authenticated | userId=${user.id} email=${user.email} role=${user.role} ${method} ${path}`)
+    // If user has old role but no role_id, try to migrate
+    if (user.role && !user.role_id) {
+      try {
+        const { rows: roleRows } = await pool.query(
+          'SELECT id FROM roles WHERE LOWER(name) = $1 LIMIT 1',
+          [String(user.role).toLowerCase()]
+        );
+        if (roleRows.length > 0) {
+          await pool.query('UPDATE users SET role_id = $1 WHERE id = $2', [roleRows[0].id, user.id]);
+          user.role_id = roleRows[0].id;
+          console.log(`[AUTH] Migrated user role to role_id | userId=${user.id} role_id=${user.role_id}`);
+        }
+      } catch (migrateErr) {
+        console.error(`[AUTH] Error migrating role: ${migrateErr.message}`);
+      }
+    }
+    
+    console.log(`[AUTH] SUCCESS: User authenticated | userId=${user.id} email=${user.email} role=${user.role} role_id=${user.role_id} ${method} ${path}`)
     req.user = user;
     
     try {
