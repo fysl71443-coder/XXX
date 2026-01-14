@@ -85,21 +85,21 @@ export function AuthProvider({ children }) {
         console.log('[AuthContext] Admin user detected - skipping permissions load');
         setPermissionsLoaded(true); // Mark as loaded so ProtectedRoute doesn't wait
         setPermissionsMap({}); // Empty map is fine for admin
-        return; // Early return - no need to load permissions
-      }
-      
-      // For non-admin users, load permissions only if needed
-      const needsPermissionsReload = !permissionsLoaded || (lastLoadedUserIdRef.current !== userId);
-      if (needsPermissionsReload && userId) {
-        console.log('[AuthContext] Loading permissions for non-admin user...');
-        try {
-          const pm = await apiUsers.permissions(userId);
-          setPermissionsMap(normalizePerms(pm || {}));
-          setPermissionsLoaded(true);
-          console.log('[AuthContext] Permissions loaded successfully');
-        } catch (permErr) {
-          console.error('[AuthContext] Error loading permissions:', permErr);
-          setPermissionsLoaded(false); // Mark as not loaded on error
+        // Continue to finally block to set loading=false
+      } else {
+        // For non-admin users, load permissions only if needed
+        const needsPermissionsReload = !permissionsLoaded || (lastLoadedUserIdRef.current !== userId);
+        if (needsPermissionsReload && userId) {
+          console.log('[AuthContext] Loading permissions for non-admin user...');
+          try {
+            const pm = await apiUsers.permissions(userId);
+            setPermissionsMap(normalizePerms(pm || {}));
+            setPermissionsLoaded(true);
+            console.log('[AuthContext] Permissions loaded successfully');
+          } catch (permErr) {
+            console.error('[AuthContext] Error loading permissions:', permErr);
+            setPermissionsLoaded(false); // Mark as not loaded on error
+          }
         }
       }
     } catch (e) {
