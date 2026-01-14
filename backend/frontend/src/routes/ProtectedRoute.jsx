@@ -1,6 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useEffect } from 'react'
+import { isAdmin } from '../utils/auth.js'
 
 export default function ProtectedRoute(){
   const { user, token, loading, permissionsLoaded } = useAuth()
@@ -56,10 +57,9 @@ export default function ProtectedRoute(){
   }
   
   // Admin bypass: Admin users can render immediately without waiting for permissions
-  const role = String(user?.role || '').toLowerCase();
-  const isAdmin = user?.isSuperAdmin === true || user?.isAdmin === true || role === 'admin';
+  const userIsAdmin = isAdmin(user);
   
-  if (isAdmin) {
+  if (userIsAdmin) {
     console.log('[ProtectedRoute] Admin user - allowing access immediately', {
       path: location.pathname,
       userEmail: user?.email,

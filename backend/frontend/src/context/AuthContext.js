@@ -1,6 +1,8 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { auth as apiAuth, users as apiUsers } from '../services/api';
+import { isAdmin as isAdminUser } from '../utils/auth.js';
+import { parsePermission } from '../utils/permissions.js';
 
 const AuthContext = createContext(null);
 
@@ -105,8 +107,7 @@ export function AuthProvider({ children }) {
       // User is already set above - authentication successful
       // Now handle permissions (authorization) - this is OPTIONAL and should not fail auth
       const userId = data.id;
-      const role = String(data?.role || '').toLowerCase();
-      const isAdmin = data?.isAdmin === true || data?.isSuperAdmin === true || role === 'admin';
+      const isAdmin = isAdminUser(data);
       
       // Admin bypass: Skip loading permissions entirely - admin has all permissions
       if (isAdmin) {
@@ -193,8 +194,7 @@ export function AuthProvider({ children }) {
         setUser(data);
         
         // Check if admin - skip permissions load
-        const role = String(data?.role || '').toLowerCase();
-        const isAdmin = data?.isSuperAdmin === true || data?.isAdmin === true || role === 'admin';
+        const isAdmin = isAdminUser(data);
         
         if (isAdmin) {
           console.log('[AuthContext] Admin user logged in - skipping permissions load');
@@ -258,49 +258,20 @@ export function AuthProvider({ children }) {
     if (!user) return false;
     
     // Admin bypass - return true immediately for any permission
-    const role = String(user.role || '').toLowerCase();
-    if (user.isSuperAdmin === true || user.isAdmin === true || role === 'admin') {
+    if (isAdminUser(user)) {
       return true;
     }
     
     // For non-admin users, parse permission and check via canScreen
-    const raw = String(permission || '').toLowerCase();
-    let screen = '';
-    let action = '';
-    if (raw.includes(':')) {
-      const [s, a] = raw.split(':');
-      screen = s || '';
-      action = a || '';
-    } else if (raw.includes('.')) {
-      const [s, a] = raw.split('.');
-      screen = s || '';
-      action = a || '';
-    } else {
-      screen = raw;
-      action = 'view';
-    }
-    const mapAction = (a) => {
-      const x = String(a || '').toLowerCase();
-      if (x === 'view') return 'view';
-      if (x === 'create') return 'create';
-      if (x === 'edit') return 'edit';
-      if (x === 'delete') return 'delete';
-      if (x === 'settings' || x === 'manage') return 'settings';
-      if (x === 'write') return 'edit';
-      if (x === 'print' || x === 'export') return 'view';
-      if (x === 'post' || x === 'reverse' || x === 'credit_note' || x === 'return') return 'edit';
-      return 'view';
-    };
-    const act = mapAction(action);
-    return canScreen(screen, act);
+    const { screen, action } = parsePermission(permission);
+    return canScreen(screen, action);
   };
 
   const canScreen = (screenCode, actionCode, branch = null) => {
     if (!user) return false;
     
     // Admin bypass - return true immediately for any screen/action/branch
-    const role = String(user.role || '').toLowerCase();
-    if (user.isSuperAdmin === true || user.isAdmin === true || role === 'admin') {
+    if (isAdminUser(user)) {
       return true;
     }
     
@@ -328,9 +299,7 @@ export function AuthProvider({ children }) {
   // Helper function to check if user is admin
   // CRITICAL: Admin has unrestricted access - no permission checks needed
   const isAdmin = useMemo(() => {
-    if (!user) return false;
-    const role = String(user.role || '').toLowerCase();
-    return user.isSuperAdmin === true || user.isAdmin === true || role === 'admin';
+    return isAdminUser(user);
   }, [user]);
 
   async function impersonatePermissionsForUser(id){

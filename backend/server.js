@@ -9,6 +9,7 @@ import { createAdmin } from "./createAdmin.js";
 import { pool } from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { authorize } from "./middleware/authorize.js";
+import { isAdminUser } from "./utils/auth.js";
 
 dotenv.config();
 
@@ -429,9 +430,8 @@ function requireAdmin(req, res, next){
     return res.status(401).json({ error: "unauthorized" });
   }
   
-  // Use isAdmin flag if available, otherwise check role
-  const isAdmin = req.user?.isAdmin === true || 
-                  String(req.user?.role || '').toLowerCase() === 'admin';
+  // Use centralized admin check
+  const isAdmin = isAdminUser(req.user);
   
   const userId = req.user?.id || 'anon';
   const role = String(req.user?.role || '').toLowerCase();

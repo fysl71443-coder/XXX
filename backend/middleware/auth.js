@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import { pool } from "../db.js";
+import { isAdminUser } from "../utils/auth.js";
 
 export async function authenticateToken(req, res, next) {
   try {
@@ -82,9 +83,8 @@ export async function authenticateToken(req, res, next) {
       return res.status(401).json({ error: "unauthorized" });
     }
     
-    // Simple admin check based on role field only
-    const role = String(user.role || '').toLowerCase();
-    const isAdmin = role === 'admin';
+    // Use centralized admin check
+    const isAdmin = isAdminUser(user);
     
     console.log(`[AUTH] SUCCESS: User authenticated | userId=${user.id} email=${user.email} role=${user.role} isAdmin=${isAdmin} ${method} ${path}`)
     

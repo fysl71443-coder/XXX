@@ -1,4 +1,5 @@
 import { pool } from "../db.js";
+import { isAdminUser } from "../utils/auth.js";
 
 function normalize(str){ return String(str||'').trim().toLowerCase() }
 
@@ -88,8 +89,8 @@ export function authorize(screen, action, options = {}) {
       }
       
       // Admin bypass - return immediately, no permission checks needed
-      // Use isAdmin flag if available, otherwise check role
-      const isAdmin = req.user?.isAdmin === true || normalize(req.user?.role) === 'admin';
+      // Use centralized admin check
+      const isAdmin = isAdminUser(req.user);
       
       if (isAdmin) {
         const userId = req.user?.id || 'anon'
