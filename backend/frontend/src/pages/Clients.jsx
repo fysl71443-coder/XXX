@@ -115,7 +115,17 @@ export default function Clients() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  // CRITICAL: Wait for auth to be ready before making API calls
+  const { loading: authLoading, isLoggedIn } = useAuth();
+  
+  useEffect(() => { 
+    // Don't make API calls until auth is ready
+    if (authLoading || !isLoggedIn) {
+      console.log('[Clients] Waiting for auth before loading data...');
+      return;
+    }
+    load() 
+  }, [authLoading, isLoggedIn])
   useEffect(()=>{ (async()=>{ try { const d = new Date(); const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; if (typeof periods?.get === 'function') { const s = await periods.get(per); setPeriodStatus(String(s?.status||'open')) } } catch {} })() },[])
   async function ensureWalkInPartnerId(){
     try {

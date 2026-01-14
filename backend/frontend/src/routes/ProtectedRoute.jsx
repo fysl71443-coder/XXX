@@ -21,8 +21,9 @@ export default function ProtectedRoute(){
   
   // CRITICAL: Wait for initial load - Don't render ANY content until auth check is complete
   // This prevents showing the page before verifying the user's session
+  // NO API calls can happen if loading is true because component doesn't render
   if (loading) {
-    console.log('[ProtectedRoute] Waiting for auth check...', { 
+    console.log('[ProtectedRoute] BLOCKING render - waiting for auth check...', { 
       path: location.pathname,
       loading: true,
       timestamp: new Date().toISOString()

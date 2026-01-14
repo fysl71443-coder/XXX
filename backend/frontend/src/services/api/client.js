@@ -11,12 +11,16 @@ const api = axios.create({
 });
 
 // 2. Request Interceptor: Inject Token
+// CRITICAL: Always read token from localStorage at request time (not at instance creation)
+// This ensures token is always fresh, even if it was set after axios instance was created
 api.interceptors.request.use((config) => {
+  // Always read token fresh from localStorage for each request
   const token = localStorage.getItem('token');
   const isPublicEndpoint = config.url?.includes('/auth/login') || 
-                           config.url?.includes('/auth/register') ||
-                           config.url?.includes('/auth/me'); // /auth/me needs token but we log it
+                           config.url?.includes('/auth/register');
   
+  // CRITICAL: Always inject token if it exists, even for /auth/me
+  // Token should be available by the time any API call is made (ProtectedRoute ensures this)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
     // Log for debugging (only for important endpoints or in development)
@@ -26,9 +30,9 @@ api.interceptors.request.use((config) => {
       console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url} | token=present (${token.substring(0, 10)}...)`);
     }
   } else {
-    // Warn if no token for protected endpoints
+    // Warn if no token for protected endpoints (this should not happen if ProtectedRoute works correctly)
     if (config.url && !isPublicEndpoint) {
-      console.warn(`[API Request] No token for ${config.method?.toUpperCase()} ${config.url} - request may fail`);
+      console.warn(`[API Request] ⚠️ No token for ${config.method?.toUpperCase()} ${config.url} - request will likely fail. Auth may not be ready yet.`);
     }
   }
   return config;
