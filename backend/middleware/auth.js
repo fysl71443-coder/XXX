@@ -57,6 +57,10 @@ export async function authenticateToken(req, res, next) {
     console.log(`[AUTH] SUCCESS: User authenticated | userId=${user.id} email=${user.email} role=${user.role} role_id=${user.role_id} ${method} ${path}`)
     req.user = user;
     
+    // CRITICAL: Permission loading is OPTIONAL and should NEVER fail authentication
+    // Authentication (who you are) is separate from Authorization (what you can do)
+    // If permission loading fails, user is still authenticated
+    // Permissions will be checked later in authorize middleware when needed
     try {
       const { rows: pr } = await pool.query('SELECT screen_code, branch_code, action_code, allowed FROM user_permissions WHERE user_id = $1', [user.id]);
       const map = {};
@@ -74,9 +78,13 @@ export async function authenticateToken(req, res, next) {
       req.user.permissionsMap = map;
       const permCount = Object.keys(map).length
       const globalPerms = Object.values(map).reduce((sum, v) => sum + Object.keys(v._global || {}).length, 0)
-      console.log(`[AUTH] Permissions loaded | userId=${user.id} screens=${permCount} globalActions=${globalPerms}`)
+      console.log(`[AUTH] Permissions loaded (optional) | userId=${user.id} screens=${permCount} globalActions=${globalPerms}`)
     } catch (permErr) {
-      console.error(`[AUTH] ERROR loading permissions | userId=${user.id}`, permErr?.message)
+      // Permission loading failure does NOT fail authentication
+      // Admin doesn't need permissions anyway (bypass)
+      // Regular users will be checked in authorize middleware
+      console.warn(`[AUTH] Permission loading failed (non-critical) | userId=${user.id}`, permErr?.message)
+      req.user.permissionsMap = {}; // Empty map is fine - will be checked later if needed
     }
     
     next();
