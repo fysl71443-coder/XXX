@@ -266,6 +266,8 @@ function DraftModal({ open, onClose, onSubmit, initial, accounts, onPost }) {
 export default function Journal() {
   const navigate = useNavigate()
   const location = useLocation()
+  // CRITICAL: Get auth state to prevent API calls before auth is ready
+  const { loading: authLoading, isLoggedIn, can } = useAuth()
   const [lang, setLang] = useState(localStorage.getItem('lang') || 'ar')
   const [filters, setFilters] = useState({ status: 'posted', page: 1, pageSize: 20, summary: false, quarter: localStorage.getItem('selected_quarter') || '' })
   const [data, setData] = useState({ items: [], total: 0 })
@@ -273,7 +275,6 @@ export default function Journal() {
   const [modalOpen, setModalOpen] = useState(false)
   const [toast, setToast] = useState('')
   const [accounts, setAccounts] = useState([])
-  const { can } = useAuth()
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [returnOpen, setReturnOpen] = useState(false)
