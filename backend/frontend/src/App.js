@@ -9,6 +9,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './ErrorBoundary';
 import ProtectedRoute from './routes/ProtectedRoute';
 import { useLang } from './hooks/useLang';
+import { isAdmin } from './utils/auth.js';
 
 // Lazy load pages for better performance
 const Login = lazy(() => import('./pages/Login'));
@@ -118,8 +119,8 @@ function Dashboard() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           {modules.filter(({ key }) => {
-            const isAdmin = user?.isSuperAdmin === true || user?.isAdmin === true || String(user?.role||'').toLowerCase() === 'admin'
-            if (isAdmin) return true
+            const userIsAdmin = isAdmin(user);
+            if (userIsAdmin) return true
             const map = { clients:'clients', suppliers:'suppliers', employees:'employees', expenses:'expenses', products:'products', sales:'sales', purchase:'purchases', reports:'reports', accounting:'accounting', journal:'journal' }
             const sc = map[key]
             if (!sc) return true

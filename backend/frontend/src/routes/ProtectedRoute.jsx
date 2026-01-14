@@ -63,7 +63,7 @@ export default function ProtectedRoute(){
     console.log('[ProtectedRoute] Admin user - allowing access immediately', {
       path: location.pathname,
       userEmail: user?.email,
-      role
+      role: user?.role || 'none'
     })
     return <Outlet />
   }
@@ -84,7 +84,7 @@ export default function ProtectedRoute(){
   console.log('[ProtectedRoute] Access granted', {
     path: location.pathname,
     userEmail: user?.email,
-    role
+    role: user?.role || 'none'
   })
   
   return <Outlet />
