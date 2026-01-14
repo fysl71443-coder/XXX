@@ -27,10 +27,52 @@ async function ensurePermissionsMap(req){
 export function authorize(screen, action, options = {}) {
   return async (req, res, next) => {
     try {
-      // Check authentication first
+      const method = req.method || 'UNKNOWN'
+      const path = req.path || req.url || 'UNKNOWN'
+      
+      // CRITICAL: Skip authorization for static assets and non-API paths
+      // Authorization should ONLY apply to API endpoints, not frontend routes or static files
+      const staticPaths = [
+        '/static',
+        '/favicon.ico',
+        '/manifest.json',
+        '/robots.txt',
+        '/logo',
+        '.js',
+        '.css',
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.gif',
+        '.svg',
+        '.ico',
+        '.woff',
+        '.woff2',
+        '.ttf',
+        '.eot'
+      ];
+      
+      // Check if this is a static file request
+      const isStaticFile = staticPaths.some(staticPath => 
+        path.startsWith(staticPath) || path.endsWith(staticPath)
+      );
+      
+      // CRITICAL: Only apply authorization to API endpoints
+      // Frontend routes (like /supplier-invoices/new) should NOT be authorized here
+      // They are protected by React Router's ProtectedRoute component
+      const isApiEndpoint = path.startsWith('/api/') || 
+                           (req.headers['content-type']?.includes('application/json')) ||
+                           (req.headers['accept']?.includes('application/json'));
+      
+      // Skip authorization for static files and non-API frontend routes
+      if (isStaticFile || !isApiEndpoint) {
+        // This is a frontend route or static file - let it pass through
+        // React Router will handle protection on the frontend
+        return next();
+      }
+      
+      // Check authentication first (only for API endpoints)
       if (!req.user) {
-        const method = req.method || 'UNKNOWN'
-        const path = req.path || req.url || 'UNKNOWN'
         console.log(`[AUTHORIZE] REJECTED: No user | ${method} ${path}`)
         return res.status(401).json({ error: 'unauthorized' })
       }

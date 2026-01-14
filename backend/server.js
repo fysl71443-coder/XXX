@@ -846,8 +846,17 @@ app.get("/healthz", (req, res) => {
   res.json({ ok: true });
 });
 
-// Authorization guards for critical resources (prefix-level)
+// CRITICAL: Authorization guards ONLY for API endpoints
+// Frontend routes (like /invoices, /supplier-invoices) are handled by React Router
+// These middleware only apply to API calls, not to static files or frontend routes
+// Static files are already handled by express.static and authenticateToken skips them
 app.use("/invoices", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request (frontend route or static file)
+  if (!req.path.startsWith('/api/') && 
+      !req.headers['content-type']?.includes('application/json') &&
+      !req.headers['accept']?.includes('application/json')) {
+    return next(); // Let React Router handle it
+  }
   try {
     if (req.method === "GET") {
       return authorize("sales", "view", { branchFrom: req => (req.query.branch || req.query.branch_code || req.query.branchId || null) })(req, res, next);
@@ -1143,6 +1152,15 @@ app.use("/orders", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/supplier-invoices", authenticateToken, async (req, res, next) => {
+  // CRITICAL: Skip if this is not an API request (frontend route or static file)
+  // Frontend routes like /supplier-invoices/new should NOT be authorized here
+  // They are protected by React Router's ProtectedRoute component
+  if (!req.path.startsWith('/api/') && 
+      !req.headers['content-type']?.includes('application/json') &&
+      !req.headers['accept']?.includes('application/json')) {
+    return next(); // Let React Router handle it
+  }
+  
   try {
     const opts = { branchFrom: r => (r.query.branch || r.query.branch_code || r.body?.branch || r.body?.branch_code || null) }
     if (req.method === "GET") return authorize("purchases", "view", opts)(req, res, next)
