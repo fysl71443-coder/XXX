@@ -850,11 +850,17 @@ app.get("/healthz", (req, res) => {
 // Frontend routes (like /invoices, /supplier-invoices) are handled by React Router
 // These middleware only apply to API calls, not to static files or frontend routes
 // Static files are already handled by express.static and authenticateToken skips them
+
+// Helper function to check if request is API endpoint
+function isApiRequest(req) {
+  return req.path.startsWith('/api/') || 
+         req.headers['content-type']?.includes('application/json') ||
+         req.headers['accept']?.includes('application/json');
+}
+
 app.use("/invoices", authenticateToken, async (req, res, next) => {
   // Skip if this is not an API request (frontend route or static file)
-  if (!req.path.startsWith('/api/') && 
-      !req.headers['content-type']?.includes('application/json') &&
-      !req.headers['accept']?.includes('application/json')) {
+  if (!isApiRequest(req)) {
     return next(); // Let React Router handle it
   }
   try {
@@ -874,6 +880,10 @@ app.use("/invoices", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/drafts", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     if (req.method === "GET") {
       return authorize("sales", "view", { branchFrom: r => (r.query.branch || r.query.branch_code || null) })(req, res, next);
@@ -888,6 +898,10 @@ app.use("/drafts", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/expenses", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     if (req.method === "GET") {
       return authorize("expenses", "view", { branchFrom: r => (r.query.branch || null) })(req, res, next);
@@ -921,6 +935,10 @@ app.use("/api/expenses", authenticateToken, async (req, res, next) => {
   }
 });
 app.use("/customers", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     if (req.method === "GET") {
       return authorize("clients", "view")(req, res, next);
@@ -978,6 +996,10 @@ app.use("/api/employees", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/journal", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     return authorize("journal", "view")(req, res, next);
   } catch (e) {
@@ -985,6 +1007,10 @@ app.use("/journal", authenticateToken, async (req, res, next) => {
   }
 });
 app.use("/ledger", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     return authorize("accounting", "view")(req, res, next);
   } catch (e) {
@@ -992,6 +1018,10 @@ app.use("/ledger", authenticateToken, async (req, res, next) => {
   }
 });
 app.use("/reports", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     return authorize("reports", "view")(req, res, next);
   } catch (e) {
@@ -1104,6 +1134,10 @@ app.post("/api/settings/restore", authenticateToken, requireAdmin, async (req, r
   } finally { client.release(); }
 });
 app.use("/partners", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     const t = String(req.query?.type || req.body?.type || '').toLowerCase()
     if (t === 'customer') return authorize("clients", req.method === "GET" ? "view" : (req.method === "POST" ? "create" : "edit"))(req, res, next)
@@ -1127,6 +1161,10 @@ app.use("/api/partners", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/products", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     if (req.method === "GET") return authorize("products", "view")(req, res, next)
     if (req.method === "POST") return authorize("products", "create")(req, res, next)
@@ -1139,6 +1177,10 @@ app.use("/products", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/orders", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     const opts = { branchFrom: r => (r.query.branch || r.query.branch_code || r.body?.branch || r.body?.branch_code || null) }
     if (req.method === "GET") return authorize("sales", "view", opts)(req, res, next)
@@ -1152,15 +1194,10 @@ app.use("/orders", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/supplier-invoices", authenticateToken, async (req, res, next) => {
-  // CRITICAL: Skip if this is not an API request (frontend route or static file)
-  // Frontend routes like /supplier-invoices/new should NOT be authorized here
-  // They are protected by React Router's ProtectedRoute component
-  if (!req.path.startsWith('/api/') && 
-      !req.headers['content-type']?.includes('application/json') &&
-      !req.headers['accept']?.includes('application/json')) {
-    return next(); // Let React Router handle it
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
   }
-  
   try {
     const opts = { branchFrom: r => (r.query.branch || r.query.branch_code || r.body?.branch || r.body?.branch_code || null) }
     if (req.method === "GET") return authorize("purchases", "view", opts)(req, res, next)
@@ -1174,6 +1211,10 @@ app.use("/supplier-invoices", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/payments", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     const opts = { branchFrom: r => (r.query.branch || r.body?.branch || null) }
     if (req.method === "GET") return authorize("sales", "view", opts)(req, res, next)
@@ -1185,6 +1226,10 @@ app.use("/payments", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/accounts", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     if (req.method === "GET") return authorize("accounting", "view")(req, res, next)
     if (req.method === "POST") return authorize("accounting", "create")(req, res, next)
@@ -1197,6 +1242,10 @@ app.use("/accounts", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/ar", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     return authorize("reports", "view")(req, res, next)
   } catch (e) {
@@ -1205,6 +1254,10 @@ app.use("/ar", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/pos", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     const opts = { branchFrom: r => (r.params?.branch || r.query.branch || r.body?.branch || null) }
     return authorize("sales", "view", opts)(req, res, next)
@@ -1214,6 +1267,10 @@ app.use("/pos", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/accounting-periods", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     if (req.method === "GET") return authorize("accounting", "view")(req, res, next)
     return authorize("accounting", "edit")(req, res, next)
@@ -1223,6 +1280,10 @@ app.use("/accounting-periods", authenticateToken, async (req, res, next) => {
 });
 
 app.use("/preview", authenticateToken, async (req, res, next) => {
+  // Skip if this is not an API request
+  if (!isApiRequest(req)) {
+    return next();
+  }
   try {
     return authorize("sales", "view")(req, res, next)
   } catch (e) {
