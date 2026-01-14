@@ -5,13 +5,21 @@ import { auth as apiAuth, users as apiUsers } from '../services/api';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  // CRITICAL: Start with loading=true to prevent any content from rendering
+  // until we verify the user's session
   const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true); // Must start as true
   const [token, setToken] = useState(() => localStorage.getItem('token') || null);
   const [permissionsMap, setPermissionsMap] = useState({})
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
   const loadingUserRef = useRef(false) // Use ref to prevent concurrent loads without causing re-renders
   const lastLoadedUserIdRef = useRef(null) // Track last loaded user ID
+  
+  console.log('[AuthContext] Provider initialized', { 
+    initialLoading: true, 
+    hasToken: !!token,
+    timestamp: new Date().toISOString()
+  });
 
   function normalizeSlug(name){
     return String(name||'').trim().toLowerCase().replace(/\s+/g,'_')
@@ -58,16 +66,14 @@ export function AuthProvider({ children }) {
       return;
     }
     
-    // Check if already loaded for this user
-    const currentUser = user;
-    const currentUserId = currentUser?.id || currentUser?.user?.id;
-    if (currentUserId && permissionsLoaded && lastLoadedUserIdRef.current === currentUserId && token === tk) {
-      console.log('[AuthContext] User and permissions already loaded, skipping...');
-      setLoading(false);
-      return;
-    }
-    
+    // CRITICAL: Always set loading to true at the start of loadUser
+    // This ensures ProtectedRoute waits for auth check to complete
+    setLoading(true);
     loadingUserRef.current = true;
+    
+    // Check if already loaded for this user (only skip if we have valid user data)
+    // But still need to verify token is valid by calling /auth/me
+    // This prevents showing content before verifying session
     try {
       console.log('[AuthContext] Loading user from /auth/me...', { tokenPresent: !!tk });
       const data = await apiAuth.me();

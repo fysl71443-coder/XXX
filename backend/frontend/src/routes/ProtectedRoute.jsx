@@ -19,24 +19,38 @@ export default function ProtectedRoute(){
     })
   }, [location.pathname, loading, user, token, permissionsLoaded])
   
-  // Wait for initial load - CRITICAL: Don't render anything until auth check is complete
+  // CRITICAL: Wait for initial load - Don't render ANY content until auth check is complete
+  // This prevents showing the page before verifying the user's session
   if (loading) {
-    console.log('[ProtectedRoute] Waiting for auth check...', { path: location.pathname })
+    console.log('[ProtectedRoute] Waiting for auth check...', { 
+      path: location.pathname,
+      loading: true,
+      timestamp: new Date().toISOString()
+    })
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-gray-600">جار التحميل...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-pulse text-gray-600 text-lg mb-2">جار التحميل...</div>
+          <div className="text-gray-400 text-sm">التحقق من الجلسة...</div>
+        </div>
       </div>
     )
   }
   
-  // Check authentication - CRITICAL: Must have both user and token
+  // CRITICAL: Check authentication - Must have both user and token
+  // If either is missing, redirect to login immediately
+  // This ensures no protected content is shown to unauthenticated users
   if (!user || !token) {
+    const tokenInStorage = !!localStorage.getItem('token');
     console.log('[ProtectedRoute] Authentication failed - redirecting to login', {
       path: location.pathname,
       hasUser: !!user,
       hasToken: !!token,
-      tokenFromStorage: !!localStorage.getItem('token')
+      tokenInStorage,
+      loading: false,
+      timestamp: new Date().toISOString()
     })
+    // Use replace to prevent back button from going to protected route
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname || '/')}`} replace />
   }
   
