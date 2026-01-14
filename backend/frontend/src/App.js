@@ -176,6 +176,15 @@ function Dashboard() {
 }
 
 function App() {
+  // Log app initialization
+  useEffect(() => {
+    console.log('[App] Application initialized', {
+      path: window.location.pathname,
+      hasToken: !!localStorage.getItem('token'),
+      timestamp: new Date().toISOString()
+    });
+  }, []);
+  
   return (
     <AuthProvider>
       <BrowserRouter>

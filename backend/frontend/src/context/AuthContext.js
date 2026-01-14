@@ -44,7 +44,10 @@ export function AuthProvider({ children }) {
     }
     
     const tk = localStorage.getItem('token');
+    console.log('[AuthContext] loadUser called', { hasToken: !!tk, tokenLength: tk?.length || 0 });
+    
     if (!tk) {
+      console.log('[AuthContext] No token found - clearing auth state');
       setUser(null);
       setToken(null);
       setPermissionsMap({});
@@ -66,9 +69,17 @@ export function AuthProvider({ children }) {
     
     loadingUserRef.current = true;
     try {
-      console.log('[AuthContext] Loading user...');
+      console.log('[AuthContext] Loading user from /auth/me...', { tokenPresent: !!tk });
       const data = await apiAuth.me();
+      console.log('[AuthContext] User data received', { 
+        hasData: !!data, 
+        userId: data?.id, 
+        userEmail: data?.email,
+        userRole: data?.role 
+      });
+      
       if (!data || !data.id) {
+        console.error('[AuthContext] Invalid user data received', data);
         throw new Error('Invalid user data');
       }
       

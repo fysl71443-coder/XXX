@@ -13,20 +13,27 @@ const api = axios.create({
 // 2. Request Interceptor: Inject Token
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
+  const isPublicEndpoint = config.url?.includes('/auth/login') || 
+                           config.url?.includes('/auth/register') ||
+                           config.url?.includes('/auth/me'); // /auth/me needs token but we log it
+  
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
-    // Log for debugging (only in development or for specific endpoints)
-    if (process.env.NODE_ENV === 'development' || config.url?.includes('/permissions')) {
-      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url} | token=${token ? 'present' : 'missing'}`);
+    // Log for debugging (only for important endpoints or in development)
+    if (process.env.NODE_ENV === 'development' || 
+        config.url?.includes('/permissions') || 
+        config.url?.includes('/auth/me')) {
+      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url} | token=present (${token.substring(0, 10)}...)`);
     }
   } else {
     // Warn if no token for protected endpoints
-    if (config.url && !config.url.includes('/auth/login') && !config.url.includes('/auth/register')) {
-      console.warn(`[API Request] No token for ${config.method?.toUpperCase()} ${config.url}`);
+    if (config.url && !isPublicEndpoint) {
+      console.warn(`[API Request] No token for ${config.method?.toUpperCase()} ${config.url} - request may fail`);
     }
   }
   return config;
 }, (error) => {
+  console.error('[API Request] Interceptor error:', error);
   return Promise.reject(error);
 });
 
