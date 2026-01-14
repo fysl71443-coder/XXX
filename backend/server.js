@@ -274,7 +274,13 @@ app.get("/auth/me", authenticateToken, (req, res) => {
 
 function requireAdmin(req, res, next){
   const role = String((req.user && req.user.role) || "").toLowerCase();
-  if (role !== "admin") return res.status(403).json({ error: "forbidden", required: "admin" });
+  const userId = req.user?.id || 'anon';
+  console.log(`[REQUIRE_ADMIN] Checking admin access | userId=${userId} role=${role}`);
+  if (role !== "admin") {
+    console.log(`[REQUIRE_ADMIN] REJECTED: Not admin | userId=${userId} role=${role}`);
+    return res.status(403).json({ error: "forbidden", required: "admin" });
+  }
+  console.log(`[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=${userId}`);
   next();
 }
 
@@ -905,19 +911,8 @@ app.use("/reports", authenticateToken, async (req, res, next) => {
   }
 });
 
-app.use("/settings", authenticateToken, async (req, res, next) => {
-  try {
-    if (req.method === "GET") {
-      return authorize("settings", "view")(req, res, next);
-    }
-    if (req.method === "PUT" || req.method === "POST" || req.method === "DELETE") {
-      return authorize("settings", "edit")(req, res, next);
-    }
-    return authorize("settings", "view")(req, res, next);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+// Settings routes use requireAdmin directly, no need for authorize middleware
+// Admin should have full access to all settings without permission checks
 
 // Settings storage (DB-backed)
 app.get("/settings", authenticateToken, requireAdmin, async (req, res) => {
