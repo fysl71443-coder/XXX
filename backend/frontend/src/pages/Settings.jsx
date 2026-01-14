@@ -6,7 +6,21 @@ import { users as apiUsers, actions as apiActions, screens as apiScreens, branch
 import { useAuth } from '../context/AuthContext'
 
 export default function Settings(){
-  const { user, refreshPermissions, impersonatePermissionsForUser, clearImpersonation } = useAuth()
+  // CRITICAL: Settings page is admin-only
+  // Admin has unrestricted access - no permission checks needed
+  const { user, refreshPermissions, impersonatePermissionsForUser, clearImpersonation, isAdmin } = useAuth()
+  
+  // If not admin, show access denied (though backend requireAdmin should prevent this)
+  if (user && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-xl font-bold text-red-600 mb-2">غير مصرح</div>
+          <div className="text-gray-600">هذه الصفحة متاحة للمدير فقط</div>
+        </div>
+      </div>
+    );
+  }
   const [activeTab, setActiveTab] = useState('general')
   const [users, setUsers] = useState([])
   const [selectedUserId, setSelectedUserId] = useState(null)

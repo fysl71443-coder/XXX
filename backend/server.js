@@ -406,14 +406,29 @@ app.get("/auth/me", authenticateToken, (req, res) => {
   }
 });
 
+// CRITICAL: requireAdmin - Simple admin check, no permissions, no screens, no actions
+// Admin has unrestricted access to everything
+// This is the ONLY check needed - if user is admin, allow everything
 function requireAdmin(req, res, next){
-  const role = String((req.user && req.user.role) || "").toLowerCase();
+  if (!req.user) {
+    console.log(`[REQUIRE_ADMIN] REJECTED: No user`);
+    return res.status(401).json({ error: "unauthorized" });
+  }
+  
+  // Use isAdmin flag if available, otherwise check role
+  const isAdmin = req.user?.isAdmin === true || 
+                  String(req.user?.role || '').toLowerCase() === 'admin';
+  
   const userId = req.user?.id || 'anon';
-  console.log(`[REQUIRE_ADMIN] Checking admin access | userId=${userId} role=${role}`);
-  if (role !== "admin") {
+  const role = String(req.user?.role || '').toLowerCase();
+  
+  console.log(`[REQUIRE_ADMIN] Checking admin access | userId=${userId} role=${role} isAdmin=${isAdmin}`);
+  
+  if (!isAdmin) {
     console.log(`[REQUIRE_ADMIN] REJECTED: Not admin | userId=${userId} role=${role}`);
     return res.status(403).json({ error: "forbidden", required: "admin" });
   }
+  
   console.log(`[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=${userId}`);
   next();
 }

@@ -325,6 +325,14 @@ export function AuthProvider({ children }) {
   // Even if permissions fail to load, user is still logged in
   const isLoggedIn = !!user && !!token;
 
+  // Helper function to check if user is admin
+  // CRITICAL: Admin has unrestricted access - no permission checks needed
+  const isAdmin = useMemo(() => {
+    if (!user) return false;
+    const role = String(user.role || '').toLowerCase();
+    return user.isSuperAdmin === true || user.isAdmin === true || role === 'admin';
+  }, [user]);
+
   async function impersonatePermissionsForUser(id){
     try {
       console.log('[AuthContext] Impersonating permissions for user:', id);
@@ -344,7 +352,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoggedIn, loading, permissionsLoaded, refresh, refreshPermissions, login, logout, can, canScreen, permissionsMap, impersonatePermissionsForUser, clearImpersonation }}>
+    <AuthContext.Provider value={{ user, token, isLoggedIn, loading, permissionsLoaded, refresh, refreshPermissions, login, logout, can, canScreen, permissionsMap, impersonatePermissionsForUser, clearImpersonation, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

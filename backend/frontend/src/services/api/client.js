@@ -82,19 +82,16 @@ api.interceptors.response.use(
       }
     }
     
-    // Explicitly handle 403 to prevent any confusion
-    if (status === 403) {
-      console.warn('[API] Access Forbidden (403). User has token but lacks permission.');
-      // Do NOT logout.
-    }
-
-    if (status === 403) {
-      try {
-        const req = error.response?.data?.required || error.response?.data?.required_permission
-        const msg = req ? `لا تملك الصلاحية: ${req}` : 'لا تملك الصلاحية للوصول'
-        console.warn('[API] 403:', msg)
-      } catch {}
-    }
+            // Explicitly handle 403 to prevent any confusion
+            // CRITICAL: 403 means user is authenticated but lacks permission
+            // Do NOT logout - user is still logged in, just doesn't have permission
+            // Frontend should handle this gracefully (show error message, not redirect)
+            if (status === 403) {
+              const required = error.response?.data?.required || error.response?.data?.required_permission || 'unknown';
+              console.warn(`[API] Access Forbidden (403). User authenticated but lacks permission: ${required}`);
+              // Do NOT logout - user is still authenticated
+              // Return error so component can handle it (show message, not redirect)
+            }
 
     try { console.error('[API Error]', status, error.response?.data) } catch {}
     if (error.response) {
