@@ -9,6 +9,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState(() => localStorage.getItem('token') || null);
   const [permissionsMap, setPermissionsMap] = useState({})
+  const [permissionsLoaded, setPermissionsLoaded] = useState(false)
+  const [loadingUser, setLoadingUser] = useState(false) // Prevent concurrent loads
 
   function normalizeSlug(name){
     return String(name||'').trim().toLowerCase().replace(/\s+/g,'_')
@@ -34,40 +36,93 @@ export function AuthProvider({ children }) {
   }
 
   const loadUser = useCallback(async () => {
+    // Prevent concurrent loads
+    if (loadingUser) {
+      console.log('[AuthContext] loadUser already in progress, skipping...');
+      return;
+    }
+    
     const tk = localStorage.getItem('token');
     if (!tk) {
       setUser(null);
       setToken(null);
+      setPermissionsMap({});
+      setPermissionsLoaded(false);
       setLoading(false);
       return;
     }
+    
+    setLoadingUser(true);
     try {
+      console.log('[AuthContext] Loading user...');
       const data = await apiAuth.me();
+      if (!data || !data.id) {
+        throw new Error('Invalid user data');
+      }
+      
+      const userId = data?.id || data?.user?.id;
+      const currentUserId = user?.id || user?.user?.id;
+      
+      // Check if we need to reload permissions
+      const needsPermissionsReload = !permissionsLoaded || (currentUserId && currentUserId !== userId);
+      
       setUser(data);
       setToken(tk);
-      try { const pm = await apiUsers.permissions(data?.id||data?.user?.id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
+      
+      // Load permissions only if needed
+      if (needsPermissionsReload && userId) {
+        console.log('[AuthContext] Loading permissions...');
+        try {
+          const pm = await apiUsers.permissions(userId);
+          setPermissionsMap(normalizePerms(pm || {}));
+          setPermissionsLoaded(true);
+          console.log('[AuthContext] Permissions loaded successfully');
+        } catch (permErr) {
+          console.error('[AuthContext] Error loading permissions:', permErr);
+          // Don't fail entire load if permissions fail - admin can still work
+          if (String(data?.role || '').toLowerCase() === 'admin') {
+            setPermissionsLoaded(true); // Admin doesn't need permissions
+          }
+        }
+      } else if (String(data?.role || '').toLowerCase() === 'admin') {
+        // Admin doesn't need permissions, mark as loaded
+        setPermissionsLoaded(true);
+      }
     } catch (e) {
+      console.error('[AuthContext] Error loading user:', e);
       try { localStorage.removeItem('token'); localStorage.removeItem('auth_user') } catch {}
       setUser(null);
       setToken(null);
-      setPermissionsMap({})
+      setPermissionsMap({});
+      setPermissionsLoaded(false);
     } finally {
       setLoading(false);
+      setLoadingUser(false);
     }
-  }, []);
+  }, [loadingUser]); // Only depend on loadingUser to prevent concurrent calls
 
   useEffect(() => {
+    // Only load once on mount
     loadUser();
-  }, [loadUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only run once on mount
 
   const refresh = loadUser;
   const refreshPermissions = useCallback(async () => {
     try {
       const id = (user && (user.id || user?.user?.id))
-      if (!id) return
-      const pm = await apiUsers.permissions(id)
-      setPermissionsMap(normalizePerms(pm||{}))
-    } catch {}
+      if (!id) {
+        console.warn('[AuthContext] refreshPermissions: No user ID');
+        return;
+      }
+      console.log('[AuthContext] Refreshing permissions...');
+      const pm = await apiUsers.permissions(id);
+      setPermissionsMap(normalizePerms(pm || {}));
+      setPermissionsLoaded(true);
+      console.log('[AuthContext] Permissions refreshed successfully');
+    } catch (e) {
+      console.error('[AuthContext] Error refreshing permissions:', e);
+    }
   }, [user])
 
   const login = useCallback(async (email, password) => {
@@ -79,19 +134,50 @@ export function AuthProvider({ children }) {
       try { if (Array.isArray(r?.screens)) localStorage.setItem('screens', JSON.stringify(r.screens)); } catch {}
       try { if (Array.isArray(r?.branches)) localStorage.setItem('branches', JSON.stringify(r.branches)); } catch {}
       setToken(tk);
+      setPermissionsLoaded(false); // Reset permissions flag
+      
       try {
         const data = await apiAuth.me();
+        if (!data || !data.id) {
+          throw new Error('Invalid user data from /auth/me');
+        }
         setUser(data);
-        try { const pm = await apiUsers.permissions(data?.id||data?.user?.id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
+        
+        // Load permissions once
+        try {
+          const userId = data?.id || data?.user?.id;
+          if (userId) {
+            console.log('[AuthContext] Loading permissions after login...');
+            const pm = await apiUsers.permissions(userId);
+            setPermissionsMap(normalizePerms(pm || {}));
+            setPermissionsLoaded(true);
+            console.log('[AuthContext] Permissions loaded after login');
+          }
+        } catch (permErr) {
+          console.error('[AuthContext] Error loading permissions after login:', permErr);
+          // Admin can still work without permissions
+          if (String(data?.role || '').toLowerCase() === 'admin') {
+            setPermissionsLoaded(true);
+          }
+        }
         return data;
       } catch (e) {
+        console.error('[AuthContext] Error in login flow:', e);
         const fallbackUser = (r && (r.user || r)) || null
-        if (fallbackUser) {
-          setUser(fallbackUser)
-          try { const pm = await apiUsers.permissions(fallbackUser?.id||fallbackUser?.user?.id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
-          return fallbackUser
+        if (fallbackUser && fallbackUser.id) {
+          setUser(fallbackUser);
+          // Try to load permissions for fallback user
+          try {
+            const userId = fallbackUser?.id || fallbackUser?.user?.id;
+            if (userId) {
+              const pm = await apiUsers.permissions(userId);
+              setPermissionsMap(normalizePerms(pm || {}));
+              setPermissionsLoaded(true);
+            }
+          } catch {}
+          return fallbackUser;
         }
-        throw e
+        throw e;
       }
     }
     const e = new Error('invalid_credentials');
@@ -105,7 +191,9 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('remember');
     setUser(null);
     setToken(null);
-    setPermissionsMap({})
+    setPermissionsMap({});
+    setPermissionsLoaded(false);
+    setLoadingUser(false);
     window.location.href = '/login';
   };
 
@@ -167,12 +255,25 @@ export function AuthProvider({ children }) {
   const isLoggedIn = !!user && !!token;
 
   async function impersonatePermissionsForUser(id){
-    try { const pm = await apiUsers.permissions(id); setPermissionsMap(normalizePerms(pm||{})) } catch {}
+    try {
+      console.log('[AuthContext] Impersonating permissions for user:', id);
+      const pm = await apiUsers.permissions(id);
+      setPermissionsMap(normalizePerms(pm || {}));
+      setPermissionsLoaded(true);
+    } catch (e) {
+      console.error('[AuthContext] Error impersonating permissions:', e);
+    }
   }
-  async function clearImpersonation(){ try { await refreshPermissions() } catch {} }
+  async function clearImpersonation(){
+    try {
+      await refreshPermissions();
+    } catch (e) {
+      console.error('[AuthContext] Error clearing impersonation:', e);
+    }
+  }
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoggedIn, loading, refresh, refreshPermissions, login, logout, can, canScreen, permissionsMap, impersonatePermissionsForUser, clearImpersonation }}>
+    <AuthContext.Provider value={{ user, token, isLoggedIn, loading, permissionsLoaded, refresh, refreshPermissions, login, logout, can, canScreen, permissionsMap, impersonatePermissionsForUser, clearImpersonation }}>
       {children}
     </AuthContext.Provider>
   );

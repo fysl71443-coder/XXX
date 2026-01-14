@@ -15,6 +15,15 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    // Log for debugging (only in development or for specific endpoints)
+    if (process.env.NODE_ENV === 'development' || config.url?.includes('/permissions')) {
+      console.log(`[API Request] ${config.method?.toUpperCase()} ${config.url} | token=${token ? 'present' : 'missing'}`);
+    }
+  } else {
+    // Warn if no token for protected endpoints
+    if (config.url && !config.url.includes('/auth/login') && !config.url.includes('/auth/register')) {
+      console.warn(`[API Request] No token for ${config.method?.toUpperCase()} ${config.url}`);
+    }
   }
   return config;
 }, (error) => {
