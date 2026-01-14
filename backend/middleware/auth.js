@@ -3,17 +3,39 @@ import { pool } from "../db.js";
 
 export async function authenticateToken(req, res, next) {
   try {
+    const method = req.method || 'UNKNOWN'
+    const path = req.path || req.url || 'UNKNOWN'
     const authHeader = req.headers["authorization"] || "";
     const parts = authHeader.split(" ");
     const token = parts.length === 2 && /^Bearer$/i.test(parts[0]) ? parts[1] : null;
-    if (!token) return res.status(401).json({ error: "unauthorized" });
+    
+    if (!token) {
+      console.log(`[AUTH] REJECTED: No token | ${method} ${path}`)
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    
     const payload = jwt.verify(token, String(process.env.JWT_SECRET));
-    if (!payload?.id) return res.status(401).json({ error: "unauthorized" });
-    if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
+    if (!payload?.id) {
+      console.log(`[AUTH] REJECTED: Invalid token payload | ${method} ${path}`)
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    
+    if (!pool) {
+      console.error(`[AUTH] ERROR: DB not configured | ${method} ${path}`)
+      return res.status(500).json({ error: "server_error", details: "db_not_configured" });
+    }
+    
     const { rows } = await pool.query('SELECT id, email, role, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', [payload.id]);
     const user = rows && rows[0];
-    if (!user) return res.status(401).json({ error: "unauthorized" });
+    
+    if (!user) {
+      console.log(`[AUTH] REJECTED: User not found | userId=${payload.id} ${method} ${path}`)
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    
+    console.log(`[AUTH] SUCCESS: User authenticated | userId=${user.id} email=${user.email} role=${user.role} ${method} ${path}`)
     req.user = user;
+    
     try {
       const { rows: pr } = await pool.query('SELECT screen_code, branch_code, action_code, allowed FROM user_permissions WHERE user_id = $1', [user.id]);
       const map = {};
@@ -29,9 +51,18 @@ export async function authenticateToken(req, res, next) {
         }
       }
       req.user.permissionsMap = map;
-    } catch {}
+      const permCount = Object.keys(map).length
+      const globalPerms = Object.values(map).reduce((sum, v) => sum + Object.keys(v._global || {}).length, 0)
+      console.log(`[AUTH] Permissions loaded | userId=${user.id} screens=${permCount} globalActions=${globalPerms}`)
+    } catch (permErr) {
+      console.error(`[AUTH] ERROR loading permissions | userId=${user.id}`, permErr?.message)
+    }
+    
     next();
   } catch (e) {
+    const method = req.method || 'UNKNOWN'
+    const path = req.path || req.url || 'UNKNOWN'
+    console.error(`[AUTH] ERROR: ${e?.message || 'unknown'} | ${method} ${path}`, e?.stack)
     return res.status(401).json({ error: "unauthorized" });
   }
 }

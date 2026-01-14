@@ -24,6 +24,28 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Request Logging Middleware
+app.use((req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const method = req.method || 'UNKNOWN';
+  const url = req.url || req.path || '/';
+  const userId = req.user?.id || 'anon';
+  const userEmail = req.user?.email || 'anon';
+  console.log(`[REQUEST] ${timestamp} | ${method} ${url} | userId=${userId} email=${userEmail}`);
+  next();
+});
+
+// Global Error Handler
+app.use((err, req, res, next) => {
+  const timestamp = new Date().toISOString();
+  const method = req.method || 'UNKNOWN';
+  const url = req.url || req.path || '/';
+  console.error(`[ERROR] ${timestamp} | ${method} ${url} | ${err?.message || 'unknown error'}`, err?.stack);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'server_error', details: err?.message || 'unknown' });
+  }
+});
+
 const JWT_SECRET = process.env.JWT_SECRET;
 
 async function ensureSchema() {
@@ -153,17 +175,24 @@ async function ensureSchema() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
-  } catch {}
+  } catch (e) {
+    console.error(`[SCHEMA] ERROR: Failed to ensure schema`, e?.message, e?.stack);
+  }
 }
-ensureSchema().catch(()=>{});
+ensureSchema().catch((e) => {
+  console.error(`[SCHEMA] ERROR: Failed to ensure schema (async)`, e?.message, e?.stack);
+});
 
 async function handleLogin(req, res) {
   try {
     const { email, password } = req.body || {};
+    console.log(`[LOGIN] Attempt | email=${email || '(empty)'}`)
     if (!email || !password) {
+      console.log(`[LOGIN] REJECTED: Missing credentials | email=${email || '(empty)'}`)
       return res.status(400).json({ error: "invalid_credentials" });
     }
     if (!pool) {
+      console.error(`[LOGIN] ERROR: DB not configured | email=${email}`)
       return res.status(500).json({ error: "server_error", details: "db_not_configured" });
     }
     const { rows } = await pool.query(
@@ -172,15 +201,19 @@ async function handleLogin(req, res) {
     );
     const user = rows && rows[0];
     if (!user) {
+      console.log(`[LOGIN] REJECTED: User not found | email=${email}`)
       return res.status(404).json({ error: "not_found" });
     }
     const ok = await bcrypt.compare(String(password), String(user.password || ""));
     if (!ok) {
+      console.log(`[LOGIN] REJECTED: Invalid password | userId=${user.id} email=${email}`)
       return res.status(401).json({ error: "invalid_credentials" });
     }
     const token = jwt.sign({ id: user.id, email: user.email, role: user.role || "user" }, String(JWT_SECRET), { expiresIn: "12h" });
     let perms = {};
-    try { perms = await loadUserPermissionsMap(user.id) } catch {}
+    try { perms = await loadUserPermissionsMap(user.id) } catch (permErr) {
+      console.error(`[LOGIN] ERROR loading permissions | userId=${user.id}`, permErr?.message)
+    }
     const screens = Object.entries(perms || {}).filter(([_, v]) => {
       const g = v?._global || {};
       if (Object.values(g).some(Boolean)) return true;
@@ -199,6 +232,7 @@ async function handleLogin(req, res) {
       const def = String(user.default_branch || '').trim() || 'china_town';
       return [def];
     })();
+    console.log(`[LOGIN] SUCCESS | userId=${user.id} email=${email} role=${user.role} screens=${screens.length} branches=${branches.length}`)
     return res.json({
       token,
       user: { id: user.id, email: user.email, role: user.role || "user", default_branch: user.default_branch || null, created_at: user.created_at },
@@ -206,6 +240,7 @@ async function handleLogin(req, res) {
       branches
     });
   } catch (e) {
+    console.error(`[LOGIN] ERROR: ${e?.message || 'unknown'}`, e?.stack)
     return res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 }
@@ -479,34 +514,56 @@ app.get("/api/users/:id/permissions", authenticateToken, async (req, res) => {
 app.put("/users/:id/permissions", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
+    const adminId = req.user?.id || 'unknown';
+    if (!id) {
+      console.log(`[PERMISSIONS] REJECTED: Invalid user ID | adminId=${adminId} targetId=${id}`)
+      return res.status(400).json({ error: "invalid_payload" });
+    }
     const body = req.body || {};
+    console.log(`[PERMISSIONS] Saving permissions | adminId=${adminId} targetUserId=${id} payloadType=${Array.isArray(body) ? 'array' : 'object'} payloadSize=${Array.isArray(body) ? body.length : Object.keys(body).length}`)
     let rows = [];
     if (Array.isArray(body)) {
       rows = flattenPermissionsList(body, id);
+      console.log(`[PERMISSIONS] Flattened array to ${rows.length} rows | targetUserId=${id}`)
     } else {
       rows = flattenPermissionsMap(body, id);
+      console.log(`[PERMISSIONS] Flattened map to ${rows.length} rows | targetUserId=${id}`)
     }
     await saveUserPermissions(id, rows);
+    console.log(`[PERMISSIONS] SUCCESS: Saved ${rows.length} permission rows | adminId=${adminId} targetUserId=${id}`)
     res.json({ ok: true });
   } catch (e) {
+    const adminId = req.user?.id || 'unknown';
+    const id = Number(req.params.id || 0);
+    console.error(`[PERMISSIONS] ERROR: Failed to save | adminId=${adminId} targetUserId=${id}`, e?.message, e?.stack);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
 app.put("/api/users/:id/permissions", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
+    const adminId = req.user?.id || 'unknown';
+    if (!id) {
+      console.log(`[PERMISSIONS] REJECTED: Invalid user ID | adminId=${adminId} targetId=${id}`)
+      return res.status(400).json({ error: "invalid_payload" });
+    }
     const body = req.body || {};
+    console.log(`[PERMISSIONS] Saving permissions (API) | adminId=${adminId} targetUserId=${id} payloadType=${Array.isArray(body) ? 'array' : 'object'} payloadSize=${Array.isArray(body) ? body.length : Object.keys(body).length}`)
     let rows = [];
     if (Array.isArray(body)) {
       rows = flattenPermissionsList(body, id);
+      console.log(`[PERMISSIONS] Flattened array to ${rows.length} rows | targetUserId=${id}`)
     } else {
       rows = flattenPermissionsMap(body, id);
+      console.log(`[PERMISSIONS] Flattened map to ${rows.length} rows | targetUserId=${id}`)
     }
     await saveUserPermissions(id, rows);
+    console.log(`[PERMISSIONS] SUCCESS: Saved ${rows.length} permission rows (API) | adminId=${adminId} targetUserId=${id}`)
     res.json({ ok: true });
   } catch (e) {
+    const adminId = req.user?.id || 'unknown';
+    const id = Number(req.params.id || 0);
+    console.error(`[PERMISSIONS] ERROR: Failed to save (API) | adminId=${adminId} targetUserId=${id}`, e?.message, e?.stack);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
@@ -1537,4 +1594,9 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(buildPath, "index.html"));
 });
 
-app.listen(port, () => {});
+app.listen(port, () => {
+  console.log(`[SERVER] Started on port ${port} | NODE_ENV=${process.env.NODE_ENV || 'development'}`);
+  console.log(`[SERVER] Build path: ${buildPath}`);
+  console.log(`[SERVER] JWT_SECRET: ${JWT_SECRET ? 'configured' : 'MISSING'}`);
+  console.log(`[SERVER] Database: ${pool ? 'connected' : 'NOT configured'}`);
+});

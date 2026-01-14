@@ -29,24 +29,60 @@ export function authorize(screen, action, options = {}) {
     try {
       const sc = normalize(screen)
       const ac = normalize(action)
-      if (!req.user) return res.status(401).json({ error: 'unauthorized' })
+      const userId = req.user?.id || 'anon'
+      const method = req.method || 'UNKNOWN'
+      const path = req.path || req.url || 'UNKNOWN'
+      
+      console.log(`[AUTHORIZE] ${method} ${path} | screen=${sc} action=${ac} userId=${userId}`)
+      
+      if (!req.user) {
+        console.log(`[AUTHORIZE] REJECTED: No user | ${method} ${path}`)
+        return res.status(401).json({ error: 'unauthorized' })
+      }
+      
       const role = normalize(req.user.role)
-      if (role === 'admin') return next()
+      if (role === 'admin') {
+        console.log(`[AUTHORIZE] ALLOWED: Admin bypass | userId=${userId} screen=${sc} action=${ac}`)
+        return next()
+      }
+      
       const perms = await ensurePermissionsMap(req)
       const p = perms[sc] || null
-      if (!p) return res.status(403).json({ error: 'forbidden', required: `${sc}:${ac}` })
-      if ((p._global || {})[ac] === true) return next()
+      
+      if (!p) {
+        console.log(`[AUTHORIZE] REJECTED: No permissions for screen | userId=${userId} screen=${sc} action=${ac} | Available screens: ${Object.keys(perms).join(',') || 'none'}`)
+        return res.status(403).json({ error: 'forbidden', required: `${sc}:${ac}` })
+      }
+      
+      if ((p._global || {})[ac] === true) {
+        console.log(`[AUTHORIZE] ALLOWED: Global permission | userId=${userId} screen=${sc} action=${ac}`)
+        return next()
+      }
+      
       const branch =
         (typeof options.branchFrom === 'function' ? options.branchFrom(req) : null) ||
         req.body?.branch ||
         req.query?.branch ||
         req.user?.default_branch ||
         ''
-      if (!branch) return res.status(400).json({ error: 'branch_required' })
+      
+      console.log(`[AUTHORIZE] Checking branch permission | userId=${userId} screen=${sc} action=${ac} branch=${branch || '(empty)'}`)
+      
+      if (!branch) {
+        console.log(`[AUTHORIZE] REJECTED: Branch required but not provided | userId=${userId} screen=${sc} action=${ac}`)
+        return res.status(400).json({ error: 'branch_required' })
+      }
+      
       const bp = p[String(branch)] || null
-      if (!bp || bp[ac] !== true) return res.status(403).json({ error: 'forbidden', required: `${sc}:${ac}:${branch}` })
+      if (!bp || bp[ac] !== true) {
+        console.log(`[AUTHORIZE] REJECTED: No branch permission | userId=${userId} screen=${sc} action=${ac} branch=${branch} | Available branches: ${Object.keys(p).filter(k => k !== '_global').join(',') || 'none'}`)
+        return res.status(403).json({ error: 'forbidden', required: `${sc}:${ac}:${branch}` })
+      }
+      
+      console.log(`[AUTHORIZE] ALLOWED: Branch permission | userId=${userId} screen=${sc} action=${ac} branch=${branch}`)
       return next()
     } catch (e) {
+      console.error(`[AUTHORIZE] ERROR: ${e?.message || 'unknown'}`, e?.stack)
       return res.status(500).json({ error: 'server_error', details: e?.message || 'unknown' })
     }
   }
