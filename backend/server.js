@@ -333,14 +333,17 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
     
     // Return user data ONLY - no permissions, no complex logic
     // Authentication is separate from Authorization
+    // Simple admin check based on role field only (no role_id dependency)
+    const role = String(user.role || '').toLowerCase();
+    const isAdmin = role === 'admin';
+    
     const response = {
       id: user.id,
       email: user.email,
       role: user.role || 'user',
-      role_id: user.role_id || null,
       default_branch: user.default_branch || null,
       created_at: user.created_at,
-      isAdmin: String(user.role || '').toLowerCase() === 'admin' || user.role_id === 1 // role_id 1 is admin
+      isAdmin: isAdmin // Simple boolean flag
     };
     
     console.log(`[AUTH/ME] SUCCESS | userId=${user.id} email=${user.email} role=${user.role} isAdmin=${response.isAdmin}`);
@@ -349,12 +352,14 @@ app.get("/api/auth/me", authenticateToken, (req, res) => {
     console.error(`[AUTH/ME] ERROR: ${e?.message || 'unknown'}`, e);
     // Even on error, if user exists, return it - don't fail auth due to other issues
     if (req.user) {
+      const role = String(req.user.role || '').toLowerCase();
       return res.json({
         id: req.user.id,
         email: req.user.email,
         role: req.user.role || 'user',
-        role_id: req.user.role_id || null,
-        isAdmin: String(req.user.role || '').toLowerCase() === 'admin'
+        default_branch: req.user.default_branch,
+        created_at: req.user.created_at,
+        isAdmin: role === 'admin'
       });
     }
     return res.status(401).json({ error: "unauthorized" });
@@ -369,14 +374,17 @@ app.get("/auth/me", authenticateToken, (req, res) => {
       return res.status(401).json({ error: "unauthorized" });
     }
     
+    // Simple admin check based on role field only (no role_id dependency)
+    const role = String(user.role || '').toLowerCase();
+    const isAdmin = role === 'admin';
+    
     const response = {
       id: user.id,
       email: user.email,
       role: user.role || 'user',
-      role_id: user.role_id || null,
       default_branch: user.default_branch || null,
       created_at: user.created_at,
-      isAdmin: String(user.role || '').toLowerCase() === 'admin' || user.role_id === 1
+      isAdmin: isAdmin // Simple boolean flag
     };
     
     console.log(`[AUTH/ME] SUCCESS | userId=${user.id} email=${user.email} role=${user.role} isAdmin=${response.isAdmin}`);
@@ -384,12 +392,14 @@ app.get("/auth/me", authenticateToken, (req, res) => {
   } catch (e) {
     console.error(`[AUTH/ME] ERROR: ${e?.message || 'unknown'}`, e);
     if (req.user) {
+      const role = String(req.user.role || '').toLowerCase();
       return res.json({
         id: req.user.id,
         email: req.user.email,
         role: req.user.role || 'user',
-        role_id: req.user.role_id || null,
-        isAdmin: String(req.user.role || '').toLowerCase() === 'admin'
+        default_branch: req.user.default_branch,
+        created_at: req.user.created_at,
+        isAdmin: role === 'admin'
       });
     }
     return res.status(401).json({ error: "unauthorized" });
