@@ -46,14 +46,25 @@ api.interceptors.response.use(
     const status = error.response?.status;
     const hasToken = !!localStorage.getItem('token');
 
-    // 🔴 Rule: Only logout if 401 AND we had a token (meaning token is invalid/expired)
-    // Do NOT logout on 403 (Forbidden) or other errors
+    // 🔴 CRITICAL: Only logout if 401 AND token is actually invalid
+    // Do NOT logout on /auth/me failures - these might be temporary (DB issues, etc.)
+    // Authentication failures should only logout if token itself is invalid
     if (status === 401 && hasToken) {
       const isLoginRequest = error.config?.url?.includes('/auth/login');
       const isMeRequest = error.config?.url?.includes('/auth/me');
+      const isRegisterRequest = error.config?.url?.includes('/auth/register');
       
-      if (!isLoginRequest && !isMeRequest) {
-        console.warn('[Auto-Logout] 401 Unauthorized with token present. Redirecting to login.');
+      // NEVER logout on /auth/me failures - these are handled in AuthContext
+      // /auth/me might fail due to DB issues, but token is still valid
+      if (isMeRequest) {
+        console.warn('[API] /auth/me failed - token may still be valid, letting AuthContext handle it');
+        // Don't logout - let AuthContext decide
+        return Promise.reject(error);
+      }
+      
+      // Only logout on other 401s (not login/register/me)
+      if (!isLoginRequest && !isRegisterRequest) {
+        console.warn('[Auto-Logout] 401 Unauthorized on protected endpoint. Token may be invalid. Redirecting to login.');
         try {
           localStorage.removeItem('token');
           localStorage.removeItem('auth_user');

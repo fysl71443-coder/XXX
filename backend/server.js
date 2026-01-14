@@ -265,11 +265,80 @@ app.post("/debug/bootstrap-admin", async (req, res) => {
   }
 });
 
+// /auth/me endpoint - CRITICAL: Only returns user if token is valid
+// Does NOT check permissions - that's authorization, not authentication
+// Must NEVER fail due to permission loading errors
 app.get("/api/auth/me", authenticateToken, (req, res) => {
-  res.json(req.user);
+  try {
+    const user = req.user;
+    if (!user) {
+      console.error('[AUTH/ME] No user in request after authentication');
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    
+    // Return user data ONLY - no permissions, no complex logic
+    // Authentication is separate from Authorization
+    const response = {
+      id: user.id,
+      email: user.email,
+      role: user.role || 'user',
+      role_id: user.role_id || null,
+      default_branch: user.default_branch || null,
+      created_at: user.created_at,
+      isAdmin: String(user.role || '').toLowerCase() === 'admin' || user.role_id === 1 // role_id 1 is admin
+    };
+    
+    console.log(`[AUTH/ME] SUCCESS | userId=${user.id} email=${user.email} role=${user.role} isAdmin=${response.isAdmin}`);
+    res.json(response);
+  } catch (e) {
+    console.error(`[AUTH/ME] ERROR: ${e?.message || 'unknown'}`, e);
+    // Even on error, if user exists, return it - don't fail auth due to other issues
+    if (req.user) {
+      return res.json({
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role || 'user',
+        role_id: req.user.role_id || null,
+        isAdmin: String(req.user.role || '').toLowerCase() === 'admin'
+      });
+    }
+    return res.status(401).json({ error: "unauthorized" });
+  }
 });
+
 app.get("/auth/me", authenticateToken, (req, res) => {
-  res.json(req.user);
+  try {
+    const user = req.user;
+    if (!user) {
+      console.error('[AUTH/ME] No user in request after authentication');
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    
+    const response = {
+      id: user.id,
+      email: user.email,
+      role: user.role || 'user',
+      role_id: user.role_id || null,
+      default_branch: user.default_branch || null,
+      created_at: user.created_at,
+      isAdmin: String(user.role || '').toLowerCase() === 'admin' || user.role_id === 1
+    };
+    
+    console.log(`[AUTH/ME] SUCCESS | userId=${user.id} email=${user.email} role=${user.role} isAdmin=${response.isAdmin}`);
+    res.json(response);
+  } catch (e) {
+    console.error(`[AUTH/ME] ERROR: ${e?.message || 'unknown'}`, e);
+    if (req.user) {
+      return res.json({
+        id: req.user.id,
+        email: req.user.email,
+        role: req.user.role || 'user',
+        role_id: req.user.role_id || null,
+        isAdmin: String(req.user.role || '').toLowerCase() === 'admin'
+      });
+    }
+    return res.status(401).json({ error: "unauthorized" });
+  }
 });
 
 function requireAdmin(req, res, next){

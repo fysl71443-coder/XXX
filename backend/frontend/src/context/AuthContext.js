@@ -86,42 +86,54 @@ export function AuthProvider({ children }) {
         hasData: !!data, 
         userId: data?.id, 
         userEmail: data?.email,
-        userRole: data?.role 
+        userRole: data?.role,
+        isAdmin: data?.isAdmin
       });
       
       if (!data || !data.id) {
-        console.error('[AuthContext] Invalid user data received', data);
-        throw new Error('Invalid user data');
+        console.error('[AuthContext] Invalid user data received - token may be invalid', data);
+        // If /auth/me fails, token is likely invalid - clear auth state
+        throw new Error('Invalid user data - token may be expired or invalid');
       }
       
-      const userId = data?.id || data?.user?.id;
-      const role = String(data?.role || '').toLowerCase();
-      const isAdmin = data?.isSuperAdmin === true || data?.isAdmin === true || role === 'admin';
-      
+      // CRITICAL: Set user immediately - authentication is successful
+      // Permissions loading is separate and should not block authentication
       setUser(data);
       setToken(tk);
-      lastLoadedUserIdRef.current = userId;
+      lastLoadedUserIdRef.current = data.id;
       
-      // Admin bypass: Skip loading permissions entirely
+      // User is already set above - authentication successful
+      // Now handle permissions (authorization) - this is OPTIONAL and should not fail auth
+      const userId = data.id;
+      const role = String(data?.role || '').toLowerCase();
+      const isAdmin = data?.isAdmin === true || data?.isSuperAdmin === true || role === 'admin';
+      
+      // Admin bypass: Skip loading permissions entirely - admin has all permissions
       if (isAdmin) {
-        console.log('[AuthContext] Admin user detected - skipping permissions load');
+        console.log('[AuthContext] Admin user detected - skipping permissions load (admin has all permissions)');
         setPermissionsLoaded(true); // Mark as loaded so ProtectedRoute doesn't wait
-        setPermissionsMap({}); // Empty map is fine for admin
-        // Continue to finally block to set loading=false
+        setPermissionsMap({}); // Empty map is fine for admin - bypass works
       } else {
-        // For non-admin users, load permissions only if needed
+        // For non-admin users, try to load permissions (but don't fail auth if it fails)
         const needsPermissionsReload = !permissionsLoaded || (lastLoadedUserIdRef.current !== userId);
         if (needsPermissionsReload && userId) {
-          console.log('[AuthContext] Loading permissions for non-admin user...');
+          console.log('[AuthContext] Loading permissions for non-admin user (optional)...');
           try {
             const pm = await apiUsers.permissions(userId);
             setPermissionsMap(normalizePerms(pm || {}));
             setPermissionsLoaded(true);
             console.log('[AuthContext] Permissions loaded successfully');
           } catch (permErr) {
-            console.error('[AuthContext] Error loading permissions:', permErr);
-            setPermissionsLoaded(false); // Mark as not loaded on error
+            // Permission loading failure does NOT fail authentication
+            // User is still logged in, just won't see protected content until permissions load
+            console.warn('[AuthContext] Permission loading failed (non-critical) - user still authenticated:', permErr?.message);
+            setPermissionsMap({}); // Empty map - will retry later if needed
+            setPermissionsLoaded(false); // Mark as not loaded - will retry
+            // Don't throw - authentication succeeded, permissions are separate
           }
+        } else {
+          // Permissions already loaded or not needed
+          setPermissionsLoaded(true);
         }
       }
     } catch (e) {
@@ -308,6 +320,9 @@ export function AuthProvider({ children }) {
     }
   }
 
+  // CRITICAL: isLoggedIn should ONLY depend on authentication (token + user)
+  // NOT on permissions - that's authorization, separate concern
+  // Even if permissions fail to load, user is still logged in
   const isLoggedIn = !!user && !!token;
 
   async function impersonatePermissionsForUser(id){
