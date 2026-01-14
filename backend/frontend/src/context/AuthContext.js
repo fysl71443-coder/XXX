@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { auth as apiAuth, users as apiUsers } from '../services/api';
 
 const AuthContext = createContext(null);
@@ -10,7 +10,8 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem('token') || null);
   const [permissionsMap, setPermissionsMap] = useState({})
   const [permissionsLoaded, setPermissionsLoaded] = useState(false)
-  const [loadingUser, setLoadingUser] = useState(false) // Prevent concurrent loads
+  const loadingUserRef = useRef(false) // Use ref to prevent concurrent loads without causing re-renders
+  const lastLoadedUserIdRef = useRef(null) // Track last loaded user ID
 
   function normalizeSlug(name){
     return String(name||'').trim().toLowerCase().replace(/\s+/g,'_')
@@ -36,12 +37,16 @@ export function AuthProvider({ children }) {
   }
 
   const loadUser = useCallback(async () => {
-    // Prevent concurrent loads
-    if (loadingUser) {
-      console.log('[AuthContext] loadUser already in progress, skipping...');
-      return;
-    }
+    // Prevent concurrent loads using functional update
+    setLoadingUser(prev => {
+      if (prev) {
+        console.log('[AuthContext] loadUser already in progress, skipping...');
+        return prev; // Keep true
+      }
+      return true; // Set to true
+    });
     
+    // Check again after state update (async)
     const tk = localStorage.getItem('token');
     if (!tk) {
       setUser(null);
@@ -49,10 +54,10 @@ export function AuthProvider({ children }) {
       setPermissionsMap({});
       setPermissionsLoaded(false);
       setLoading(false);
+      setLoadingUser(false);
       return;
     }
     
-    setLoadingUser(true);
     try {
       console.log('[AuthContext] Loading user...');
       const data = await apiAuth.me();
@@ -61,33 +66,42 @@ export function AuthProvider({ children }) {
       }
       
       const userId = data?.id || data?.user?.id;
-      const currentUserId = user?.id || user?.user?.id;
       
-      // Check if we need to reload permissions
-      const needsPermissionsReload = !permissionsLoaded || (currentUserId && currentUserId !== userId);
-      
-      setUser(data);
-      setToken(tk);
-      
-      // Load permissions only if needed
-      if (needsPermissionsReload && userId) {
-        console.log('[AuthContext] Loading permissions...');
-        try {
-          const pm = await apiUsers.permissions(userId);
-          setPermissionsMap(normalizePerms(pm || {}));
-          setPermissionsLoaded(true);
-          console.log('[AuthContext] Permissions loaded successfully');
-        } catch (permErr) {
-          console.error('[AuthContext] Error loading permissions:', permErr);
-          // Don't fail entire load if permissions fail - admin can still work
-          if (String(data?.role || '').toLowerCase() === 'admin') {
-            setPermissionsLoaded(true); // Admin doesn't need permissions
+      // Use functional updates to check current state
+      setUser(prevUser => {
+        const currentUserId = prevUser?.id || prevUser?.user?.id;
+        
+        // Load permissions only if user changed or not loaded yet
+        setPermissionsLoaded(prevLoaded => {
+          if (!prevLoaded || (currentUserId && currentUserId !== userId)) {
+            // Load permissions
+            if (userId) {
+              console.log('[AuthContext] Loading permissions...');
+              apiUsers.permissions(userId)
+                .then(pm => {
+                  setPermissionsMap(normalizePerms(pm || {}));
+                  setPermissionsLoaded(true);
+                  console.log('[AuthContext] Permissions loaded successfully');
+                })
+                .catch(permErr => {
+                  console.error('[AuthContext] Error loading permissions:', permErr);
+                  // Admin doesn't need permissions
+                  if (String(data?.role || '').toLowerCase() === 'admin') {
+                    setPermissionsLoaded(true);
+                  }
+                });
+            } else if (String(data?.role || '').toLowerCase() === 'admin') {
+              // Admin doesn't need permissions
+              return true;
+            }
           }
-        }
-      } else if (String(data?.role || '').toLowerCase() === 'admin') {
-        // Admin doesn't need permissions, mark as loaded
-        setPermissionsLoaded(true);
-      }
+          return prevLoaded;
+        });
+        
+        return data;
+      });
+      
+      setToken(tk);
     } catch (e) {
       console.error('[AuthContext] Error loading user:', e);
       try { localStorage.removeItem('token'); localStorage.removeItem('auth_user') } catch {}
@@ -99,7 +113,7 @@ export function AuthProvider({ children }) {
       setLoading(false);
       setLoadingUser(false);
     }
-  }, [loadingUser]); // Only depend on loadingUser to prevent concurrent calls
+  }, []); // Empty deps - only create once
 
   useEffect(() => {
     // Only load once on mount
@@ -193,7 +207,8 @@ export function AuthProvider({ children }) {
     setToken(null);
     setPermissionsMap({});
     setPermissionsLoaded(false);
-    setLoadingUser(false);
+    loadingUserRef.current = false;
+    lastLoadedUserIdRef.current = null;
     window.location.href = '/login';
   };
 
