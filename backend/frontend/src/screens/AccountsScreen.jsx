@@ -47,13 +47,17 @@ export default function AccountsScreen() {
       setFsPeriod(periodData.items||[])
       setFsPre(preData.items||[])
     } catch (e) {
-      setFsError(e.code||'request_failed')
+      if (e?.status === 403) {
+        setFsError(lang === 'ar' ? 'ليس لديك صلاحية لعرض هذه الشاشة' : 'You do not have permission to view this screen')
+      } else {
+        setFsError(e.code||'request_failed')
+      }
       setFsPeriod([])
       setFsPre([])
     } finally {
       setFsLoading(false)
     }
-  }, [])
+  }, [lang])
 
   const [passInput, setPassInput] = useState('')
 
@@ -178,12 +182,16 @@ export default function AccountsScreen() {
         setAccounts(data)
         setLoadError(null)
       } catch (e) {
-        setLoadError(e.code || 'request_failed')
+        if (e?.status === 403) {
+          setLoadError(lang === 'ar' ? 'ليس لديك صلاحية لعرض هذه الشاشة' : 'You do not have permission to view this screen')
+        } else {
+          setLoadError(e.code || 'request_failed')
+        }
         setAccounts([])
       }
     }
     fetchAccounts()
-  }, [])
+  }, [lang])
   useEffect(() => {
     function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') }
     window.addEventListener('storage', onStorage)
@@ -215,12 +223,15 @@ export default function AccountsScreen() {
         const rows = await apiJournal.byAccount(selectedAccount.id, { pageSize: 500 })
         const clean = rows.filter(r => !(parseFloat(r.debit||0)===0 && parseFloat(r.credit||0)===0))
         setEntries(clean)
-      } catch {
+      } catch (e) {
+        if (e?.status === 403) {
+          setLoadError(lang === 'ar' ? 'ليس لديك صلاحية لعرض هذه الشاشة' : 'You do not have permission to view this screen')
+        }
         setEntries([])
       }
     }
     loadEntries()
-  }, [selectedAccount])
+  }, [selectedAccount, lang])
 
   const filteredAccounts = useMemo(() => {
     function match(a){

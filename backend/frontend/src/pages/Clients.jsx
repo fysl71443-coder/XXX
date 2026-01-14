@@ -85,8 +85,11 @@ export default function Clients() {
 
   
 
+  const [error, setError] = useState('')
+  
   async function load() {
     setLoading(true)
+    setError('')
     try {
       const data = await partners.list({ type: 'customer' })
       setItems(((Array.isArray(data)?data:(data?.items||[]))||[]).filter(x => {
@@ -94,6 +97,11 @@ export default function Clients() {
         return t === 'customer' || x.type === 'عميل'
       }))
     } catch (e) {
+      if (e?.status === 403) {
+        setError(lang === 'ar' ? 'ليس لديك صلاحية لعرض هذه الشاشة' : 'You do not have permission to view this screen')
+      } else {
+        setError(lang === 'ar' ? 'تعذر تحميل البيانات' : 'Failed to load data')
+      }
       setItems([])
     } finally {
       setLoading(false)
@@ -594,6 +602,11 @@ export default function Clients() {
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-6">
         <section className="space-y-6">
+        {error ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+            <div className="font-semibold">{error}</div>
+          </div>
+        ) : null}
         {loading ? (<div className="text-sm text-gray-600">{lang==='ar'?'جار التحميل...':'Loading...'}</div>) : null}
 
         <div>

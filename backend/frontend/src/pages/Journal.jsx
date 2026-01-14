@@ -299,7 +299,10 @@ export default function Journal() {
     return () => window.removeEventListener('storage', onStorage)
   }, [])
 
+  const [error, setError] = useState('')
+  
   async function load() {
+    setError('')
     try {
       const params = {
         status: filters.status || '',
@@ -327,6 +330,11 @@ export default function Journal() {
       const res = await apiJournal.list(params)
       setData(res || { items: [], total: 0 })
     } catch (e) {
+      if (e?.status === 403) {
+        setError(lang === 'ar' ? 'ليس لديك صلاحية لعرض هذه الشاشة' : 'You do not have permission to view this screen')
+      } else {
+        setError(lang === 'ar' ? 'تعذر تحميل البيانات' : 'Failed to load data')
+      }
       setData({ items: [], total: 0 })
     }
   }
@@ -557,6 +565,11 @@ export default function Journal() {
         ]}
       />
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-3">
+        {error ? (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-700">
+            <div className="font-semibold">{error}</div>
+          </div>
+        ) : null}
         <div className="grid grid-cols-3 gap-2">
           <div className="flex items-center gap-2 px-3 py-2 bg-sky-50 border rounded">
             <span className="inline-block w-2 h-2 bg-sky-500 rounded-full"></span>

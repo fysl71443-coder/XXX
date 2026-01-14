@@ -708,13 +708,13 @@ app.get("/healthz", (req, res) => {
 app.use("/invoices", authenticateToken, async (req, res, next) => {
   try {
     if (req.method === "GET") {
-      return authorize("sales", "view", { branchFrom: r => (r.query.branch || r.query.branch_code || r.query.branchId || null) })(req, res, next);
+      return authorize("sales", "view", { branchFrom: req => (req.query.branch || req.query.branch_code || req.query.branchId || null) })(req, res, next);
     }
     if (req.method === "POST") {
-      return authorize("sales", "create", { branchFrom: r => (r.body.branch || r.body.branch_code || r.body.branchId || null) })(req, res, next);
+      return authorize("sales", "create", { branchFrom: req => (req.body.branch || req.body.branch_code || req.body.branchId || null) })(req, res, next);
     }
     if (req.method === "PUT") {
-      return authorize("sales", "edit", { branchFrom: r => (r.body.branch || r.body.branch_code || r.body.branchId || null) })(req, res, next);
+      return authorize("sales", "edit", { branchFrom: req => (req.body.branch || req.body.branch_code || req.body.branchId || null) })(req, res, next);
     }
     next();
   } catch (e) {

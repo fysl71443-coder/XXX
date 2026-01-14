@@ -1,55 +1,65 @@
 import './App.css';
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { FaUsers, FaTruck, FaUserTie, FaReceipt, FaBox, FaCashRegister, FaShoppingCart, FaChartPie, FaCog } from 'react-icons/fa';
 import { GiMoneyStack } from 'react-icons/gi';
 import { settings as apiSettings } from './services/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ErrorBoundary from './ErrorBoundary';
-import Clients from './pages/Clients';
-import ClientCreate from './pages/ClientCreate';
-import ClientsCards from './pages/ClientsCards';
-import ClientsLayout from './pages/ClientsLayout';
-import ClientsInvoicesAll from './pages/ClientsInvoicesAll';
-import ClientsInvoicesPaid from './pages/ClientsInvoicesPaid';
-import ClientsAging from './pages/ClientsAging';
-import ClientsDue from './pages/ClientsDue';
-import Suppliers from './pages/Suppliers';
-import SuppliersCards from './pages/SuppliersCards';
-import SupplierCreate from './pages/SupplierCreate';
-import Products from './pages/Products';
-import PurchaseOrders from './pages/PurchaseOrders';
-import SalesOrders from './pages/SalesOrders';
-import Sales from './pages/Sales';
-import POSBranch from './pages/POSBranch';
-import POSTables from './pages/POSTables';
-import POSInvoice from './pages/POSInvoice';
-import SalesOrderDetail from './pages/SalesOrderDetail';
-import PurchaseOrderDetail from './pages/PurchaseOrderDetail';
-import CustomerInvoice from './pages/CustomerInvoice';
-import SupplierInvoice from './pages/SupplierInvoice';
-import Accounts from './pages/Accounts';
-import AccountsScreen from './screens/AccountsScreen';
-import Journal from './pages/Journal';
-import Login from './pages/Login';
-import Employees from './pages/Employees';
-import EmployeesCards from './pages/EmployeesCards';
-import EmployeeCreate from './pages/EmployeeCreate';
-import EmployeeEdit from './pages/EmployeeEdit';
-import EmployeeSettings from './pages/EmployeeSettings';
-import PayrollPayments from './pages/PayrollPayments';
-import PayrollStatements from './pages/PayrollStatements';
-import PayrollDues from './pages/PayrollDues';
-import PayrollRunForm from './pages/PayrollRunForm';
-import Expenses from './pages/Expenses';
-import ExpensesInvoices from './pages/ExpensesInvoices';
-import POSManage from './pages/POSManage';
-import BusinessDaySalesReport from './pages/BusinessDaySalesReport';
-import Reports from './pages/Reports';
-import PrintPreview from './pages/PrintPreview';
-import Settings from './pages/Settings';
 import ProtectedRoute from './routes/ProtectedRoute';
+import { useLang } from './hooks/useLang';
+
+// Lazy load pages for better performance
+const Login = lazy(() => import('./pages/Login'));
+const Clients = lazy(() => import('./pages/Clients'));
+const ClientCreate = lazy(() => import('./pages/ClientCreate'));
+const ClientsCards = lazy(() => import('./pages/ClientsCards'));
+const ClientsLayout = lazy(() => import('./pages/ClientsLayout'));
+const ClientsInvoicesAll = lazy(() => import('./pages/ClientsInvoicesAll'));
+const ClientsInvoicesPaid = lazy(() => import('./pages/ClientsInvoicesPaid'));
+const ClientsAging = lazy(() => import('./pages/ClientsAging'));
+const ClientsDue = lazy(() => import('./pages/ClientsDue'));
+const Suppliers = lazy(() => import('./pages/Suppliers'));
+const SuppliersCards = lazy(() => import('./pages/SuppliersCards'));
+const SupplierCreate = lazy(() => import('./pages/SupplierCreate'));
+const Products = lazy(() => import('./pages/Products'));
+const PurchaseOrders = lazy(() => import('./pages/PurchaseOrders'));
+const SalesOrders = lazy(() => import('./pages/SalesOrders'));
+const Sales = lazy(() => import('./pages/Sales'));
+const POSBranch = lazy(() => import('./pages/POSBranch'));
+const POSTables = lazy(() => import('./pages/POSTables'));
+const POSInvoice = lazy(() => import('./pages/POSInvoice'));
+const SalesOrderDetail = lazy(() => import('./pages/SalesOrderDetail'));
+const PurchaseOrderDetail = lazy(() => import('./pages/PurchaseOrderDetail'));
+const CustomerInvoice = lazy(() => import('./pages/CustomerInvoice'));
+const SupplierInvoice = lazy(() => import('./pages/SupplierInvoice'));
+const Accounts = lazy(() => import('./pages/Accounts'));
+const AccountsScreen = lazy(() => import('./screens/AccountsScreen'));
+const Journal = lazy(() => import('./pages/Journal'));
+const Employees = lazy(() => import('./pages/Employees'));
+const EmployeesCards = lazy(() => import('./pages/EmployeesCards'));
+const EmployeeCreate = lazy(() => import('./pages/EmployeeCreate'));
+const EmployeeEdit = lazy(() => import('./pages/EmployeeEdit'));
+const EmployeeSettings = lazy(() => import('./pages/EmployeeSettings'));
+const PayrollPayments = lazy(() => import('./pages/PayrollPayments'));
+const PayrollStatements = lazy(() => import('./pages/PayrollStatements'));
+const PayrollDues = lazy(() => import('./pages/PayrollDues'));
+const PayrollRunForm = lazy(() => import('./pages/PayrollRunForm'));
+const Expenses = lazy(() => import('./pages/Expenses'));
+const ExpensesInvoices = lazy(() => import('./pages/ExpensesInvoices'));
+const POSManage = lazy(() => import('./pages/POSManage'));
+const BusinessDaySalesReport = lazy(() => import('./pages/BusinessDaySalesReport'));
+const Reports = lazy(() => import('./pages/Reports'));
+const PrintPreview = lazy(() => import('./pages/PrintPreview'));
+const Settings = lazy(() => import('./pages/Settings'));
+
+// Loading fallback component
+const LoadingFallback = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-pulse text-gray-600">جار التحميل...</div>
+  </div>
+);
 
 const modules = [
   { key: 'accounting', titleAr: 'المحاسبة', titleEn: 'Accounting', icon: GiMoneyStack, color: 'bg-primary-600' },
@@ -69,12 +79,7 @@ const modules = [
 function Dashboard() {
   const navigate = useNavigate()
   const { logout, isLoggedIn, user, permissionsMap } = useAuth()
-  const [lang, setLang] = useState(localStorage.getItem('lang')||'ar')
-  useEffect(()=>{
-    function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') }
-    window.addEventListener('storage', onStorage)
-    return ()=> window.removeEventListener('storage', onStorage)
-  },[])
+  const { lang, setLanguage } = useLang()
   useEffect(()=>{
     (async()=>{
       try {
@@ -97,7 +102,7 @@ function Dashboard() {
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <h1 className="text-xl font-bold text-primary-700">{lang==='ar'?'نظام ERP والمحاسبة':'ERP & Accounting System'}</h1>
           <div className="flex gap-2 items-center">
-            <button className="px-3 py-1 rounded-md border" onClick={()=>{ const next = lang==='ar'?'en':'ar'; setLang(next); localStorage.setItem('lang', next) }}>{lang==='ar'?'English':'العربية'}</button>
+            <button className="px-3 py-1 rounded-md border" onClick={()=>{ setLanguage(lang==='ar'?'en':'ar') }}>{lang==='ar'?'English':'العربية'}</button>
             <span className="px-3 py-1 rounded-full text-sm bg-green-100 text-green-700">{lang==='ar'?'متصل':'Online'}</span>
             <span className="px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-700">{lang==='ar'?'إشعارات':'Notifications'}</span>
             <button className="px-3 py-1 rounded-md border text-red-600 border-red-300" onClick={logout}>{lang==='ar'?'تسجيل الخروج':'Logout'}</button>
@@ -175,6 +180,7 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <ErrorBoundary>
+        <Suspense fallback={<LoadingFallback />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route element={<ProtectedRoute />}>
@@ -231,6 +237,7 @@ function App() {
             <Route path="/settings" element={<Settings />} />
           </Route>
         </Routes>
+        </Suspense>
         </ErrorBoundary>
     </BrowserRouter>
     </AuthProvider>
