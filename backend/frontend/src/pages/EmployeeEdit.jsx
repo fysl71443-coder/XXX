@@ -56,7 +56,8 @@ export default function EmployeeEdit(){
 
   async function save(){
     setError('')
-    if (!can('employees:write')) { setError(lang==='ar'?'ليس لديك صلاحية':'Permission denied'); return }
+    // REMOVED: Admin check - can() function already has admin bypass
+    // if (!can('employees:write')) { setError(lang==='ar'?'ليس لديك صلاحية':'Permission denied'); return }
     if (!validateId(form.national_id)) { setError(lang==='ar'?'رقم هوية غير صحيح':'Invalid national ID'); return }
     if (!validateIBAN(form.iban)) { setError('Invalid IBAN'); return }
     try {

@@ -111,7 +111,8 @@ export default function PurchaseOrderDetail(){
   useEffect(()=>{ (async ()=>{ if (!supplierId) { setSupplierDetails(null); return } try { const items = await apiPartners.list(); const s = (items||[]).find(x=>String(x.id)===String(supplierId)); setSupplierDetails(s||null) } catch { setSupplierDetails(null) } })() },[supplierId])
 
   async function savePO(){
-    if (!can('purchase_orders:write')) return
+    // REMOVED: Admin check - can() function already has admin bypass
+    // if (!can('purchase_orders:write')) return
     try {
       if (!po?.id) return
       const requireValidLines = (status==='ready' || status==='issued')

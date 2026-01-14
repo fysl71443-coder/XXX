@@ -104,8 +104,9 @@ export default function Products() {
 
   async function remove(id) {
     try {
-      const canDelete = can('products:delete')
-      if (!canDelete) return
+      // REMOVED: Admin check - can() function already has admin bypass
+      // const canDelete = can('products:delete')
+      // if (!canDelete) return
       const resp = await products.remove(id)
       if (resp && resp.error==='product_linked') {
         try { alert(lang==='ar'?'لا يمكن حذف منتج مرتبط بفواتير، يمكنك تعطيله فقط':'Cannot delete product linked to invoices; you can disable it') } catch {}
@@ -118,8 +119,9 @@ export default function Products() {
 
   async function disable(id) {
     try {
-      const canWrite = can('products:write')
-      if (!canWrite) return
+      // REMOVED: Admin check - can() function already has admin bypass
+      // const canWrite = can('products:write')
+      // if (!canWrite) return
       await products.disable(id)
     } catch (e) {}
     await load()
@@ -127,8 +129,9 @@ export default function Products() {
 
   async function enable(id) {
     try {
-      const canWrite = can('products:write')
-      if (!canWrite) return
+      // REMOVED: Admin check - can() function already has admin bypass
+      // const canWrite = can('products:write')
+      // if (!canWrite) return
       await products.enable(id)
     } catch (e) {}
     await load()

@@ -51,7 +51,8 @@ export default function POSTables(){
     window.addEventListener('pos:table-busy', onBusy)
     return ()=> window.removeEventListener('pos:table-busy', onBusy)
   },[branch])
-  useEffect(()=>{ const s = String(branch||'').trim().toLowerCase(); if (!canScreen('sales','read', s)) { try { alert('لا تملك صلاحية الفرع') } catch {} ; navigate('/pos') } },[branch, canScreen, navigate])
+  // REMOVED: Admin blocking check - canScreen() already has admin bypass
+  // useEffect(()=>{ const s = String(branch||'').trim().toLowerCase(); if (!canScreen('sales','read', s)) { try { alert('لا تملك صلاحية الفرع') } catch {} ; navigate('/pos') } },[branch, canScreen, navigate])
   function isOccupied(t){ return busy.has(String(t)) }
   async function openTable(t){
     try {

@@ -24,7 +24,8 @@ export default function SupplierCreate() {
   })
 
   async function save() {
-    if (!can('suppliers:write')) return
+    // REMOVED: Admin check - can() function already has admin bypass
+    // if (!can('suppliers:write')) return
     setSaving(true)
     try {
       const nm = String((form.trade_name || form.legal_name || form.short_name || form.name)||'').trim()

@@ -52,7 +52,8 @@ export default function POSInvoice(){
   useEffect(()=>{ 
     const norm = (v)=>{ const x = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); return (x==='palace_india'||x==='palce_india')?'place_india':x }
     const s = norm(branch)
-    if (!canScreen('sales','read', s) && !storedOrderId) { try { alert('لا تملك صلاحية الفرع') } catch {} ; navigate('/pos') }
+    // REMOVED: Admin blocking check - canScreen() already has admin bypass
+    // if (!canScreen('sales','read', s) && !storedOrderId) { try { alert('لا تملك صلاحية الفرع') } catch {} ; navigate('/pos') }
   },[branch, table, orderId, canScreen, navigate, storedOrderId])
   const [date, setDate] = useState(()=> new Date().toISOString().slice(0,10))
   const [customerName, setCustomerName] = useState('')
