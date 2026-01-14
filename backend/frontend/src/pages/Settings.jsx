@@ -147,6 +147,29 @@ export default function Settings(){
   }
   async function saveBranding(){ try { setSaving(true); await apiSettings.save('settings_branding', branding); setToast({ type: 'success', message: 'تم حفظ الهوية' }) } catch (e) { setToast({ type: 'error', message: 'فشل حفظ الهوية' }) } finally { setSaving(false) } }
   async function saveFooter(){ try { setSaving(true); await apiSettings.save('settings_footer', footerCfg); setToast({ type: 'success', message: 'تم حفظ التذييل' }) } catch (e) { setToast({ type: 'error', message: 'فشل حفظ التذييل' }) } finally { setSaving(false) } }
+  // دالة لتحميل إعدادات الفرع عند تغيير الفرع
+  async function loadBranchSettings(code) {
+    const normalize = (s) => String(s||'').trim().toLowerCase().replace(/\s+/g,'_');
+    const map = { CT: 'china_town', PI: 'place_india' };
+    const bRow = branches.find(x => String(x.code||'') === String(code));
+    const slug = map[String(bRow?.code||'')] || normalize(bRow?.name||code);
+    const key = `settings_branch_${slug}`;
+    try {
+      const bs = await apiSettings.get(key);
+      setBranchSettings(prev => ({ ...prev, ...(bs||{}) }));
+    } catch {
+      setBranchSettings({
+        logo_base64: '',
+        receipt_font_base64: '',
+        phone: '',
+        print_logo: true,
+        logo_width_mm: 0,
+        logo_height_mm: 0,
+        cancel_password: ''
+      });
+    }
+  }
+
   async function saveBranch(){
     try {
       setSaving(true)
@@ -248,7 +271,15 @@ export default function Settings(){
             <div className="bg-white border rounded p-4">
               <div className="font-semibold mb-3">إعدادات الفرع</div>
               <div className="grid grid-cols-1 gap-3">
-                <select className="border rounded px-3 py-2" value={branchCode} onChange={async e=>{ const code=e.target.value; setBranchCode(code); const normalize=(s)=>String(s||'').trim().toLowerCase().replace(/\s+/g,'_'); const map={ CT:'china_town', PI:'place_india' }; const bRow = branches.find(x=> String(x.code||'')===String(code)); const slug = map[String(bRow?.code||'')] || normalize(bRow?.name||code); const key = `settings_branch_${slug}`; try { const bs = await apiSettings.get(key); setBranchSettings(prev => ({ ...prev, ...(bs||{}) })) } catch { setBranchSettings({ logo_base64:'', receipt_font_base64:'', phone:'', print_logo:true, logo_width_mm:0, logo_height_mm:0, cancel_password:'' }) } }}>
+                <select 
+                  className="border rounded px-3 py-2" 
+                  value={branchCode} 
+                  onChange={e => {
+                    const code = e.target.value;
+                    setBranchCode(code);
+                    loadBranchSettings(code); // استدعاء آمن خارج JSX
+                  }}
+                >
                   {branches.map(b => (<option key={b.id} value={b.code||''}>{b.name}</option>))}
                 </select>
                 <input className="border rounded px-3 py-2" placeholder="Base64 شعار الفرع" value={branchSettings.logo_base64||''} onChange={e=>setBranchSettings({ ...branchSettings, logo_base64: e.target.value })} />
