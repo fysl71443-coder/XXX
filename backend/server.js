@@ -28,6 +28,22 @@ const buildPath = path.join(__dirname, "frontend", "build");
 // They must be served directly without any middleware checks
 // This prevents login loops when React tries to load chunks
 
+// 0️⃣ CRITICAL: Rewrite nested static paths to root static paths
+// React Router lazy loading creates requests like /supplier-invoices/static/js/...
+// These need to be rewritten to /static/js/... to find the actual files
+app.use((req, res, next) => {
+  const url = req.url || '';
+  // Check if URL contains /static/ but not at the start
+  // e.g., /supplier-invoices/static/js/... -> /static/js/...
+  const staticMatch = url.match(/\/static\/(js|css|media)\/.+/);
+  if (staticMatch && !url.startsWith('/static/')) {
+    const newUrl = url.substring(url.indexOf('/static/'));
+    console.log(`[STATIC REWRITE] ${url} -> ${newUrl}`);
+    req.url = newUrl;
+  }
+  next();
+});
+
 // 1️⃣ Static files FIRST - before ANY middleware
 app.use(express.static(buildPath));
 
