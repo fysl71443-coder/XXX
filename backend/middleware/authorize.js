@@ -81,8 +81,6 @@ export function authorize(screen, action, options = {}) {
       const role = normalize(req.user.role)
       if (role === 'admin') {
         const userId = req.user?.id || 'anon'
-        const method = req.method || 'UNKNOWN'
-        const path = req.path || req.url || 'UNKNOWN'
         const sc = normalize(screen)
         const ac = normalize(action)
         console.log(`[AUTHORIZE] ALLOWED: Admin bypass | userId=${userId} screen=${sc} action=${ac} ${method} ${path}`)
@@ -93,8 +91,6 @@ export function authorize(screen, action, options = {}) {
       const sc = normalize(screen)
       const ac = normalize(action)
       const userId = req.user?.id || 'anon'
-      const method = req.method || 'UNKNOWN'
-      const path = req.path || req.url || 'UNKNOWN'
       
       console.log(`[AUTHORIZE] ${method} ${path} | screen=${sc} action=${ac} userId=${userId}`)
       
