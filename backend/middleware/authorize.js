@@ -27,6 +27,27 @@ async function ensurePermissionsMap(req){
 export function authorize(screen, action, options = {}) {
   return async (req, res, next) => {
     try {
+      // Check authentication first
+      if (!req.user) {
+        const method = req.method || 'UNKNOWN'
+        const path = req.path || req.url || 'UNKNOWN'
+        console.log(`[AUTHORIZE] REJECTED: No user | ${method} ${path}`)
+        return res.status(401).json({ error: 'unauthorized' })
+      }
+      
+      // Admin bypass - return immediately, no permission checks needed
+      const role = normalize(req.user.role)
+      if (role === 'admin') {
+        const userId = req.user?.id || 'anon'
+        const method = req.method || 'UNKNOWN'
+        const path = req.path || req.url || 'UNKNOWN'
+        const sc = normalize(screen)
+        const ac = normalize(action)
+        console.log(`[AUTHORIZE] ALLOWED: Admin bypass | userId=${userId} screen=${sc} action=${ac} ${method} ${path}`)
+        return next() // Admin bypass - skip all permission checks
+      }
+      
+      // For non-admin users, proceed with permission checks
       const sc = normalize(screen)
       const ac = normalize(action)
       const userId = req.user?.id || 'anon'
@@ -34,17 +55,6 @@ export function authorize(screen, action, options = {}) {
       const path = req.path || req.url || 'UNKNOWN'
       
       console.log(`[AUTHORIZE] ${method} ${path} | screen=${sc} action=${ac} userId=${userId}`)
-      
-      if (!req.user) {
-        console.log(`[AUTHORIZE] REJECTED: No user | ${method} ${path}`)
-        return res.status(401).json({ error: 'unauthorized' })
-      }
-      
-      const role = normalize(req.user.role)
-      if (role === 'admin') {
-        console.log(`[AUTHORIZE] ALLOWED: Admin bypass | userId=${userId} screen=${sc} action=${ac}`)
-        return next()
-      }
       
       const perms = await ensurePermissionsMap(req)
       const p = perms[sc] || null

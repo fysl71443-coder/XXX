@@ -73,15 +73,25 @@ export function AuthProvider({ children }) {
       }
       
       const userId = data?.id || data?.user?.id;
-      const needsPermissionsReload = !permissionsLoaded || (lastLoadedUserIdRef.current !== userId);
+      const role = String(data?.role || '').toLowerCase();
+      const isAdmin = data?.isSuperAdmin === true || data?.isAdmin === true || role === 'admin';
       
       setUser(data);
       setToken(tk);
       lastLoadedUserIdRef.current = userId;
       
-      // Load permissions only if needed
+      // Admin bypass: Skip loading permissions entirely
+      if (isAdmin) {
+        console.log('[AuthContext] Admin user detected - skipping permissions load');
+        setPermissionsLoaded(true); // Mark as loaded so ProtectedRoute doesn't wait
+        setPermissionsMap({}); // Empty map is fine for admin
+        return; // Early return - no need to load permissions
+      }
+      
+      // For non-admin users, load permissions only if needed
+      const needsPermissionsReload = !permissionsLoaded || (lastLoadedUserIdRef.current !== userId);
       if (needsPermissionsReload && userId) {
-        console.log('[AuthContext] Loading permissions...');
+        console.log('[AuthContext] Loading permissions for non-admin user...');
         try {
           const pm = await apiUsers.permissions(userId);
           setPermissionsMap(normalizePerms(pm || {}));
@@ -89,14 +99,8 @@ export function AuthProvider({ children }) {
           console.log('[AuthContext] Permissions loaded successfully');
         } catch (permErr) {
           console.error('[AuthContext] Error loading permissions:', permErr);
-          // Admin doesn't need permissions
-          if (String(data?.role || '').toLowerCase() === 'admin') {
-            setPermissionsLoaded(true);
-          }
+          setPermissionsLoaded(false); // Mark as not loaded on error
         }
-      } else if (String(data?.role || '').toLowerCase() === 'admin') {
-        // Admin doesn't need permissions, mark as loaded
-        setPermissionsLoaded(true);
       }
     } catch (e) {
       console.error('[AuthContext] Error loading user:', e);
@@ -154,21 +158,28 @@ export function AuthProvider({ children }) {
         }
         setUser(data);
         
-        // Load permissions once
-        try {
-          const userId = data?.id || data?.user?.id;
-          if (userId) {
-            console.log('[AuthContext] Loading permissions after login...');
-            const pm = await apiUsers.permissions(userId);
-            setPermissionsMap(normalizePerms(pm || {}));
-            setPermissionsLoaded(true);
-            console.log('[AuthContext] Permissions loaded after login');
-          }
-        } catch (permErr) {
-          console.error('[AuthContext] Error loading permissions after login:', permErr);
-          // Admin can still work without permissions
-          if (String(data?.role || '').toLowerCase() === 'admin') {
-            setPermissionsLoaded(true);
+        // Check if admin - skip permissions load
+        const role = String(data?.role || '').toLowerCase();
+        const isAdmin = data?.isSuperAdmin === true || data?.isAdmin === true || role === 'admin';
+        
+        if (isAdmin) {
+          console.log('[AuthContext] Admin user logged in - skipping permissions load');
+          setPermissionsLoaded(true);
+          setPermissionsMap({});
+        } else {
+          // Load permissions for non-admin users
+          try {
+            const userId = data?.id || data?.user?.id;
+            if (userId) {
+              console.log('[AuthContext] Loading permissions after login...');
+              const pm = await apiUsers.permissions(userId);
+              setPermissionsMap(normalizePerms(pm || {}));
+              setPermissionsLoaded(true);
+              console.log('[AuthContext] Permissions loaded after login');
+            }
+          } catch (permErr) {
+            console.error('[AuthContext] Error loading permissions after login:', permErr);
+            setPermissionsLoaded(false);
           }
         }
         return data;
@@ -211,10 +222,15 @@ export function AuthProvider({ children }) {
 
   const can = (permission) => {
     if (!user) return false;
-    if (user.isSuperAdmin === true) return true;
-    if (user.isAdmin === true) return true;
-    if (String(user.role).toLowerCase() === 'admin') return true;
-    const raw = String(permission||'').toLowerCase();
+    
+    // Admin bypass - return true immediately for any permission
+    const role = String(user.role || '').toLowerCase();
+    if (user.isSuperAdmin === true || user.isAdmin === true || role === 'admin') {
+      return true;
+    }
+    
+    // For non-admin users, parse permission and check via canScreen
+    const raw = String(permission || '').toLowerCase();
     let screen = '';
     let action = '';
     if (raw.includes(':')) {
@@ -230,7 +246,7 @@ export function AuthProvider({ children }) {
       action = 'view';
     }
     const mapAction = (a) => {
-      const x = String(a||'').toLowerCase();
+      const x = String(a || '').toLowerCase();
       if (x === 'view') return 'view';
       if (x === 'create') return 'create';
       if (x === 'edit') return 'edit';
@@ -246,21 +262,27 @@ export function AuthProvider({ children }) {
   };
 
   const canScreen = (screenCode, actionCode, branch = null) => {
-    if (!user) return false
-    if (user.isSuperAdmin === true) return true
-    if (user.isAdmin === true) return true
-    if (String(user.role).toLowerCase() === 'admin') return true
-    const sc = String(screenCode||'').toLowerCase()
-    const ac = String(actionCode||'').toLowerCase()
-    const perms = permissionsMap[sc] || null
-    if (!perms) return false
+    if (!user) return false;
+    
+    // Admin bypass - return true immediately for any screen/action/branch
+    const role = String(user.role || '').toLowerCase();
+    if (user.isSuperAdmin === true || user.isAdmin === true || role === 'admin') {
+      return true;
+    }
+    
+    // For non-admin users, check permissionsMap
+    const sc = String(screenCode || '').toLowerCase();
+    const ac = String(actionCode || '').toLowerCase();
+    const perms = permissionsMap[sc] || null;
+    if (!perms) return false;
+    
     if (branch === null || typeof branch === 'undefined') {
-      const g = perms._global || {}
-      return g[ac] === true
+      const g = perms._global || {};
+      return g[ac] === true;
     } else {
-      const bkey = typeof branch === 'string' ? branch : String(branch||'')
-      const bp = perms[bkey] || {}
-      return bp[ac] === true
+      const bkey = typeof branch === 'string' ? branch : String(branch || '');
+      const bp = perms[bkey] || {};
+      return bp[ac] === true;
     }
   }
 

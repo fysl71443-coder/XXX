@@ -19,10 +19,11 @@ export default function ProtectedRoute(){
     return <Navigate to={`/login?next=${encodeURIComponent(location.pathname || '/')}`} replace />
   }
   
-  // For admin, permissions are not required (they bypass all checks)
-  const isAdmin = user?.isSuperAdmin === true || user?.isAdmin === true || String(user?.role || '').toLowerCase() === 'admin'
+  // Admin bypass: Admin users can render immediately without waiting for permissions
+  const role = String(user?.role || '').toLowerCase();
+  const isAdmin = user?.isSuperAdmin === true || user?.isAdmin === true || role === 'admin';
   
-  // For non-admin users, wait for permissions to load
+  // For non-admin users only, wait for permissions to load
   if (!isAdmin && !permissionsLoaded) {
     return (
       <div className="min-h-screen flex items-center justify-center">
