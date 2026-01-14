@@ -92,11 +92,18 @@ export default function Clients() {
     setError('')
     try {
       const data = await partners.list({ type: 'customer' })
-      setItems(((Array.isArray(data)?data:(data?.items||[]))||[]).filter(x => {
+      if (!data) {
+        console.warn('[Clients] No data returned from API')
+        setItems([])
+        return
+      }
+      const filtered = ((Array.isArray(data)?data:(data?.items||[]))||[]).filter(x => {
         const t = String(x.type||'').toLowerCase()
         return t === 'customer' || x.type === 'عميل'
-      }))
+      })
+      setItems(filtered)
     } catch (e) {
+      console.error('[Clients] Error loading data:', e)
       if (e?.status === 403) {
         setError(lang === 'ar' ? 'ليس لديك صلاحية لعرض هذه الشاشة' : 'You do not have permission to view this screen')
       } else {

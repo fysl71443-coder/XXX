@@ -28,8 +28,14 @@ export function useEmployeesData() {
     setError('');
     try {
       const rows = await apiEmployees.list();
+      if (!rows) {
+        console.warn('[useEmployeesData] No data returned from API');
+        setList([]);
+        return;
+      }
       setList(Array.isArray(rows) ? rows : []);
     } catch (e) {
+      console.error('[useEmployeesData] Error loading employees:', e);
       if (e?.status === 403) {
         setError('ليس لديك صلاحية لعرض هذه الشاشة');
       } else {

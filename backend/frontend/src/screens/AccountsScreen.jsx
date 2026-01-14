@@ -179,9 +179,16 @@ export default function AccountsScreen() {
     async function fetchAccounts() {
       try {
         const data = await apiAccounts.tree()
+        if (!data || !Array.isArray(data)) {
+          console.warn('[AccountsScreen] Invalid accounts data:', data)
+          setAccounts([])
+          setLoadError('invalid_data')
+          return
+        }
         setAccounts(data)
         setLoadError(null)
       } catch (e) {
+        console.error('[AccountsScreen] Error fetching accounts:', e)
         if (e?.status === 403) {
           setLoadError(lang === 'ar' ? 'ليس لديك صلاحية لعرض هذه الشاشة' : 'You do not have permission to view this screen')
         } else {
