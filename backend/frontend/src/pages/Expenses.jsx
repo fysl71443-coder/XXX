@@ -19,6 +19,7 @@ function labelName(acc, lang){ return lang==='ar'?(acc.name||''):(acc.name_en||a
 export default function Expenses(){
   const navigate = useNavigate()
   const location = useLocation()
+  const { loading: authLoading, isLoggedIn } = useAuth() // CRITICAL: Check auth state before API calls
   const [lang, setLang] = useState(localStorage.getItem('lang')||'ar')
   const [tree, setTree] = useState([])
   const [accounts, setAccounts] = useState([])
@@ -105,10 +106,76 @@ export default function Expenses(){
     }))
   }
 
-  useEffect(()=>{ (async()=>{ try { const t = await apiAccounts.tree(); setTree(Array.isArray(t) ? t : []) } catch (e) { console.error('[Expenses] Error loading accounts tree:', e); setTree([]) } })() },[])
-  useEffect(()=>{ try { const flat = flatten(tree); const allowedTypes = ['expense', 'cash', 'bank', 'equity', 'liability', 'income']; const allowed = flat.filter(a => allowedTypes.includes(String(a.type||'').toLowerCase()) && (a.allow_manual_entry !== false)); setAccounts(allowed) } catch (e) { console.error('[Expenses] Error processing accounts:', e); setAccounts([]) } },[tree])
-  useEffect(()=>{ (async()=>{ try { const res = await apiExpenses.list(filters); if (!res) { console.warn('[Expenses] No data returned from API'); setList([]); setError(''); return; } setList(Array.isArray(res) ? res : (res?.items || [])); setError('') } catch (e) { console.error('[Expenses] Error loading expenses:', e); if (e?.status===403) { setError('ليس لديك صلاحية لعرض هذه الشاشة') } else { setError('تعذر تحميل البيانات') } setList([]) } })() },[filters])
-  useEffect(()=>{ (async()=>{ try { const d = new Date(); const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; const s = await apiPeriods.get(per); setPeriodStatus(String(s?.status||'open')) } catch {} })() },[])
+  // CRITICAL: Wait for auth to be ready before making API calls
+  useEffect(()=>{ 
+    if (authLoading || !isLoggedIn) {
+      console.log('[Expenses] Waiting for auth before loading accounts tree...');
+      return;
+    }
+    (async()=>{ 
+      try { 
+        const t = await apiAccounts.tree(); 
+        setTree(Array.isArray(t) ? t : []) 
+      } catch (e) { 
+        console.error('[Expenses] Error loading accounts tree:', e); 
+        setTree([]) 
+      } 
+    })() 
+  },[authLoading, isLoggedIn])
+  
+  useEffect(()=>{ 
+    try { 
+      const flat = flatten(tree); 
+      const allowedTypes = ['expense', 'cash', 'bank', 'equity', 'liability', 'income']; 
+      const allowed = flat.filter(a => allowedTypes.includes(String(a.type||'').toLowerCase()) && (a.allow_manual_entry !== false)); 
+      setAccounts(allowed) 
+    } catch (e) { 
+      console.error('[Expenses] Error processing accounts:', e); 
+      setAccounts([]) 
+    } 
+  },[tree])
+  
+  useEffect(()=>{ 
+    if (authLoading || !isLoggedIn) {
+      console.log('[Expenses] Waiting for auth before loading expenses...');
+      return;
+    }
+    (async()=>{ 
+      try { 
+        const res = await apiExpenses.list(filters); 
+        if (!res) { 
+          console.warn('[Expenses] No data returned from API'); 
+          setList([]); 
+          setError(''); 
+          return; 
+        } 
+        setList(Array.isArray(res) ? res : (res?.items || [])); 
+        setError('') 
+      } catch (e) { 
+        console.error('[Expenses] Error loading expenses:', e); 
+        if (e?.status===403) { 
+          setError('ليس لديك صلاحية لعرض هذه الشاشة') 
+        } else { 
+          setError('تعذر تحميل البيانات') 
+        } 
+        setList([]) 
+      } 
+    })() 
+  },[filters, authLoading, isLoggedIn])
+  
+  useEffect(()=>{ 
+    if (authLoading || !isLoggedIn) {
+      return;
+    }
+    (async()=>{ 
+      try { 
+        const d = new Date(); 
+        const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; 
+        const s = await apiPeriods.get(per); 
+        setPeriodStatus(String(s?.status||'open')) 
+      } catch {} 
+    })() 
+  },[authLoading, isLoggedIn])
 
   // Smart Linking Data Fetching
   useEffect(() => {

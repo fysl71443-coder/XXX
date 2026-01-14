@@ -338,7 +338,14 @@ export default function Journal() {
       setData({ items: [], total: 0 })
     }
   }
-  useEffect(() => { load() }, [filters])
+  useEffect(() => { 
+    // CRITICAL: Don't make API calls until auth is ready
+    if (authLoading || !isLoggedIn) {
+      console.log('[Journal] Waiting for auth before loading data...');
+      return;
+    }
+    load() 
+  }, [filters, authLoading, isLoggedIn])
   useEffect(() => {
     try {
       const q = new URLSearchParams(location.search)
