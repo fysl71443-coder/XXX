@@ -89,8 +89,13 @@ export default function Accounts() {
   const [helpOpen, setHelpOpen] = useState(false)
 
   async function loadTree() {
-    const data = await apiAccounts.tree()
-    setTree(data)
+    try {
+      const data = await apiAccounts.tree()
+      setTree(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('[Accounts] Error loading tree:', e)
+      setTree([])
+    }
   }
   useEffect(() => { loadTree() }, [])
   useEffect(() => {
@@ -229,8 +234,13 @@ export default function Accounts() {
 
   async function showEntries(acc) {
     setSelected(acc)
-    const data = await apiJournal.byAccount(acc.id)
-    setEntries(data)
+    try {
+      const data = await apiJournal.byAccount(acc.id)
+      setEntries(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('[Accounts] Error loading entries:', e)
+      setEntries([])
+    }
   }
 
   async function createJournal(acc) {

@@ -62,63 +62,51 @@ api.interceptors.request.use((config) => {
   return Promise.reject(error);
 });
 
-// 3. Response Interceptor: Smart 401 Handling
+// 3. Response Interceptor: Smart Error Handling
+// CRITICAL: DO NOT AUTO-LOGOUT on ANY error!
+// 401/403/500/413 are NOT reasons to logout
+// Only AuthContext should decide when to logout
 api.interceptors.response.use(
   (response) => {
     return response;
   },
   (error) => {
     const status = error.response?.status;
-    const hasToken = !!localStorage.getItem('token');
+    const url = error.config?.url || '';
 
-    // 🔴 CRITICAL: Only logout if 401 AND token is actually invalid
-    // Do NOT logout on /auth/me failures - these might be temporary (DB issues, etc.)
-    // Authentication failures should only logout if token itself is invalid
-    if (status === 401 && hasToken) {
-      const isLoginRequest = error.config?.url?.includes('/auth/login');
-      const isMeRequest = error.config?.url?.includes('/auth/me');
-      const isRegisterRequest = error.config?.url?.includes('/auth/register');
-      
-      // NEVER logout on /auth/me failures - these are handled in AuthContext
-      // /auth/me might fail due to DB issues, but token is still valid
-      if (isMeRequest) {
-        console.warn('[API] /auth/me failed - token may still be valid, letting AuthContext handle it');
-        // Don't logout - let AuthContext decide
-        return Promise.reject(error);
-      }
-      
-      // Only logout on other 401s (not login/register/me)
-      if (!isLoginRequest && !isRegisterRequest) {
-        console.warn('[Auto-Logout] 401 Unauthorized on protected endpoint. Token may be invalid. Redirecting to login.');
-        try {
-          localStorage.removeItem('token');
-          localStorage.removeItem('auth_user');
-          if (typeof window !== 'undefined') {
-            const next = encodeURIComponent(window.location.pathname || '/');
-            window.location.href = `/login?next=${next}`;
-          }
-        } catch (e) {
-          console.error('Logout failed', e);
-        }
-      }
+    // Log errors for debugging
+    console.warn(`[API Error] ${status} on ${url}:`, error.response?.data?.error || error.message);
+
+    // 🔴 CRITICAL: NEVER AUTO-LOGOUT
+    // - 401 might be temporary token issue (let AuthContext handle it)
+    // - 403 means user IS authenticated but lacks permission (NOT logout)
+    // - 413 is payload too large (NOT auth issue)
+    // - 500 is server error (NOT auth issue)
+    // - Any other error is NOT a reason to logout
+    
+    if (status === 401) {
+      // Log but DO NOT logout - let AuthContext handle authentication
+      console.warn('[API] 401 Unauthorized - AuthContext will handle if needed');
+      // DO NOT redirect, DO NOT clear token, DO NOT logout
     }
     
-            // Explicitly handle 403 to prevent any confusion
-            // CRITICAL: 403 means user is authenticated but lacks permission
-            // Do NOT logout - user is still logged in, just doesn't have permission
-            // Frontend should handle this gracefully (show error message, not redirect)
-            if (status === 403) {
-              const required = error.response?.data?.required || error.response?.data?.required_permission || 'unknown';
-              console.warn(`[API] Access Forbidden (403). User authenticated but lacks permission: ${required}`);
-              // Do NOT logout - user is still authenticated
-              // Return error so component can handle it (show message, not redirect)
-            }
+    if (status === 403) {
+      // User IS authenticated but lacks permission - this is NOT a logout scenario
+      const required = error.response?.data?.required || error.response?.data?.required_permission || 'unknown';
+      console.warn(`[API] 403 Forbidden - User authenticated but lacks permission: ${required}`);
+      // DO NOT logout - user is still authenticated
+    }
+    
+    if (status === 413) {
+      // Payload too large - NOT an auth issue
+      console.warn('[API] 413 Payload Too Large - reduce request size');
+    }
 
-    try { console.error('[API Error]', status, error.response?.data) } catch {}
+    // Enrich error object for component handling
     if (error.response) {
       error.code = error.response.data?.error || error.response.data?.code || 'request_failed';
       error.status = error.response.status;
-      error.message = error.response.data?.details || error.message;
+      error.message = error.response.data?.details || error.response.data?.message || error.message;
     }
     
     return Promise.reject(error);
