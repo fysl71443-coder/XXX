@@ -17,12 +17,22 @@ export default class ErrorBoundary extends Component {
     // Store error info in state for display
     this.setState({ errorInfo })
     
-    // Try to send error to backend for logging (optional)
+    // CRITICAL: Send error to backend WITH token (if available)
+    // This prevents auth_header=missing in logs
+    // Error logging should NEVER cause redirect or logout
     try {
       if (typeof window !== 'undefined' && window.fetch) {
+        const token = localStorage.getItem('token')
+        const headers = { 'Content-Type': 'application/json' }
+        
+        // Include Authorization header if token exists
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`
+        }
+        
         fetch('/api/error-log', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             error: error?.message || 'Unknown error',
             stack: error?.stack || '',
@@ -31,10 +41,10 @@ export default class ErrorBoundary extends Component {
             userAgent: navigator.userAgent,
             timestamp: new Date().toISOString()
           })
-        }).catch(() => {}) // Ignore if logging fails
+        }).catch(() => {}) // Silently ignore - NEVER redirect or logout
       }
     } catch (e) {
-      // Ignore logging errors
+      // Silently ignore - error logging should NEVER affect user experience
     }
   }
   render(){

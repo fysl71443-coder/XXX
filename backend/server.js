@@ -987,6 +987,27 @@ app.get("/healthz", (req, res) => {
   res.json({ ok: true });
 });
 
+// CRITICAL: Error logging endpoint - NO authentication required
+// This endpoint is used by ErrorBoundary to log frontend errors
+// It should NEVER cause auth failures or redirects
+app.post("/api/error-log", (req, res) => {
+  try {
+    const { error, stack, componentStack, url, userAgent, timestamp } = req.body || {};
+    console.log(`[ERROR-LOG] Frontend error captured:`, {
+      error: error || 'Unknown',
+      url: url || 'Unknown',
+      timestamp: timestamp || new Date().toISOString(),
+      hasStack: !!stack,
+      hasComponentStack: !!componentStack
+    });
+    // Always return success - error logging should never fail
+    res.json({ ok: true });
+  } catch (e) {
+    // Even if logging fails, return success to prevent frontend issues
+    res.json({ ok: true });
+  }
+});
+
 // CRITICAL: Authorization guards ONLY for API endpoints
 // Frontend routes (like /invoices, /supplier-invoices) are handled by React Router
 // These middleware only apply to API calls, not to static files or frontend routes
