@@ -29,11 +29,12 @@ export default function Settings(){
   const [toast, setToast] = useState({ type: '', message: '' })
   
   const companyValid = useMemo(()=>{
+    // Only require name - VAT and phone are optional
     const nameOk = !!((company.name_ar||'').trim() || (company.name_en||'').trim())
-    const vatRegex = /^\d{15}$/
-    const phoneRegex = /^(\+?\d{8,15}|05\d{8})$/
-    const vatOk = vatRegex.test(String(company.vat_number||''))
-    const phoneOk = phoneRegex.test(String(company.phone||''))
+    // VAT is valid if empty OR 15 digits
+    const vatOk = !(company.vat_number||'').trim() || /^\d{15}$/.test(String(company.vat_number||''))
+    // Phone is valid if empty OR valid format
+    const phoneOk = !(company.phone||'').trim() || /^(\+?\d{8,15}|05\d{8})$/.test(String(company.phone||''))
     return nameOk && vatOk && phoneOk
   },[company])
 
@@ -135,15 +136,22 @@ export default function Settings(){
   async function saveCompany(){
     try {
       setSaving(true)
-      const vatRegex = /^\d{15}$/
-      const phoneRegex = /^(\+?\d{8,15}|05\d{8})$/
       const nameOk = !!((company.name_ar||'').trim() || (company.name_en||'').trim())
-      if (!nameOk) { alert('الاسم مطلوب'); return }
-      if (!vatRegex.test(String(company.vat_number||''))) { alert('رقم الضريبة غير صحيح'); return }
-      if (!phoneRegex.test(String(company.phone||''))) { alert('رقم الهاتف غير صحيح'); return }
+      if (!nameOk) { alert('الاسم مطلوب'); setSaving(false); return }
+      // VAT validation only if provided
+      if ((company.vat_number||'').trim() && !/^\d{15}$/.test(String(company.vat_number||''))) { 
+        alert('رقم الضريبة يجب أن يكون 15 رقم'); setSaving(false); return 
+      }
+      // Phone validation only if provided
+      if ((company.phone||'').trim() && !/^(\+?\d{8,15}|05\d{8})$/.test(String(company.phone||''))) { 
+        alert('رقم الهاتف غير صحيح'); setSaving(false); return 
+      }
       await apiSettings.save('settings_company', company)
       setToast({ type: 'success', message: 'تم حفظ إعدادات المؤسسة' })
-    } catch (e) { try { alert('فشل حفظ الإعدادات') } catch {} } finally { setSaving(false) }
+    } catch (e) { 
+      console.error('[Settings] Error saving company:', e)
+      setToast({ type: 'error', message: 'فشل حفظ الإعدادات' }) 
+    } finally { setSaving(false) }
   }
   async function saveBranding(){ try { setSaving(true); await apiSettings.save('settings_branding', branding); setToast({ type: 'success', message: 'تم حفظ الهوية' }) } catch (e) { setToast({ type: 'error', message: 'فشل حفظ الهوية' }) } finally { setSaving(false) } }
   async function saveFooter(){ try { setSaving(true); await apiSettings.save('settings_footer', footerCfg); setToast({ type: 'success', message: 'تم حفظ التذييل' }) } catch (e) { setToast({ type: 'error', message: 'فشل حفظ التذييل' }) } finally { setSaving(false) } }
@@ -248,7 +256,36 @@ export default function Settings(){
             <div className="bg-white border rounded p-4">
               <div className="font-semibold mb-3">الهوية</div>
               <div className="grid grid-cols-1 gap-3">
-                <input className="border rounded px-3 py-2" placeholder="Base64 للشعار" value={branding.logo_base64||''} onChange={e=>setBranding({ ...branding, logo_base64: e.target.value })} />
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">الشعار الرئيسي (PNG/JPG)</label>
+                  <input 
+                    type="file" 
+                    accept="image/png,image/jpeg,image/jpg" 
+                    className="border rounded px-3 py-2 w-full"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setBranding({ ...branding, logo_base64: ev.target?.result || '' });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  {branding.logo_base64 && (
+                    <div className="mt-2">
+                      <img src={branding.logo_base64} alt="Logo" className="max-h-20 border rounded" />
+                      <button 
+                        type="button" 
+                        className="text-red-600 text-sm mt-1"
+                        onClick={() => setBranding({ ...branding, logo_base64: '' })}
+                      >
+                        إزالة الشعار
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input className="border rounded px-3 py-2" placeholder="الخط" value={branding.font||''} onChange={e=>setBranding({ ...branding, font: e.target.value })} />
                 <input className="border rounded px-3 py-2" placeholder="Favicon" value={branding.favicon||''} onChange={e=>setBranding({ ...branding, favicon: e.target.value })} />
               </div>
@@ -282,7 +319,36 @@ export default function Settings(){
                 >
                   {branches.map(b => (<option key={b.id} value={b.code||''}>{b.name}</option>))}
                 </select>
-                <input className="border rounded px-3 py-2" placeholder="Base64 شعار الفرع" value={branchSettings.logo_base64||''} onChange={e=>setBranchSettings({ ...branchSettings, logo_base64: e.target.value })} />
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">شعار الفرع (PNG/JPG)</label>
+                  <input 
+                    type="file" 
+                    accept="image/png,image/jpeg,image/jpg" 
+                    className="border rounded px-3 py-2 w-full"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (ev) => {
+                          setBranchSettings({ ...branchSettings, logo_base64: ev.target?.result || '' });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                  />
+                  {branchSettings.logo_base64 && (
+                    <div className="mt-2">
+                      <img src={branchSettings.logo_base64} alt="Branch Logo" className="max-h-20 border rounded" />
+                      <button 
+                        type="button" 
+                        className="text-red-600 text-sm mt-1"
+                        onClick={() => setBranchSettings({ ...branchSettings, logo_base64: '' })}
+                      >
+                        إزالة الشعار
+                      </button>
+                    </div>
+                  )}
+                </div>
                 <input className="border rounded px-3 py-2" placeholder="Base64 خط الإيصال" value={branchSettings.receipt_font_base64||''} onChange={e=>setBranchSettings({ ...branchSettings, receipt_font_base64: e.target.value })} />
                 <input className="border rounded px-3 py-2" placeholder="هاتف الفرع" value={branchSettings.phone||''} onChange={e=>setBranchSettings({ ...branchSettings, phone: e.target.value })} />
                 <label className="flex items-center gap-2"><input type="checkbox" checked={!!branchSettings.print_logo} onChange={e=>setBranchSettings({ ...branchSettings, print_logo: e.target.checked })} /><span>طباعة الشعار على الإيصال</span></label>

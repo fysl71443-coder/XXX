@@ -340,6 +340,26 @@ async function ensureSchema() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS products (
+        id SERIAL PRIMARY KEY,
+        name TEXT NOT NULL,
+        name_en TEXT,
+        sku TEXT,
+        barcode TEXT,
+        category TEXT,
+        unit TEXT DEFAULT 'unit',
+        price NUMERIC(18,2) DEFAULT 0,
+        cost NUMERIC(18,2) DEFAULT 0,
+        tax_rate NUMERIC(5,2) DEFAULT 15,
+        stock_quantity NUMERIC(18,2) DEFAULT 0,
+        min_stock NUMERIC(18,2) DEFAULT 0,
+        description TEXT,
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
   } catch (e) {
     console.error(`[SCHEMA] ERROR: Failed to ensure schema`, e?.message, e?.stack);
   }
@@ -1355,18 +1375,125 @@ app.use("/api/partners", authenticateToken, async (req, res, next) => {
   }
 });
 
-app.use("/products", authenticateToken, async (req, res, next) => {
-  // Skip if this is not an API request
-  if (!isApiRequest(req)) {
-    return next();
-  }
+// ==================== PRODUCTS API ====================
+app.get("/products", authenticateToken, authorize("products", "view"), async (req, res) => {
   try {
-    if (req.method === "GET") return authorize("products", "view")(req, res, next)
-    if (req.method === "POST") return authorize("products", "create")(req, res, next)
-    if (req.method === "PUT") return authorize("products", "edit")(req, res, next)
-    if (req.method === "DELETE") return authorize("products", "delete")(req, res, next)
-    next()
+    const { rows } = await pool.query('SELECT * FROM products ORDER BY id DESC');
+    res.json(rows || []);
   } catch (e) {
+    console.error('[PRODUCTS] Error listing products:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.get("/api/products", authenticateToken, authorize("products", "view"), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM products ORDER BY id DESC');
+    res.json(rows || []);
+  } catch (e) {
+    console.error('[PRODUCTS] Error listing products:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/products", authenticateToken, authorize("products", "create"), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      `INSERT INTO products(name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_quantity, min_stock, description, is_active) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [b.name||'', b.name_en||'', b.sku||null, b.barcode||null, b.category||null, b.unit||'unit', 
+       Number(b.price||0), Number(b.cost||0), Number(b.tax_rate||15), Number(b.stock_quantity||0), 
+       Number(b.min_stock||0), b.description||null, b.is_active!==false]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[PRODUCTS] Error creating product:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/products", authenticateToken, authorize("products", "create"), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      `INSERT INTO products(name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_quantity, min_stock, description, is_active) 
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+      [b.name||'', b.name_en||'', b.sku||null, b.barcode||null, b.category||null, b.unit||'unit', 
+       Number(b.price||0), Number(b.cost||0), Number(b.tax_rate||15), Number(b.stock_quantity||0), 
+       Number(b.min_stock||0), b.description||null, b.is_active!==false]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[PRODUCTS] Error creating product:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.put("/products/:id", authenticateToken, authorize("products", "edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      `UPDATE products SET name=COALESCE($1,name), name_en=COALESCE($2,name_en), sku=COALESCE($3,sku), 
+       barcode=COALESCE($4,barcode), category=COALESCE($5,category), unit=COALESCE($6,unit), 
+       price=COALESCE($7,price), cost=COALESCE($8,cost), tax_rate=COALESCE($9,tax_rate), 
+       stock_quantity=COALESCE($10,stock_quantity), min_stock=COALESCE($11,min_stock), 
+       description=COALESCE($12,description), is_active=COALESCE($13,is_active), updated_at=NOW() 
+       WHERE id=$14 RETURNING *`,
+      [b.name||null, b.name_en||null, b.sku||null, b.barcode||null, b.category||null, b.unit||null,
+       b.price!=null?Number(b.price):null, b.cost!=null?Number(b.cost):null, b.tax_rate!=null?Number(b.tax_rate):null,
+       b.stock_quantity!=null?Number(b.stock_quantity):null, b.min_stock!=null?Number(b.min_stock):null,
+       b.description||null, b.is_active, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[PRODUCTS] Error updating product:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.put("/api/products/:id", authenticateToken, authorize("products", "edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      `UPDATE products SET name=COALESCE($1,name), name_en=COALESCE($2,name_en), sku=COALESCE($3,sku), 
+       barcode=COALESCE($4,barcode), category=COALESCE($5,category), unit=COALESCE($6,unit), 
+       price=COALESCE($7,price), cost=COALESCE($8,cost), tax_rate=COALESCE($9,tax_rate), 
+       stock_quantity=COALESCE($10,stock_quantity), min_stock=COALESCE($11,min_stock), 
+       description=COALESCE($12,description), is_active=COALESCE($13,is_active), updated_at=NOW() 
+       WHERE id=$14 RETURNING *`,
+      [b.name||null, b.name_en||null, b.sku||null, b.barcode||null, b.category||null, b.unit||null,
+       b.price!=null?Number(b.price):null, b.cost!=null?Number(b.cost):null, b.tax_rate!=null?Number(b.tax_rate):null,
+       b.stock_quantity!=null?Number(b.stock_quantity):null, b.min_stock!=null?Number(b.min_stock):null,
+       b.description||null, b.is_active, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[PRODUCTS] Error updating product:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.delete("/products/:id", authenticateToken, authorize("products", "delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    await pool.query('DELETE FROM products WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[PRODUCTS] Error deleting product:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.delete("/api/products/:id", authenticateToken, authorize("products", "delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    await pool.query('DELETE FROM products WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[PRODUCTS] Error deleting product:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
