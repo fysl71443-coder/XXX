@@ -1692,33 +1692,149 @@ app.delete("/api/accounts/:id", authenticateToken, authorize("accounting", "dele
 // Seed default accounts tree
 app.post("/accounts/seed-default", authenticateToken, authorize("accounting", "create"), async (req, res) => {
   try {
-    // Check if accounts already exist
+    // Check if accounts already exist - allow force recreate
+    const forceRecreate = req.body?.force === true;
     const { rows: existing } = await pool.query('SELECT COUNT(*) as count FROM accounts');
-    if (existing && existing[0] && Number(existing[0].count) > 0) {
-      return res.status(400).json({ error: "accounts_exist", message: "Accounts already exist. Clear them first." });
+    if (!forceRecreate && existing && existing[0] && Number(existing[0].count) > 0) {
+      return res.status(400).json({ error: "accounts_exist", message: "Accounts already exist. Use force=true to recreate." });
     }
     
-    // Default chart of accounts
+    // Clear existing accounts if force recreate
+    if (forceRecreate) {
+      await pool.query('DELETE FROM journal_postings');
+      await pool.query('DELETE FROM accounts');
+    }
+    
+    // شجرة حسابات كاملة متوافقة مع النظام السعودي
     const defaultAccounts = [
+      // ═══════════════════════════════════════════════════════════════
+      // 1000 - الأصول (Assets)
+      // ═══════════════════════════════════════════════════════════════
       { account_number: '1000', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
+      
+      // 1100 - الأصول المتداولة
       { account_number: '1100', name: 'الأصول المتداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
-      { account_number: '1110', name: 'النقدية', name_en: 'Cash', type: 'cash', nature: 'debit', parent_number: '1100' },
-      { account_number: '1120', name: 'البنك', name_en: 'Bank', type: 'bank', nature: 'debit', parent_number: '1100' },
-      { account_number: '1130', name: 'المدينون', name_en: 'Accounts Receivable', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1110', name: 'النقدية والصندوق', name_en: 'Cash on Hand', type: 'cash', nature: 'debit', parent_number: '1100' },
+      { account_number: '1111', name: 'صندوق فرع CHINA TOWN', name_en: 'Cash - China Town', type: 'cash', nature: 'debit', parent_number: '1110' },
+      { account_number: '1112', name: 'صندوق فرع PLACE INDIA', name_en: 'Cash - Place India', type: 'cash', nature: 'debit', parent_number: '1110' },
+      { account_number: '1120', name: 'البنوك', name_en: 'Banks', type: 'bank', nature: 'debit', parent_number: '1100' },
+      { account_number: '1121', name: 'البنك الأهلي', name_en: 'Al Ahli Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
+      { account_number: '1122', name: 'بنك الراجحي', name_en: 'Al Rajhi Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
+      { account_number: '1123', name: 'بنك الإنماء', name_en: 'Alinma Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
+      { account_number: '1130', name: 'الذمم المدينة', name_en: 'Accounts Receivable', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1131', name: 'ذمم العملاء', name_en: 'Customer Receivables', type: 'asset', nature: 'debit', parent_number: '1130' },
+      { account_number: '1132', name: 'شيكات تحت التحصيل', name_en: 'Checks Under Collection', type: 'asset', nature: 'debit', parent_number: '1130' },
+      { account_number: '1133', name: 'سلف الموظفين', name_en: 'Employee Advances', type: 'asset', nature: 'debit', parent_number: '1130' },
       { account_number: '1140', name: 'المخزون', name_en: 'Inventory', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1141', name: 'مخزون المواد الغذائية', name_en: 'Food Inventory', type: 'asset', nature: 'debit', parent_number: '1140' },
+      { account_number: '1142', name: 'مخزون المشروبات', name_en: 'Beverages Inventory', type: 'asset', nature: 'debit', parent_number: '1140' },
+      { account_number: '1143', name: 'مخزون مواد التعبئة', name_en: 'Packaging Inventory', type: 'asset', nature: 'debit', parent_number: '1140' },
+      { account_number: '1150', name: 'مصروفات مدفوعة مقدماً', name_en: 'Prepaid Expenses', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1160', name: 'ضريبة القيمة المضافة المدفوعة', name_en: 'VAT Input', type: 'asset', nature: 'debit', parent_number: '1100' },
+      
+      // 1200 - الأصول الثابتة
+      { account_number: '1200', name: 'الأصول الثابتة', name_en: 'Fixed Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
+      { account_number: '1210', name: 'المباني والإنشاءات', name_en: 'Buildings', type: 'asset', nature: 'debit', parent_number: '1200' },
+      { account_number: '1220', name: 'الأثاث والتجهيزات', name_en: 'Furniture & Fixtures', type: 'asset', nature: 'debit', parent_number: '1200' },
+      { account_number: '1230', name: 'معدات المطبخ', name_en: 'Kitchen Equipment', type: 'asset', nature: 'debit', parent_number: '1200' },
+      { account_number: '1240', name: 'أجهزة الكمبيوتر', name_en: 'Computer Equipment', type: 'asset', nature: 'debit', parent_number: '1200' },
+      { account_number: '1250', name: 'السيارات', name_en: 'Vehicles', type: 'asset', nature: 'debit', parent_number: '1200' },
+      { account_number: '1290', name: 'مجمع الإهلاك', name_en: 'Accumulated Depreciation', type: 'asset', nature: 'credit', parent_number: '1200' },
+      
+      // ═══════════════════════════════════════════════════════════════
+      // 2000 - الالتزامات (Liabilities)
+      // ═══════════════════════════════════════════════════════════════
       { account_number: '2000', name: 'الالتزامات', name_en: 'Liabilities', type: 'liability', nature: 'credit' },
+      
+      // 2100 - الالتزامات المتداولة
       { account_number: '2100', name: 'الالتزامات المتداولة', name_en: 'Current Liabilities', type: 'liability', nature: 'credit', parent_number: '2000' },
-      { account_number: '2110', name: 'الدائنون', name_en: 'Accounts Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
-      { account_number: '2120', name: 'ضريبة القيمة المضافة', name_en: 'VAT Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2110', name: 'الذمم الدائنة', name_en: 'Accounts Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2111', name: 'ذمم الموردين', name_en: 'Supplier Payables', type: 'liability', nature: 'credit', parent_number: '2110' },
+      { account_number: '2120', name: 'ضريبة القيمة المضافة المستحقة', name_en: 'VAT Output', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2130', name: 'الرواتب المستحقة', name_en: 'Salaries Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2131', name: 'رواتب الموظفين المستحقة', name_en: 'Employee Salaries Payable', type: 'liability', nature: 'credit', parent_number: '2130' },
+      { account_number: '2132', name: 'التأمينات الاجتماعية المستحقة', name_en: 'GOSI Payable', type: 'liability', nature: 'credit', parent_number: '2130' },
+      { account_number: '2140', name: 'إيرادات مقبوضة مقدماً', name_en: 'Unearned Revenue', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2150', name: 'مصروفات مستحقة', name_en: 'Accrued Expenses', type: 'liability', nature: 'credit', parent_number: '2100' },
+      
+      // 2200 - الالتزامات طويلة الأجل
+      { account_number: '2200', name: 'الالتزامات طويلة الأجل', name_en: 'Long-term Liabilities', type: 'liability', nature: 'credit', parent_number: '2000' },
+      { account_number: '2210', name: 'القروض البنكية', name_en: 'Bank Loans', type: 'liability', nature: 'credit', parent_number: '2200' },
+      { account_number: '2220', name: 'مكافأة نهاية الخدمة', name_en: 'End of Service Benefits', type: 'liability', nature: 'credit', parent_number: '2200' },
+      
+      // ═══════════════════════════════════════════════════════════════
+      // 3000 - حقوق الملكية (Equity)
+      // ═══════════════════════════════════════════════════════════════
       { account_number: '3000', name: 'حقوق الملكية', name_en: 'Equity', type: 'equity', nature: 'credit' },
       { account_number: '3100', name: 'رأس المال', name_en: 'Capital', type: 'equity', nature: 'credit', parent_number: '3000' },
       { account_number: '3200', name: 'الأرباح المحتجزة', name_en: 'Retained Earnings', type: 'equity', nature: 'credit', parent_number: '3000' },
+      { account_number: '3300', name: 'أرباح/خسائر العام الحالي', name_en: 'Current Year P/L', type: 'equity', nature: 'credit', parent_number: '3000' },
+      { account_number: '3400', name: 'المسحوبات الشخصية', name_en: 'Owner Withdrawals', type: 'equity', nature: 'debit', parent_number: '3000' },
+      
+      // ═══════════════════════════════════════════════════════════════
+      // 4000 - الإيرادات (Revenue)
+      // ═══════════════════════════════════════════════════════════════
       { account_number: '4000', name: 'الإيرادات', name_en: 'Revenue', type: 'revenue', nature: 'credit' },
       { account_number: '4100', name: 'إيرادات المبيعات', name_en: 'Sales Revenue', type: 'revenue', nature: 'credit', parent_number: '4000' },
+      { account_number: '4110', name: 'مبيعات فرع CHINA TOWN', name_en: 'Sales - China Town', type: 'revenue', nature: 'credit', parent_number: '4100' },
+      { account_number: '4120', name: 'مبيعات فرع PLACE INDIA', name_en: 'Sales - Place India', type: 'revenue', nature: 'credit', parent_number: '4100' },
+      { account_number: '4130', name: 'مبيعات التوصيل', name_en: 'Delivery Sales', type: 'revenue', nature: 'credit', parent_number: '4100' },
+      { account_number: '4200', name: 'إيرادات أخرى', name_en: 'Other Revenue', type: 'revenue', nature: 'credit', parent_number: '4000' },
+      { account_number: '4300', name: 'مردودات المبيعات', name_en: 'Sales Returns', type: 'revenue', nature: 'debit', parent_number: '4000' },
+      { account_number: '4400', name: 'خصومات المبيعات', name_en: 'Sales Discounts', type: 'revenue', nature: 'debit', parent_number: '4000' },
+      
+      // ═══════════════════════════════════════════════════════════════
+      // 5000 - المصروفات (Expenses)
+      // ═══════════════════════════════════════════════════════════════
       { account_number: '5000', name: 'المصروفات', name_en: 'Expenses', type: 'expense', nature: 'debit' },
+      
+      // 5100 - تكلفة المبيعات
       { account_number: '5100', name: 'تكلفة المبيعات', name_en: 'Cost of Goods Sold', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5200', name: 'مصروفات إدارية', name_en: 'Administrative Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5300', name: 'مصروفات الرواتب', name_en: 'Salary Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5110', name: 'تكلفة المواد الغذائية', name_en: 'Food Cost', type: 'expense', nature: 'debit', parent_number: '5100' },
+      { account_number: '5120', name: 'تكلفة المشروبات', name_en: 'Beverage Cost', type: 'expense', nature: 'debit', parent_number: '5100' },
+      { account_number: '5130', name: 'تكلفة التعبئة والتغليف', name_en: 'Packaging Cost', type: 'expense', nature: 'debit', parent_number: '5100' },
+      
+      // 5200 - مصروفات تشغيلية
+      { account_number: '5200', name: 'مصروفات تشغيلية', name_en: 'Operating Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5210', name: 'الإيجار', name_en: 'Rent Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5220', name: 'الكهرباء', name_en: 'Electricity Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5230', name: 'المياه', name_en: 'Water Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5240', name: 'الاتصالات والإنترنت', name_en: 'Telecom & Internet', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5250', name: 'الصيانة والإصلاحات', name_en: 'Maintenance & Repairs', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5260', name: 'النظافة والتعقيم', name_en: 'Cleaning & Sanitation', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5270', name: 'الغاز', name_en: 'Gas Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
+      
+      // 5300 - مصروفات إدارية وعمومية
+      { account_number: '5300', name: 'مصروفات إدارية وعمومية', name_en: 'Administrative Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5310', name: 'الرواتب والأجور', name_en: 'Salaries & Wages', type: 'expense', nature: 'debit', parent_number: '5300' },
+      { account_number: '5311', name: 'رواتب الموظفين', name_en: 'Employee Salaries', type: 'expense', nature: 'debit', parent_number: '5310' },
+      { account_number: '5312', name: 'بدل السكن', name_en: 'Housing Allowance', type: 'expense', nature: 'debit', parent_number: '5310' },
+      { account_number: '5313', name: 'بدل النقل', name_en: 'Transport Allowance', type: 'expense', nature: 'debit', parent_number: '5310' },
+      { account_number: '5314', name: 'بدلات أخرى', name_en: 'Other Allowances', type: 'expense', nature: 'debit', parent_number: '5310' },
+      { account_number: '5315', name: 'العمل الإضافي', name_en: 'Overtime', type: 'expense', nature: 'debit', parent_number: '5310' },
+      { account_number: '5320', name: 'التأمينات الاجتماعية', name_en: 'GOSI Expense', type: 'expense', nature: 'debit', parent_number: '5300' },
+      { account_number: '5330', name: 'التأمين الطبي', name_en: 'Medical Insurance', type: 'expense', nature: 'debit', parent_number: '5300' },
+      { account_number: '5340', name: 'مصروفات التدريب', name_en: 'Training Expense', type: 'expense', nature: 'debit', parent_number: '5300' },
+      { account_number: '5350', name: 'القرطاسية والمطبوعات', name_en: 'Stationery & Printing', type: 'expense', nature: 'debit', parent_number: '5300' },
+      { account_number: '5360', name: 'الرسوم الحكومية', name_en: 'Government Fees', type: 'expense', nature: 'debit', parent_number: '5300' },
+      { account_number: '5370', name: 'الاستشارات المهنية', name_en: 'Professional Fees', type: 'expense', nature: 'debit', parent_number: '5300' },
+      { account_number: '5380', name: 'الإهلاك', name_en: 'Depreciation Expense', type: 'expense', nature: 'debit', parent_number: '5300' },
+      
+      // 5400 - مصروفات مالية
+      { account_number: '5400', name: 'مصروفات مالية', name_en: 'Financial Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5410', name: 'عمولات البنوك', name_en: 'Bank Charges', type: 'expense', nature: 'debit', parent_number: '5400' },
+      { account_number: '5420', name: 'عمولات نقاط البيع', name_en: 'POS Fees', type: 'expense', nature: 'debit', parent_number: '5400' },
+      { account_number: '5430', name: 'فوائد القروض', name_en: 'Loan Interest', type: 'expense', nature: 'debit', parent_number: '5400' },
+      
+      // 5500 - مصروفات التسويق
+      { account_number: '5500', name: 'مصروفات التسويق', name_en: 'Marketing Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5510', name: 'الإعلانات', name_en: 'Advertising', type: 'expense', nature: 'debit', parent_number: '5500' },
+      { account_number: '5520', name: 'العروض والتخفيضات', name_en: 'Promotions', type: 'expense', nature: 'debit', parent_number: '5500' },
+      
+      // 5600 - مصروفات أخرى
+      { account_number: '5600', name: 'مصروفات أخرى', name_en: 'Other Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5610', name: 'خسائر متنوعة', name_en: 'Miscellaneous Losses', type: 'expense', nature: 'debit', parent_number: '5600' },
+      { account_number: '5620', name: 'غرامات وجزاءات', name_en: 'Fines & Penalties', type: 'expense', nature: 'debit', parent_number: '5600' },
     ];
     
     // Insert accounts
@@ -1734,6 +1850,7 @@ app.post("/accounts/seed-default", authenticateToken, authorize("accounting", "c
       }
     }
     
+    console.log(`[ACCOUNTS] Seeded ${defaultAccounts.length} accounts successfully`);
     res.json({ ok: true, count: defaultAccounts.length });
   } catch (e) {
     console.error('[ACCOUNTS] Error seeding default accounts:', e);
@@ -1741,51 +1858,8 @@ app.post("/accounts/seed-default", authenticateToken, authorize("accounting", "c
   }
 });
 
-app.post("/api/accounts/seed-default", authenticateToken, authorize("accounting", "create"), async (req, res) => {
-  try {
-    const { rows: existing } = await pool.query('SELECT COUNT(*) as count FROM accounts');
-    if (existing && existing[0] && Number(existing[0].count) > 0) {
-      return res.status(400).json({ error: "accounts_exist", message: "Accounts already exist." });
-    }
-    
-    const defaultAccounts = [
-      { account_number: '1000', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
-      { account_number: '1100', name: 'الأصول المتداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
-      { account_number: '1110', name: 'النقدية', name_en: 'Cash', type: 'cash', nature: 'debit', parent_number: '1100' },
-      { account_number: '1120', name: 'البنك', name_en: 'Bank', type: 'bank', nature: 'debit', parent_number: '1100' },
-      { account_number: '1130', name: 'المدينون', name_en: 'Accounts Receivable', type: 'asset', nature: 'debit', parent_number: '1100' },
-      { account_number: '1140', name: 'المخزون', name_en: 'Inventory', type: 'asset', nature: 'debit', parent_number: '1100' },
-      { account_number: '2000', name: 'الالتزامات', name_en: 'Liabilities', type: 'liability', nature: 'credit' },
-      { account_number: '2100', name: 'الالتزامات المتداولة', name_en: 'Current Liabilities', type: 'liability', nature: 'credit', parent_number: '2000' },
-      { account_number: '2110', name: 'الدائنون', name_en: 'Accounts Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
-      { account_number: '2120', name: 'ضريبة القيمة المضافة', name_en: 'VAT Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
-      { account_number: '3000', name: 'حقوق الملكية', name_en: 'Equity', type: 'equity', nature: 'credit' },
-      { account_number: '3100', name: 'رأس المال', name_en: 'Capital', type: 'equity', nature: 'credit', parent_number: '3000' },
-      { account_number: '3200', name: 'الأرباح المحتجزة', name_en: 'Retained Earnings', type: 'equity', nature: 'credit', parent_number: '3000' },
-      { account_number: '4000', name: 'الإيرادات', name_en: 'Revenue', type: 'revenue', nature: 'credit' },
-      { account_number: '4100', name: 'إيرادات المبيعات', name_en: 'Sales Revenue', type: 'revenue', nature: 'credit', parent_number: '4000' },
-      { account_number: '5000', name: 'المصروفات', name_en: 'Expenses', type: 'expense', nature: 'debit' },
-      { account_number: '5100', name: 'تكلفة المبيعات', name_en: 'Cost of Goods Sold', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5200', name: 'مصروفات إدارية', name_en: 'Administrative Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5300', name: 'مصروفات الرواتب', name_en: 'Salary Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-    ];
-    
-    const accountIdByNumber = {};
-    for (const acc of defaultAccounts) {
-      const parentId = acc.parent_number ? accountIdByNumber[acc.parent_number] : null;
-      const { rows } = await pool.query(
-        'INSERT INTO accounts(account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
-        [acc.account_number, acc.account_number, acc.name, acc.name_en, acc.type, acc.nature, parentId, 0, true]
-      );
-      if (rows && rows[0]) accountIdByNumber[acc.account_number] = rows[0].id;
-    }
-    
-    res.json({ ok: true, count: defaultAccounts.length });
-  } catch (e) {
-    console.error('[ACCOUNTS] Error seeding default accounts:', e);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+// /api/accounts/seed-default - redirect to /accounts/seed-default
+// Both paths use the same handler defined above
 
 app.use("/ar", authenticateToken, async (req, res, next) => {
   // Skip if this is not an API request
@@ -2215,7 +2289,8 @@ app.get("/ar/summary", authenticateToken, authorize("reports","view"), async (re
     res.json({ items: [] });
   } catch (e) { res.json({ items: [] }); }
 });
-app.get("/pos/tables-layout", authenticateToken, async (req, res) => {
+// POS Tables Layout - both paths
+async function handleGetTablesLayout(req, res) {
   try {
     const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
     const key = `pos_tables_layout_${branch}`;
@@ -2224,8 +2299,11 @@ app.get("/pos/tables-layout", authenticateToken, async (req, res) => {
     const out = v && v.rows ? v : { rows: [] };
     res.json(out);
   } catch (e) { res.json({ rows: [] }); }
-});
-app.put("/pos/tables-layout", authenticateToken, authorize("sales","edit"), async (req, res) => {
+}
+app.get("/pos/tables-layout", authenticateToken, handleGetTablesLayout);
+app.get("/api/pos/tables-layout", authenticateToken, handleGetTablesLayout);
+
+async function handlePutTablesLayout(req, res) {
   try {
     const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
     const key = `pos_tables_layout_${branch}`;
@@ -2233,16 +2311,22 @@ app.put("/pos/tables-layout", authenticateToken, authorize("sales","edit"), asyn
     await pool.query('INSERT INTO settings(key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()', [key, value]);
     res.json({ ok: true });
   } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.get("/pos/table-state", authenticateToken, async (req, res) => {
+}
+app.put("/pos/tables-layout", authenticateToken, authorize("sales","edit"), handlePutTablesLayout);
+app.put("/api/pos/tables-layout", authenticateToken, authorize("sales","edit"), handlePutTablesLayout);
+
+async function handleGetTableState(req, res) {
   try {
     const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
     const { rows } = await pool.query('SELECT table_code FROM orders WHERE branch = $1 AND status = $2', [branch, 'DRAFT']);
     const busy = (rows || []).map(r => r.table_code).filter(Boolean);
     res.json({ busy });
   } catch (e) { res.json({ busy: [] }); }
-});
-app.post("/pos/verify-cancel", authenticateToken, async (req, res) => {
+}
+app.get("/pos/table-state", authenticateToken, handleGetTableState);
+app.get("/api/pos/table-state", authenticateToken, handleGetTableState);
+
+async function handleVerifyCancel(req, res) {
   try {
     const branch = String(req.body?.branch || req.user?.default_branch || 'china_town');
     const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [`settings_branch_${branch}`]);
@@ -2251,7 +2335,11 @@ app.post("/pos/verify-cancel", authenticateToken, async (req, res) => {
     const ok = !pwd || String(req.body?.password || '') === pwd;
     res.json(ok);
   } catch (e) { res.json(true); }
-});
+}
+app.post("/pos/verify-cancel", authenticateToken, handleVerifyCancel);
+app.post("/api/pos/verify-cancel", authenticateToken, handleVerifyCancel);
+
+// Legacy saveDraft - kept for compatibility
 app.post("/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
   try {
     const b = req.body || {};
@@ -2262,7 +2350,8 @@ app.post("/pos/saveDraft", authenticateToken, authorize("sales","create", { bran
     res.json(rows && rows[0]);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
-app.post("/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+// POS Issue Invoice - both paths for compatibility
+async function handleIssueInvoice(req, res) {
   try {
     const b = req.body || {};
     const number = b.number || null;
@@ -2283,8 +2372,44 @@ app.post("/pos/issueInvoice", authenticateToken, authorize("sales","create", { b
       [number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch]
     );
     res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
-});
+  } catch (e) { 
+    console.error('[POS] issueInvoice error:', e);
+    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  }
+}
+app.post("/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleIssueInvoice);
+app.post("/api/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleIssueInvoice);
+
+// POS Save Draft - both paths for compatibility
+async function handleSaveDraft(req, res) {
+  try {
+    const b = req.body || {};
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const table_code = b.table || b.table_code || null;
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const order_id = b.order_id || null;
+    
+    if (order_id) {
+      // Update existing order
+      const { rows } = await pool.query(
+        'UPDATE orders SET lines=$1, updated_at=NOW() WHERE id=$2 RETURNING id, branch, table_code, status',
+        [JSON.stringify(lines), order_id]
+      );
+      return res.json(rows && rows[0]);
+    }
+    
+    // Create new order
+    const { rows } = await pool.query(
+      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status',
+      [branch, table_code, JSON.stringify(lines), 'DRAFT']
+    );
+    res.json(rows && rows[0]);
+  } catch (e) { 
+    console.error('[POS] saveDraft error:', e);
+    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  }
+}
+app.post("/api/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
 app.get("/", (req, res) => {
   res.sendFile(path.join(buildPath, "index.html"));
 });
