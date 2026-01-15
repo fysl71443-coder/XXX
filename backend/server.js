@@ -302,6 +302,44 @@ async function ensureSchema() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id SERIAL PRIMARY KEY,
+        account_number TEXT,
+        account_code TEXT,
+        name TEXT NOT NULL,
+        name_en TEXT,
+        type TEXT NOT NULL DEFAULT 'asset',
+        nature TEXT DEFAULT 'debit',
+        parent_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+        opening_balance NUMERIC(18,2) DEFAULT 0,
+        allow_manual_entry BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS journal_entries (
+        id SERIAL PRIMARY KEY,
+        entry_number INTEGER,
+        description TEXT,
+        date DATE,
+        reference_type TEXT,
+        reference_id INTEGER,
+        status TEXT DEFAULT 'draft',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS journal_postings (
+        id SERIAL PRIMARY KEY,
+        journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE CASCADE,
+        account_id INTEGER REFERENCES accounts(id),
+        debit NUMERIC(18,2) DEFAULT 0,
+        credit NUMERIC(18,2) DEFAULT 0,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
   } catch (e) {
     console.error(`[SCHEMA] ERROR: Failed to ensure schema`, e?.message, e?.stack);
   }
@@ -853,6 +891,17 @@ app.get("/api/branches", authenticateToken, async (req, res) => {
   try {
     const id = Number(req.user?.id || 0);
     if (!id) return res.status(401).json({ error: "unauthorized" });
+    
+    // Admin gets ALL branches
+    const isAdmin = isAdminUser(req.user);
+    if (isAdmin) {
+      const allBranches = [
+        { id: 1, code: 'china_town', name: 'CHINA TOWN' },
+        { id: 2, code: 'place_india', name: 'PLACE INDIA' }
+      ];
+      return res.json(allBranches);
+    }
+    
     const map = await loadUserPermissionsMap(id);
     const set = new Set();
     for (const [screen, obj] of Object.entries(map || {})) {
@@ -1371,18 +1420,241 @@ app.use("/payments", authenticateToken, async (req, res, next) => {
   }
 });
 
-app.use("/accounts", authenticateToken, async (req, res, next) => {
-  // Skip if this is not an API request
-  if (!isApiRequest(req)) {
-    return next();
-  }
+// ==================== ACCOUNTS API ====================
+// Get accounts tree
+app.get("/accounts", authenticateToken, authorize("accounting", "view"), async (req, res) => {
   try {
-    if (req.method === "GET") return authorize("accounting", "view")(req, res, next)
-    if (req.method === "POST") return authorize("accounting", "create")(req, res, next)
-    if (req.method === "PUT") return authorize("accounting", "edit")(req, res, next)
-    if (req.method === "DELETE") return authorize("accounting", "delete")(req, res, next)
-    next()
+    const { rows } = await pool.query('SELECT id, account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry, created_at FROM accounts ORDER BY account_number ASC');
+    // Build tree structure
+    const accounts = rows || [];
+    const byId = new Map(accounts.map(a => [a.id, { ...a, children: [] }]));
+    const roots = [];
+    for (const a of byId.values()) {
+      if (a.parent_id) {
+        const p = byId.get(a.parent_id);
+        if (p) p.children.push(a);
+        else roots.push(a);
+      } else {
+        roots.push(a);
+      }
+    }
+    res.json(roots);
   } catch (e) {
+    console.error('[ACCOUNTS] Error fetching accounts tree:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.get("/api/accounts", authenticateToken, authorize("accounting", "view"), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry, created_at FROM accounts ORDER BY account_number ASC');
+    const accounts = rows || [];
+    const byId = new Map(accounts.map(a => [a.id, { ...a, children: [] }]));
+    const roots = [];
+    for (const a of byId.values()) {
+      if (a.parent_id) {
+        const p = byId.get(a.parent_id);
+        if (p) p.children.push(a);
+        else roots.push(a);
+      } else {
+        roots.push(a);
+      }
+    }
+    res.json(roots);
+  } catch (e) {
+    console.error('[ACCOUNTS] Error fetching accounts tree:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Create account
+app.post("/accounts", authenticateToken, authorize("accounting", "create"), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'INSERT INTO accounts(account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+      [b.account_number||null, b.account_code||b.account_number||null, b.name||'', b.name_en||'', b.type||'asset', b.nature||'debit', b.parent_id||null, Number(b.opening_balance||0), b.allow_manual_entry!==false]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[ACCOUNTS] Error creating account:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/accounts", authenticateToken, authorize("accounting", "create"), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'INSERT INTO accounts(account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
+      [b.account_number||null, b.account_code||b.account_number||null, b.name||'', b.name_en||'', b.type||'asset', b.nature||'debit', b.parent_id||null, Number(b.opening_balance||0), b.allow_manual_entry!==false]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[ACCOUNTS] Error creating account:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Update account
+app.put("/accounts/:id", authenticateToken, authorize("accounting", "edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE accounts SET name=COALESCE($1,name), name_en=COALESCE($2,name_en), type=COALESCE($3,type), nature=COALESCE($4,nature), opening_balance=COALESCE($5,opening_balance), allow_manual_entry=COALESCE($6,allow_manual_entry), updated_at=NOW() WHERE id=$7 RETURNING *',
+      [b.name||null, b.name_en||null, b.type||null, b.nature||null, b.opening_balance!=null?Number(b.opening_balance):null, b.allow_manual_entry, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[ACCOUNTS] Error updating account:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.put("/api/accounts/:id", authenticateToken, authorize("accounting", "edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const b = req.body || {};
+    const { rows } = await pool.query(
+      'UPDATE accounts SET name=COALESCE($1,name), name_en=COALESCE($2,name_en), type=COALESCE($3,type), nature=COALESCE($4,nature), opening_balance=COALESCE($5,opening_balance), allow_manual_entry=COALESCE($6,allow_manual_entry), updated_at=NOW() WHERE id=$7 RETURNING *',
+      [b.name||null, b.name_en||null, b.type||null, b.nature||null, b.opening_balance!=null?Number(b.opening_balance):null, b.allow_manual_entry, id]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[ACCOUNTS] Error updating account:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Delete account
+app.delete("/accounts/:id", authenticateToken, authorize("accounting", "delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const force = req.query.force === '1' || req.query.force === 'true';
+    // Check if account has journal postings
+    const { rows: postings } = await pool.query('SELECT COUNT(*) as count FROM journal_postings WHERE account_id = $1', [id]);
+    if (!force && postings && postings[0] && Number(postings[0].count) > 0) {
+      return res.status(400).json({ error: "account_has_postings", message: "Cannot delete account with journal postings" });
+    }
+    await pool.query('DELETE FROM accounts WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[ACCOUNTS] Error deleting account:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.delete("/api/accounts/:id", authenticateToken, authorize("accounting", "delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const force = req.query.force === '1' || req.query.force === 'true';
+    const { rows: postings } = await pool.query('SELECT COUNT(*) as count FROM journal_postings WHERE account_id = $1', [id]);
+    if (!force && postings && postings[0] && Number(postings[0].count) > 0) {
+      return res.status(400).json({ error: "account_has_postings", message: "Cannot delete account with journal postings" });
+    }
+    await pool.query('DELETE FROM accounts WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[ACCOUNTS] Error deleting account:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Seed default accounts tree
+app.post("/accounts/seed-default", authenticateToken, authorize("accounting", "create"), async (req, res) => {
+  try {
+    // Check if accounts already exist
+    const { rows: existing } = await pool.query('SELECT COUNT(*) as count FROM accounts');
+    if (existing && existing[0] && Number(existing[0].count) > 0) {
+      return res.status(400).json({ error: "accounts_exist", message: "Accounts already exist. Clear them first." });
+    }
+    
+    // Default chart of accounts
+    const defaultAccounts = [
+      { account_number: '1000', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
+      { account_number: '1100', name: 'الأصول المتداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
+      { account_number: '1110', name: 'النقدية', name_en: 'Cash', type: 'cash', nature: 'debit', parent_number: '1100' },
+      { account_number: '1120', name: 'البنك', name_en: 'Bank', type: 'bank', nature: 'debit', parent_number: '1100' },
+      { account_number: '1130', name: 'المدينون', name_en: 'Accounts Receivable', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1140', name: 'المخزون', name_en: 'Inventory', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '2000', name: 'الالتزامات', name_en: 'Liabilities', type: 'liability', nature: 'credit' },
+      { account_number: '2100', name: 'الالتزامات المتداولة', name_en: 'Current Liabilities', type: 'liability', nature: 'credit', parent_number: '2000' },
+      { account_number: '2110', name: 'الدائنون', name_en: 'Accounts Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2120', name: 'ضريبة القيمة المضافة', name_en: 'VAT Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '3000', name: 'حقوق الملكية', name_en: 'Equity', type: 'equity', nature: 'credit' },
+      { account_number: '3100', name: 'رأس المال', name_en: 'Capital', type: 'equity', nature: 'credit', parent_number: '3000' },
+      { account_number: '3200', name: 'الأرباح المحتجزة', name_en: 'Retained Earnings', type: 'equity', nature: 'credit', parent_number: '3000' },
+      { account_number: '4000', name: 'الإيرادات', name_en: 'Revenue', type: 'revenue', nature: 'credit' },
+      { account_number: '4100', name: 'إيرادات المبيعات', name_en: 'Sales Revenue', type: 'revenue', nature: 'credit', parent_number: '4000' },
+      { account_number: '5000', name: 'المصروفات', name_en: 'Expenses', type: 'expense', nature: 'debit' },
+      { account_number: '5100', name: 'تكلفة المبيعات', name_en: 'Cost of Goods Sold', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5200', name: 'مصروفات إدارية', name_en: 'Administrative Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5300', name: 'مصروفات الرواتب', name_en: 'Salary Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+    ];
+    
+    // Insert accounts
+    const accountIdByNumber = {};
+    for (const acc of defaultAccounts) {
+      const parentId = acc.parent_number ? accountIdByNumber[acc.parent_number] : null;
+      const { rows } = await pool.query(
+        'INSERT INTO accounts(account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+        [acc.account_number, acc.account_number, acc.name, acc.name_en, acc.type, acc.nature, parentId, 0, true]
+      );
+      if (rows && rows[0]) {
+        accountIdByNumber[acc.account_number] = rows[0].id;
+      }
+    }
+    
+    res.json({ ok: true, count: defaultAccounts.length });
+  } catch (e) {
+    console.error('[ACCOUNTS] Error seeding default accounts:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/accounts/seed-default", authenticateToken, authorize("accounting", "create"), async (req, res) => {
+  try {
+    const { rows: existing } = await pool.query('SELECT COUNT(*) as count FROM accounts');
+    if (existing && existing[0] && Number(existing[0].count) > 0) {
+      return res.status(400).json({ error: "accounts_exist", message: "Accounts already exist." });
+    }
+    
+    const defaultAccounts = [
+      { account_number: '1000', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
+      { account_number: '1100', name: 'الأصول المتداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
+      { account_number: '1110', name: 'النقدية', name_en: 'Cash', type: 'cash', nature: 'debit', parent_number: '1100' },
+      { account_number: '1120', name: 'البنك', name_en: 'Bank', type: 'bank', nature: 'debit', parent_number: '1100' },
+      { account_number: '1130', name: 'المدينون', name_en: 'Accounts Receivable', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1140', name: 'المخزون', name_en: 'Inventory', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '2000', name: 'الالتزامات', name_en: 'Liabilities', type: 'liability', nature: 'credit' },
+      { account_number: '2100', name: 'الالتزامات المتداولة', name_en: 'Current Liabilities', type: 'liability', nature: 'credit', parent_number: '2000' },
+      { account_number: '2110', name: 'الدائنون', name_en: 'Accounts Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2120', name: 'ضريبة القيمة المضافة', name_en: 'VAT Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '3000', name: 'حقوق الملكية', name_en: 'Equity', type: 'equity', nature: 'credit' },
+      { account_number: '3100', name: 'رأس المال', name_en: 'Capital', type: 'equity', nature: 'credit', parent_number: '3000' },
+      { account_number: '3200', name: 'الأرباح المحتجزة', name_en: 'Retained Earnings', type: 'equity', nature: 'credit', parent_number: '3000' },
+      { account_number: '4000', name: 'الإيرادات', name_en: 'Revenue', type: 'revenue', nature: 'credit' },
+      { account_number: '4100', name: 'إيرادات المبيعات', name_en: 'Sales Revenue', type: 'revenue', nature: 'credit', parent_number: '4000' },
+      { account_number: '5000', name: 'المصروفات', name_en: 'Expenses', type: 'expense', nature: 'debit' },
+      { account_number: '5100', name: 'تكلفة المبيعات', name_en: 'Cost of Goods Sold', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5200', name: 'مصروفات إدارية', name_en: 'Administrative Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+      { account_number: '5300', name: 'مصروفات الرواتب', name_en: 'Salary Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
+    ];
+    
+    const accountIdByNumber = {};
+    for (const acc of defaultAccounts) {
+      const parentId = acc.parent_number ? accountIdByNumber[acc.parent_number] : null;
+      const { rows } = await pool.query(
+        'INSERT INTO accounts(account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+        [acc.account_number, acc.account_number, acc.name, acc.name_en, acc.type, acc.nature, parentId, 0, true]
+      );
+      if (rows && rows[0]) accountIdByNumber[acc.account_number] = rows[0].id;
+    }
+    
+    res.json({ ok: true, count: defaultAccounts.length });
+  } catch (e) {
+    console.error('[ACCOUNTS] Error seeding default accounts:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
