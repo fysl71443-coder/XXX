@@ -8,8 +8,8 @@ export default function ClientsAging(){
   const [bucket, setBucket] = useState('')
   useEffect(()=>{ (async()=>{ setLoading(true); try { const res = await invoices.list({ type:'sale' }); setRows(res?.items||res||[]) } catch { setRows([]) } finally { setLoading(false) } })() },[])
   function days(d){ const x = Math.ceil((Date.now()-new Date(d).getTime())/(1000*60*60*24)); return x<0?0:x }
-  const filtered = useMemo(()=> rows.filter(r=> String(r.status)!=='paid' && String(r.status)!=='draft').filter(r=>{ const dd=days(r.date); if(bucket==='0-30') return dd<=30; if(bucket==='31-60') return dd>30&&dd<=60; if(bucket==='61-90') return dd>60&&dd<=90; if(bucket==='90+') return dd>90; return true }),[rows,bucket])
-  const counts = useMemo(()=>{ const b={ '0-30':0,'31-60':0,'61-90':0,'90+':0 }; rows.forEach(r=>{ if(r.status==='paid') return; const dd=days(r.date); if(dd<=30) b['0-30']++; else if(dd<=60) b['31-60']++; else if(dd<=90) b['61-90']++; else b['90+']++; }); return b },[rows])
+  const filtered = useMemo(()=> (Array.isArray(rows) ? rows : []).filter(r=> String(r.status)!=='paid' && String(r.status)!=='draft').filter(r=>{ const dd=days(r.date); if(bucket==='0-30') return dd<=30; if(bucket==='31-60') return dd>30&&dd<=60; if(bucket==='61-90') return dd>60&&dd<=90; if(bucket==='90+') return dd>90; return true }),[rows,bucket])
+  const counts = useMemo(()=>{ const b={ '0-30':0,'31-60':0,'61-90':0,'90+':0 }; const safe = Array.isArray(rows) ? rows : []; safe.forEach(r=>{ if(r.status==='paid') return; const dd=days(r.date); if(dd<=30) b['0-30']++; else if(dd<=60) b['31-60']++; else if(dd<=90) b['61-90']++; else b['90+']++; }); return b },[rows])
   return (
     <div className="space-y-4" dir="rtl">
       <h2 className="text-2xl font-bold text-gray-800">{lang==='ar'?'أعمار الديون':'Aging Debts'}</h2>
@@ -30,7 +30,7 @@ export default function ClientsAging(){
             </tr>
           </thead>
           <tbody>
-            {loading ? (<tr><td className="p-2 text-sm text-gray-600" colSpan={4}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>) : filtered.map(inv => (
+            {loading ? (<tr><td className="p-2 text-sm text-gray-600" colSpan={4}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>) : (Array.isArray(filtered) ? filtered : []).map(inv => (
               <tr key={inv.id} className="border-b odd:bg-white even:bg-gray-50">
                 <td className="p-2 font-medium">{inv.invoice_number}</td>
                 <td className="p-2">{inv.date}</td>

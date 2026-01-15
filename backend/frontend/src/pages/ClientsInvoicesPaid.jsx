@@ -9,8 +9,8 @@ export default function ClientsInvoicesPaid(){
   const [payRows, setPayRows] = useState([])
   useEffect(()=>{ (async()=>{ setLoading(true); try { const res = await invoices.list({ type:'sale', status:'paid', ...filters }); setRows(res?.items||res||[]) } catch { setRows([]) } finally { setLoading(false) } })() },[filters])
   useEffect(()=>{ (async()=>{ try { const params = {}; if (filters.from) params.from = filters.from; if (filters.to) params.to = filters.to; params.pageSize = 1000; const res = await apiPayments.list({ ...params, party_type: 'customer' }); setPayRows(res?.items||res||[]) } catch { setPayRows([]) } })() },[filters])
-  const lastPayByInvoice = useMemo(()=>{ const m=new Map(); (payRows||[]).forEach(p=>{ const id=Number(p.invoice_id||0); const d=new Date(p.date); const prev=m.get(id); if(!prev || d>prev) m.set(id, d) }); return m },[payRows])
-  const paged = useMemo(()=> rows.filter(inv => String(inv?.partner?.customer_type||'').toLowerCase()==='credit'), [rows])
+  const lastPayByInvoice = useMemo(()=>{ const m=new Map(); const safe = Array.isArray(payRows) ? payRows : []; safe.forEach(p=>{ const id=Number(p.invoice_id||0); const d=new Date(p.date); const prev=m.get(id); if(!prev || d>prev) m.set(id, d) }); return m },[payRows])
+  const paged = useMemo(()=> (Array.isArray(rows) ? rows : []).filter(inv => String(inv?.partner?.customer_type||'').toLowerCase()==='credit'), [rows])
   return (
     <div className="space-y-4" dir="rtl">
       <h2 className="text-2xl font-bold text-gray-800">{lang==='ar'?'الفواتير المدفوعة فقط':'Paid Invoices Only'}</h2>
@@ -32,7 +32,7 @@ export default function ClientsInvoicesPaid(){
             </tr>
           </thead>
           <tbody>
-            {loading ? (<tr><td className="p-2 text-sm text-gray-600" colSpan={4}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>) : paged.map(inv => (
+            {loading ? (<tr><td className="p-2 text-sm text-gray-600" colSpan={4}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>) : (Array.isArray(paged) ? paged : []).map(inv => (
               <tr key={inv.id} className="border-b odd:bg-white even:bg-gray-50">
                 <td className="p-2 font-medium">{inv.invoice_number}</td>
                 <td className="p-2">{inv.partner?.name || (inv.partner_id? `#${inv.partner_id}` : (lang==='ar'?'عميل نقدي':'Cash Customer'))}</td>

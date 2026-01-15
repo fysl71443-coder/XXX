@@ -136,7 +136,7 @@ export default function PayrollStatements(){
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => {
+              {(Array.isArray(rows) ? rows : []).map(r => {
                 const e = r.employee || {}
                 const isHourly = String(e.pay_type||'monthly')==='hourly'
                 return (
@@ -225,7 +225,7 @@ export default function PayrollStatements(){
               </tr>
             </thead>
             <tbody>
-              {rows.map((r, idx) => {
+              {(Array.isArray(rows) ? rows : []).map((r, idx) => {
                 const e = r.employee || {}
                 const isHourly = String(e.pay_type||'monthly')==='hourly'
                 const isPaid = !!r.paid_at

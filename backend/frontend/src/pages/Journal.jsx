@@ -205,8 +205,9 @@ function DraftModal({ open, onClose, onSubmit, initial, accounts, onPost }) {
   const [query, setQuery] = useState('')
   const flatAccounts = (accounts||[])
   const filtered = flatAccounts.filter(a => (a.name||'').toLowerCase().includes(query.toLowerCase()) || String(a.account_code||a.account_number).includes(query))
-  const totalDebit = rows.reduce((s, r) => s + parseFloat(r.debit || 0), 0)
-  const totalCredit = rows.reduce((s, r) => s + parseFloat(r.credit || 0), 0)
+  const safeRows = Array.isArray(rows) ? rows : []
+  const totalDebit = safeRows.reduce((s, r) => s + parseFloat(r.debit || 0), 0)
+  const totalCredit = safeRows.reduce((s, r) => s + parseFloat(r.credit || 0), 0)
   if (!open) return null
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center">
@@ -227,7 +228,7 @@ function DraftModal({ open, onClose, onSubmit, initial, accounts, onPost }) {
         </div>
         <div className="space-y-2">
           <AnimatePresence initial={false}>
-          {rows.map((r, i) => (
+          {(Array.isArray(rows) ? rows : []).map((r, i) => (
             <motion.div key={i} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="grid grid-cols-12 gap-3">
               <div className="col-span-4">
                 <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t('labels.account_search')} className="px-3 py-2 border border-gray-200 rounded-lg w-full mb-2 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
@@ -916,7 +917,7 @@ function exportCSV(items){
   
   const csvContent = [
     header.join(','),
-    ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
+    ...(Array.isArray(rows) ? rows : []).map(r => (Array.isArray(r) ? r : []).map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
   ].join('\n')
   
   const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' })

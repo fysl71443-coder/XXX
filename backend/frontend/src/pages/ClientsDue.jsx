@@ -38,7 +38,7 @@ export default function ClientsDue(){
             </tr>
           </thead>
           <tbody>
-            {loading ? (<tr><td className="p-2 text-sm text-gray-600" colSpan={3}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>) : paged.map(r => {
+            {loading ? (<tr><td className="p-2 text-sm text-gray-600" colSpan={3}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>) : (Array.isArray(paged) ? paged : []).map(r => {
               const bal = Number(r.balance||0)
               const status = bal>0 ? (lang==='ar'?"مدين":"Debit") : bal<0 ? (lang==='ar'?"دائن":"Credit") : (lang==='ar'?"صفر":"Zero")
               return (

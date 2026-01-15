@@ -15,7 +15,7 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
   const [loading, setLoading] = useState(false)
   const [filters, setFilters] = useState({ partner_id: '', status: '', from: '', to: '', branch: '' })
   const [partners, setPartners] = useState([])
-  const partnersById = useMemo(()=>{ const m=new Map(); (partners||[]).forEach(p=>m.set(Number(p.id||0), p)); return m },[partners])
+  const partnersById = useMemo(()=>{ const m=new Map(); const safe = Array.isArray(partners) ? partners : []; safe.forEach(p=>m.set(Number(p.id||0), p)); return m },[partners])
   const [helpOpen, setHelpOpen] = useState(false)
   const [periodStatus, setPeriodStatus] = useState('open')
   const [payRows, setPayRows] = useState([])
@@ -34,9 +34,9 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
   useEffect(()=>{ (async()=>{ try { const d = new Date(); const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; if (typeof periods?.get === 'function') { const s = await periods.get(per); setPeriodStatus(String(s?.status||'open')) } } catch {} })() },[])
   useEffect(()=>{ (async()=>{ try { const params = {}; if (filters.partner_id) params.partner_id = filters.partner_id; if (filters.from) params.from = filters.from; if (filters.to) params.to = filters.to; params.pageSize = 1000; const res = await payments.list({ ...params, party_type: 'customer' }); setPayRows(res?.items||res||[]) } catch { setPayRows([]) } })() },[filters])
 
-  const paidByInvoice = useMemo(()=>{ const by = new Map(); (payRows||[]).forEach(p=>{ const k = Number(p.invoice_id||0); const prev = by.get(k)||0; by.set(k, prev + parseFloat(p.amount||0)) }); return by }, [payRows])
+  const paidByInvoice = useMemo(()=>{ const by = new Map(); const safe = Array.isArray(payRows) ? payRows : []; safe.forEach(p=>{ const k = Number(p.invoice_id||0); const prev = by.get(k)||0; by.set(k, prev + parseFloat(p.amount||0)) }); return by }, [payRows])
   const paged = useMemo(()=>{
-    let list = rows
+    let list = Array.isArray(rows) ? rows : []
     const remaining = (inv)=>{ const r = Number(inv?.remaining_amount||0); if (r>0 || r===0) return r; const total=Number(inv.total||0); const paid=Number(paidByInvoice.get(Number(inv.id))||0); return Math.max(0, total-paid) }
     if (mode==='cash') {
       list = list.filter(inv => Boolean(inv?.is_cash_by_ledger))
@@ -50,7 +50,7 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
 
   const totalPages = useMemo(()=>{
     const list = (function(){
-      let arr = rows
+      let arr = Array.isArray(rows) ? rows : []
       const remaining = (inv)=>{ const r = Number(inv?.remaining_amount||0); if (r>0 || r===0) return r; const total=Number(inv.total||0); const paid=Number(paidByInvoice.get(Number(inv.id))||0); return Math.max(0, total-paid) }
       if (mode==='cash') arr = arr.filter(inv => Boolean(inv?.is_cash_by_ledger))
       else if (mode==='credit') arr = arr.filter(inv => remaining(inv) > 0)
@@ -99,7 +99,7 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
             <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
               <select className="border rounded px-2 py-2" value={filters.partner_id} onChange={e=>setFilters(f=>({...f, partner_id: e.target.value}))}>
                 <option value="">{lang==='ar'?'العميل':'Customer'}</option>
-                {partners.map(p=> (<option key={p.id} value={p.id}>{p.name}</option>))}
+                {(Array.isArray(partners) ? partners : []).map(p=> (<option key={p.id} value={p.id}>{p.name}</option>))}
               </select>
               <select className="border rounded px-2 py-2" value={filters.status} onChange={e=>setFilters(f=>({...f, status: e.target.value}))}>
                 <option value="">{lang==='ar'?'الحالة':'Status'}</option>
@@ -141,7 +141,7 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
           <tbody>
             {loading ? (
               <tr><td className="p-2 text-sm text-gray-600" colSpan={7}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>
-            ) : paged.map(inv => (
+            ) : (Array.isArray(paged) ? paged : []).map(inv => (
               <tr key={inv.id} className="border-b odd:bg-white even:bg-gray-50">
                 <td className="p-2 font-medium">{inv.invoice_number}</td>
                 <td className="p-2">{(()=>{ const pid=Number(inv.partner_id||0); const name = inv.partner?.name || (pid? (partnersById.get(pid)?.name || '') : ''); return name || (lang==='ar'?'عميل نقدي':'Cash Customer') })()}</td>

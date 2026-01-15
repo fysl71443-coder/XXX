@@ -385,7 +385,8 @@ useEffect(() => {
   function exportAllInvCSV(){
     const header = ['invoice_number','supplier','date','total','tax','status']
     const rows = (supInvActiveTab==='aging' ? viewSupInvRows : supInvRows)
-    const lines = rows.map(r => [r.invoice_number||r.id, (r.partner?.name)||supplierById.get(r.partner_id)?.name||'', r.date||'', Number(r.total||0), Number(r.tax||0), String(r.status||'issued')])
+    const safeRows = Array.isArray(rows) ? rows : []
+    const lines = safeRows.map(r => [r.invoice_number||r.id, (r.partner?.name)||supplierById.get(r.partner_id)?.name||'', r.date||'', Number(r.total||0), Number(r.tax||0), String(r.status||'issued')])
     const csvContent = [
       header.join(','),
       ...lines.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))
@@ -396,7 +397,8 @@ useEffect(() => {
   }
 
   async function exportAllInvPDF(){
-    const rows = (supInvActiveTab==='aging' ? viewSupInvRows : supInvRows).slice(0,500)
+    const rawRows = (supInvActiveTab==='aging' ? viewSupInvRows : supInvRows)
+    const rows = (Array.isArray(rawRows) ? rawRows : []).slice(0,500)
     const tableRows = rows.map(r => [String(r.invoice_number||r.id), String((r.partner?.name)||supplierById.get(r.partner_id)?.name||''), String(r.date||''), Number(r.total||0).toFixed(2), Number(r.tax||0).toFixed(2), String(r.status||'issued')])
     const body = [[{ text:'Invoice #', bold:true }, { text:'Supplier', bold:true }, { text:'Date', bold:true }, { text:'Total', bold:true }, { text:'Tax', bold:true }, { text:'Status', bold:true }], ...tableRows]
     const doc = {
@@ -1201,7 +1203,7 @@ useEffect(() => {
                           </tr>
                         </thead>
                         <tbody>
-                          {rows.map((r,i) => (
+                          {(Array.isArray(rows) ? rows : []).map((r,i) => (
                             <tr key={i} className="border-b">
                               <td className="p-2">{r.supplier}</td>
                               <td className="p-2">{Number(r.total||0).toLocaleString('en-US')}</td>
@@ -1210,7 +1212,7 @@ useEffect(() => {
                               <td className="p-2">{r.count}</td>
                             </tr>
                           ))}
-                          {!rows.length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={5}>{lang==='ar'?'لا توجد بيانات':'No data'}</td></tr>)}
+                          {!(Array.isArray(rows) ? rows : []).length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={5}>{lang==='ar'?'لا توجد بيانات':'No data'}</td></tr>)}
                         </tbody>
                       </table>
                     )

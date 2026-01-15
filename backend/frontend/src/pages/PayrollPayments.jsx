@@ -44,15 +44,16 @@ export default function PayrollPayments(){
     if (withItems.length) return withItems.filter(r => !!r.employee)
     return []
   },[items, empById, runId])
-  const byDept = useMemo(()=>{ const map = new Map(); rows.forEach(r=>{ const d = r.employee?.department || ''; if (!map.has(d)) map.set(d, []); map.get(d).push(r) }); return Array.from(map.entries()) },[rows])
-  const selectedRows = useMemo(()=> rows.filter(r => selected.has(r.employee_id)), [rows, selected])
+  const byDept = useMemo(()=>{ const map = new Map(); const safe = Array.isArray(rows) ? rows : []; safe.forEach(r=>{ const d = r.employee?.department || ''; if (!map.has(d)) map.set(d, []); map.get(d).push(r) }); return Array.from(map.entries()) },[rows])
+  const selectedRows = useMemo(()=> (Array.isArray(rows) ? rows : []).filter(r => selected.has(r.employee_id)), [rows, selected])
   const selTotal = useMemo(()=> selectedRows.reduce((s,r)=> s + parseFloat(r.net_salary||0), 0).toFixed(2), [selectedRows])
   const stats = useMemo(()=>{
-    const totalNet = rows.reduce((s,r)=> s + parseFloat(r.net_salary||0), 0)
-    const paid = rows.filter(r=>!!r.paid_at).reduce((s,r)=> s + parseFloat(r.net_salary||0), 0)
+    const safe = Array.isArray(rows) ? rows : []
+    const totalNet = safe.reduce((s,r)=> s + parseFloat(r.net_salary||0), 0)
+    const paid = safe.filter(r=>!!r.paid_at).reduce((s,r)=> s + parseFloat(r.net_salary||0), 0)
     const unpaid = totalNet - paid
-    const count = rows.length
-    const paidCount = rows.filter(r=>!!r.paid_at).length
+    const count = safe.length
+    const paidCount = safe.filter(r=>!!r.paid_at).length
     return { totalNet, paid, unpaid, count, paidCount }
   },[rows])
   const [showAdvances, setShowAdvances] = useState(true)
@@ -111,7 +112,8 @@ export default function PayrollPayments(){
     const boxH = 220
     
     // Logo removed per request
-    rows.forEach((r, i) => {
+    const safeRows = Array.isArray(rows) ? rows : []
+    safeRows.forEach((r, i) => {
       if (y + boxH > pageH - 40) {
         doc.addPage()
         y = 40
@@ -326,7 +328,7 @@ export default function PayrollPayments(){
               </tr>
               </thead>
               <tbody>
-                {rows.map(r => (
+                {(Array.isArray(rows) ? rows : []).map(r => (
                   <tr key={r.employee_id} className="border-b hover:bg-gray-50 transition-colors">
                     <td className="p-2"><input type="checkbox" checked={selected.has(r.employee_id)} onChange={()=>toggleSelect(r.employee_id)} /></td>
                   <td className="p-2">{r.employee?.full_name || ''}</td>

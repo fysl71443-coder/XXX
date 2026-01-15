@@ -37,11 +37,11 @@ export default function POSManage(){
   function addSection(){ setSections(prev=> [...prev, { name: `Section ${prev.length+1}`, rows: [] }]) }
   function updateSection(si, patch){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, ...(typeof patch==='function'?patch(s):patch) } : s )) }
   function addRow(si){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: [...(s.rows||[]), { name: `row_${(s.rows||[]).length+1}`, numbers: [] }] } : s )) }
-  function updateRow(si, ri, patch){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: s.rows.map((r,j)=> j===ri ? { ...r, ...(typeof patch==='function'?patch(r):patch) } : r ) } : s )) }
-  function removeRow(si, ri){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: s.rows.filter((_,j)=> j!==ri) } : s )) }
-  function addTable(si, ri){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: s.rows.map((r,j)=> j===ri ? { ...r, tables: [...(r.tables||[]), { id: `tbl_${Date.now()}`, name: '', status: 'available' }] } : r ) } : s )) }
-  function updateTable(si, ri, ti, patch){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: s.rows.map((r,j)=> j===ri ? { ...r, tables: r.tables.map((t,k)=> k===ti ? { ...t, ...(typeof patch==='function' ? patch(t) : patch) } : t ) } : r ) } : s )) }
-  function removeTable(si, ri, ti){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: s.rows.map((r,j)=> j===ri ? { ...r, tables: r.tables.filter((_,k)=> k!==ti) } : r ) } : s )) }
+  function updateRow(si, ri, patch){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).map((r,j)=> j===ri ? { ...r, ...(typeof patch==='function'?patch(r):patch) } : r ) } : s )) }
+  function removeRow(si, ri){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).filter((_,j)=> j!==ri) } : s )) }
+  function addTable(si, ri){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).map((r,j)=> j===ri ? { ...r, tables: [...(r.tables||[]), { id: `tbl_${Date.now()}`, name: '', status: 'available' }] } : r ) } : s )) }
+  function updateTable(si, ri, ti, patch){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).map((r,j)=> j===ri ? { ...r, tables: (Array.isArray(r.tables)?r.tables:[]).map((t,k)=> k===ti ? { ...t, ...(typeof patch==='function' ? patch(t) : patch) } : t ) } : r ) } : s )) }
+  function removeTable(si, ri, ti){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).map((r,j)=> j===ri ? { ...r, tables: (Array.isArray(r.tables)?r.tables:[]).filter((_,k)=> k!==ti) } : r ) } : s )) }
   function onDragOver(e){ e.preventDefault() }
   async function save(){
     try {

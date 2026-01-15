@@ -79,11 +79,12 @@ export default function PayrollRunForm(){
   },[editIdParam])
 
   const totals = useMemo(()=>{
-    const gross = rows.reduce((s,r)=> s + parseFloat(r.basic_salary||0) + parseFloat(r.housing_allowance||0) + parseFloat(r.transport_allowance||0) + parseFloat(r.other_allowances||0), 0)
-    const gosi = rows.reduce((s,r)=> s + (r.gosi_enrolled ? ((parseFloat(r.basic_salary||0)+parseFloat(r.housing_allowance||0)+parseFloat(r.transport_allowance||0)+parseFloat(r.other_allowances||0)) * parseFloat(r.gosi_employee_rate||0)) : 0), 0)
+    const safe = Array.isArray(rows) ? rows : []
+    const gross = safe.reduce((s,r)=> s + parseFloat(r.basic_salary||0) + parseFloat(r.housing_allowance||0) + parseFloat(r.transport_allowance||0) + parseFloat(r.other_allowances||0), 0)
+    const gosi = safe.reduce((s,r)=> s + (r.gosi_enrolled ? ((parseFloat(r.basic_salary||0)+parseFloat(r.housing_allowance||0)+parseFloat(r.transport_allowance||0)+parseFloat(r.other_allowances||0)) * parseFloat(r.gosi_employee_rate||0)) : 0), 0)
     const net = gross - gosi
-    const inc = rows.reduce((s,r)=> s + parseFloat(r.incentive_amount||0), 0)
-    const ded = rows.reduce((s,r)=> s + parseFloat(r.manual_deduction||0), 0)
+    const inc = safe.reduce((s,r)=> s + parseFloat(r.incentive_amount||0), 0)
+    const ded = safe.reduce((s,r)=> s + parseFloat(r.manual_deduction||0), 0)
     return { gross: gross.toFixed(2), gosi: gosi.toFixed(2), net: net.toFixed(2), inc: inc.toFixed(2), ded: ded.toFixed(2) }
   },[rows])
 
@@ -109,7 +110,7 @@ export default function PayrollRunForm(){
     setSelectedEmployees(prev => prev.includes(id) ? prev.filter(x => x!==id) : [...prev, id])
   }
   function toggleAll(){
-    const allIds = rows.map(r => r.employee_id)
+    const allIds = (Array.isArray(rows) ? rows : []).map(r => r.employee_id)
     if (selectedEmployees.length===allIds.length && allIds.length>0) setSelectedEmployees([])
     else setSelectedEmployees(allIds)
   }
@@ -128,13 +129,13 @@ export default function PayrollRunForm(){
     try {
       setSaving(true)
       if (!selectedEmployees.length) { setError(lang==='ar'?'يرجى اختيار موظفين':'Please select employees'); return }
-      const payloadItems = rows.filter(r => selectedEmployees.includes(r.employee_id)).map(r => ({ employee_id: r.employee_id, hours_worked: parseFloat(r.hours_worked||0), basic_salary: parseFloat(r.basic_salary||0), housing_allowance: parseFloat(r.housing_allowance||0), transport_allowance: parseFloat(r.transport_allowance||0), other_allowances: parseFloat(r.other_allowances||0), manual_deduction: parseFloat(r.manual_deduction||0), incentive_amount: parseFloat(r.incentive_amount||0) }))
+      const payloadItems = (Array.isArray(rows) ? rows : []).filter(r => selectedEmployees.includes(r.employee_id)).map(r => ({ employee_id: r.employee_id, hours_worked: parseFloat(r.hours_worked||0), basic_salary: parseFloat(r.basic_salary||0), housing_allowance: parseFloat(r.housing_allowance||0), transport_allowance: parseFloat(r.transport_allowance||0), other_allowances: parseFloat(r.other_allowances||0), manual_deduction: parseFloat(r.manual_deduction||0), incentive_amount: parseFloat(r.incentive_amount||0) }))
       if (editIdParam) {
         const id = Number(editIdParam)
         await apiPayroll.updateItems(id, payloadItems, { replace: true })
         setRun({ id, period })
       } else {
-        const hours = Object.fromEntries(rows.filter(r => selectedEmployees.includes(r.employee_id)).map(r => [r.employee_id, parseFloat(r.hours_worked||0)]))
+        const hours = Object.fromEntries((Array.isArray(rows) ? rows : []).filter(r => selectedEmployees.includes(r.employee_id)).map(r => [r.employee_id, parseFloat(r.hours_worked||0)]))
         const created = await apiPayroll.run({ period, hours, employee_ids: selectedEmployees })
         const runId = created.run?.id || created.id
         setRun(created.run || { id: runId, period })
@@ -203,7 +204,7 @@ export default function PayrollRunForm(){
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
+              {(Array.isArray(rows) ? rows : []).map(r => (
                 <tr key={r.employee_id} className="border-b">
                   <td className="p-2"><input type="checkbox" checked={selectedEmployees.includes(r.employee_id)} onChange={()=>toggleEmployee(r.employee_id)} /></td>
                   <td className="p-2">{r.full_name}</td>

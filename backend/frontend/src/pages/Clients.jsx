@@ -264,7 +264,8 @@ export default function Clients() {
           if (!prev || curr > prev) byLastPay.set(id, curr)
         })
         let totPaid = 0, totRec = 0, daysSum = 0, daysCount = 0
-        rows.forEach(inv => {
+        const safeRows = Array.isArray(rows) ? rows : []
+        safeRows.forEach(inv => {
           totPaid += Number(inv.paid_amount||0)
           totRec += Number(inv.remaining_amount||0)
           const last = byLastPay.get(Number(inv.id||0))
@@ -307,7 +308,8 @@ export default function Clients() {
         const rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])
         const totalsMap = {}
         const ledgerMap = {}
-        rows.forEach(inv => {
+        const safeInvRows = Array.isArray(rows) ? rows : []
+        safeInvRows.forEach(inv => {
           totalsMap[inv.id] = Number(inv.total||0)
           ledgerMap[inv.id] = { total: Number(inv.total||0), paid: Number(inv.paid_amount||0), remaining: Number(inv.remaining_amount||0), isCash: !!inv.is_cash_by_ledger }
         })
@@ -510,7 +512,8 @@ export default function Clients() {
       doc.safeText('Phone', 400, y+14)
       y += 30
 
-      const list = filtered.slice(0,100)
+      const safeFiltered = Array.isArray(filtered) ? filtered : []
+      const list = safeFiltered.slice(0,100)
       list.forEach((x, i) => {
         doc.safeText(`${i + 1}. ${x.name}`, 50, y)
         doc.safeText(x.email||'-', 250, y)
@@ -584,8 +587,9 @@ export default function Clients() {
   }, [items, search, filters, sortBy, sortDir])
 
   const paged = useMemo(() => {
+    const safeFiltered = Array.isArray(filtered) ? filtered : []
     const start = (page-1)*pageSize
-    return filtered.slice(start, start+pageSize)
+    return safeFiltered.slice(start, start+pageSize)
   }, [filtered, page, pageSize])
 
   
@@ -705,7 +709,8 @@ export default function Clients() {
                   {receivablesLoading ? (
                     <tr><td className="p-2 text-sm text-gray-600" colSpan={5}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>
                   ) : (()=>{
-                    const rows = (receivablesRows||[]).filter(r => Number(r.closing||0) > 0).map(r => ({ partner_id: Number(r.partner_id||0), name: r.name||`#${r.partner_id}`, count: '-', remaining: Number(r.closing||0) }))
+                    const safeReceivables = Array.isArray(receivablesRows) ? receivablesRows : []
+                    const rows = safeReceivables.filter(r => Number(r.closing||0) > 0).map(r => ({ partner_id: Number(r.partner_id||0), name: r.name||`#${r.partner_id}`, count: '-', remaining: Number(r.closing||0) }))
                     return rows.length ? rows.map(r => {
                       const last = lastPaidByPartner.get(r.partner_id)
                       return (
@@ -913,10 +918,10 @@ export default function Clients() {
             </div>
           )}
           <div className="flex items-center justify-between p-3 border-t bg-gray-50">
-            <div className="text-sm">صفحة {page} من {Math.max(1, Math.ceil(filtered.length/pageSize))}</div>
+            <div className="text-sm">صفحة {page} من {Math.max(1, Math.ceil((Array.isArray(filtered)?filtered:[]).length/pageSize))}</div>
             <div className="flex items-center gap-2">
               <button className="px-3 py-1 bg-white border rounded" disabled={page<=1} onClick={()=>setPage(p=>Math.max(1,p-1))}>السابق</button>
-              <button className="px-3 py-1 bg-white border rounded" disabled={page>=Math.ceil(filtered.length/pageSize)} onClick={()=>setPage(p=>Math.min(Math.ceil(filtered.length/pageSize),p+1))}>التالي</button>
+              <button className="px-3 py-1 bg-white border rounded" disabled={page>=Math.ceil((Array.isArray(filtered)?filtered:[]).length/pageSize)} onClick={()=>setPage(p=>Math.min(Math.ceil((Array.isArray(filtered)?filtered:[]).length/pageSize),p+1))}>التالي</button>
               <select className="border rounded px-2 py-1" value={pageSize} onChange={e=>setPageSize(Number(e.target.value))}>
                 <option value={10}>10</option>
                 <option value={20}>20</option>
