@@ -196,11 +196,11 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           {/* All routes below are protected - AuthGate ensures user is authenticated */}
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/accounts" element={<Accounts />} />
-          <Route path="/accounting" element={<AccountsScreen />} />
-          <Route path="/journal" element={<Journal />} />
-          <Route path="/clients" element={<ClientsLayout />}>
+          <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+          <Route path="/accounts" element={<ErrorBoundary><Accounts /></ErrorBoundary>} />
+          <Route path="/accounting" element={<ErrorBoundary><AccountsScreen /></ErrorBoundary>} />
+          <Route path="/journal" element={<ErrorBoundary><Journal /></ErrorBoundary>} />
+          <Route path="/clients" element={<ErrorBoundary><ClientsLayout /></ErrorBoundary>}>
             <Route index element={<Clients />} />
             <Route path="cash" element={<Clients />} />
             <Route path="credit" element={<Clients />} />
@@ -214,10 +214,10 @@ function App() {
             <Route path="cards" element={<ClientsCards />} />
             <Route path="create" element={<ClientCreate />} />
           </Route>
-          <Route path="/suppliers" element={<Suppliers />} />
-          <Route path="/suppliers/cards" element={<SuppliersCards />} />
-          <Route path="/suppliers/create" element={<SupplierCreate />} />
-          <Route path="/products" element={<Products />} />
+          <Route path="/suppliers" element={<ErrorBoundary><Suppliers /></ErrorBoundary>} />
+          <Route path="/suppliers/cards" element={<ErrorBoundary><SuppliersCards /></ErrorBoundary>} />
+          <Route path="/suppliers/create" element={<ErrorBoundary><SupplierCreate /></ErrorBoundary>} />
+          <Route path="/products" element={<ErrorBoundary><Products /></ErrorBoundary>} />
           <Route path="/products/purchase-orders" element={<PurchaseOrders />} />
           <Route path="/products/sales-orders" element={<SalesOrders />} />
           <Route path="/products/sales-orders/:number" element={<SalesOrderDetail />} />
@@ -231,11 +231,11 @@ function App() {
           <Route path="/pos/:branch/manage" element={<POSManage />} />
           <Route path="/invoices/new" element={<CustomerInvoice />} />
           <Route path="/supplier-invoices/new" element={<SupplierInvoice />} />
-          <Route path="/employees" element={<Employees />} />
-          <Route path="/employees/cards" element={<EmployeesCards />} />
-          <Route path="/employees/new" element={<EmployeeCreate />} />
-          <Route path="/expenses" element={<Expenses />} />
-          <Route path="/expenses/invoices" element={<ExpensesInvoices />} />
+          <Route path="/employees" element={<ErrorBoundary><Employees /></ErrorBoundary>} />
+          <Route path="/employees/cards" element={<ErrorBoundary><EmployeesCards /></ErrorBoundary>} />
+          <Route path="/employees/new" element={<ErrorBoundary><EmployeeCreate /></ErrorBoundary>} />
+          <Route path="/expenses" element={<ErrorBoundary><Expenses /></ErrorBoundary>} />
+          <Route path="/expenses/invoices" element={<ErrorBoundary><ExpensesInvoices /></ErrorBoundary>} />
           <Route path="/employees/:id/edit" element={<EmployeeEdit />} />
           <Route path="/employees/settings" element={<EmployeeSettings />} />
           <Route path="/payroll/payments" element={<PayrollPayments />} />
@@ -246,7 +246,7 @@ function App() {
           <Route path="/reports/business-day-sales" element={<BusinessDaySalesReport />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/debug/receipt-preview" element={<PrintPreview />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
         </Routes>
         </Suspense>
         </AuthGate>

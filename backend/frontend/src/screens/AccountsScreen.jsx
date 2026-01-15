@@ -84,7 +84,8 @@ export default function AccountsScreen() {
 
   const periodMap = useMemo(() => {
     const m = {}
-    for (const it of fsPeriod) {
+    const safeFsPeriod = Array.isArray(fsPeriod) ? fsPeriod : []
+    for (const it of safeFsPeriod) {
       for (const p of (it.postings||[])) {
         const id = p.account_id
         if (!m[id]) m[id] = { debit: 0, credit: 0 }
@@ -97,7 +98,8 @@ export default function AccountsScreen() {
 
   const preMap = useMemo(() => {
     const m = {}
-    for (const it of fsPre) {
+    const safeFsPre = Array.isArray(fsPre) ? fsPre : []
+    for (const it of safeFsPre) {
       for (const p of (it.postings||[])) {
         const id = p.account_id
         if (!m[id]) m[id] = { debit: 0, credit: 0 }
@@ -408,14 +410,14 @@ export default function AccountsScreen() {
                     </thead>
                     <tbody>
                       <tr className="bg-blue-50 border-b"><td className="p-2 font-semibold">{lang==='ar'?'الإيرادات':'Revenue'}</td><td className="p-2 font-semibold">{incomeBreakdown.revenueTotal.toFixed(2)}</td></tr>
-                      {incomeBreakdown.revenueItems.map(item => (
+                      {(Array.isArray(incomeBreakdown.revenueItems) ? incomeBreakdown.revenueItems : []).map(item => (
                         <tr key={`r-${item.id}`} className="border-b hover:bg-gray-50">
                           <td className="p-2">{item.name}</td>
                           <td className="p-2">{item.amount.toFixed(2)}</td>
                         </tr>
                       ))}
                       <tr className="bg-red-50 border-b"><td className="p-2 font-semibold">{lang==='ar'?'المصروفات':'Expenses'}</td><td className="p-2 font-semibold">{incomeBreakdown.expenseTotal.toFixed(2)}</td></tr>
-                      {incomeBreakdown.expenseItems.map(item => (
+                      {(Array.isArray(incomeBreakdown.expenseItems) ? incomeBreakdown.expenseItems : []).map(item => (
                         <tr key={`e-${item.id}`} className="border-b hover:bg-gray-50">
                           <td className="p-2">{item.name}</td>
                           <td className="p-2">{item.amount.toFixed(2)}</td>
@@ -505,7 +507,7 @@ export default function AccountsScreen() {
                       </div>
                       <div className="h-64">
                         <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={entries.map(e => ({ date: e.journal.date, net: parseFloat(e.debit||0) - parseFloat(e.credit||0) }))}>
+                          <LineChart data={(Array.isArray(entries) ? entries : []).map(e => ({ date: e.journal?.date || '', net: parseFloat(e.debit||0) - parseFloat(e.credit||0) }))}>
                             <CartesianGrid strokeDasharray="3 3" />
                             <XAxis dataKey="date" />
                             <YAxis />

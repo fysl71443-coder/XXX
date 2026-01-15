@@ -171,7 +171,11 @@ export async function request(path, options = {}) {
         ...options.headers
       }
     });
-    return response.data;
+    
+    // CRITICAL: Normalize response to ensure arrays are always arrays
+    // This prevents "o.map is not a function" errors
+    const normalized = normalizeResponse(response.data);
+    return normalized;
   } catch (error) {
     // The interceptor already processed it, but we need to ensure the format matches
     // what the calling code expects.

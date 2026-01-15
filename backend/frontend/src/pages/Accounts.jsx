@@ -172,7 +172,7 @@ export default function Accounts() {
       }
       return null
     }
-    let out = tree.map(filterNode).filter(Boolean)
+    let out = (Array.isArray(tree) ? tree : []).map(filterNode).filter(Boolean)
     function sortNodes(nodes){
       const cmp = (a,b)=>{
         if (sort==='name_asc') return (a.name||'').localeCompare(b.name||'')
@@ -364,7 +364,7 @@ export default function Accounts() {
       
       <main className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <section className="lg:col-span-5 border-r p-4 bg-white">
-          {filteredTree.map(node => (
+          {(Array.isArray(filteredTree) ? filteredTree : []).map(node => (
             <TreeNode key={node.id} node={node} onSelect={setSelected} onAddChild={addChild} onEdit={editAccount} onDelete={deleteAccount} onShowEntries={showEntries} lang={lang} canAccountsWrite={canAccountsWrite} />
           ))}
         </section>
@@ -406,7 +406,7 @@ export default function Accounts() {
                 <h3 className="font-semibold text-gray-800 mb-2">الحركات المحاسبية</h3>
                 <div className="divide-y">
                   <AnimatePresence initial={false}>
-                    {entries.map((e) => (
+                    {(Array.isArray(entries) ? entries : []).map((e) => (
                       <motion.div key={e.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -6 }} className="py-2 flex items-center justify-between">
                         <div>
                           <div className="text-sm font-medium">قيد #{e.journal.entry_number} • {e.journal.date}</div>
@@ -435,7 +435,7 @@ export default function Accounts() {
                 <h3 className="font-semibold text-gray-800 mb-2">تحليل الحساب</h3>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={entries.map(e => ({ date: e.journal.date, net: parseFloat(e.debit||0) - parseFloat(e.credit||0) }))}>
+                    <LineChart data={(Array.isArray(entries) ? entries : []).map(e => ({ date: e.journal?.date || '', net: parseFloat(e.debit||0) - parseFloat(e.credit||0) }))}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
@@ -446,7 +446,7 @@ export default function Accounts() {
                 </div>
                 <div className="h-64 mt-4">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={entries.map(e => ({ date: e.journal.date, debit: parseFloat(e.debit||0), credit: parseFloat(e.credit||0) }))}>
+                    <BarChart data={(Array.isArray(entries) ? entries : []).map(e => ({ date: e.journal?.date || '', debit: parseFloat(e.debit||0), credit: parseFloat(e.credit||0) }))}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis dataKey="date" />
                       <YAxis />
@@ -551,7 +551,8 @@ async function exportAccountPDF(items){
 }
 function exportAccountExcel(items){
   const headers = ['Entry #','Date','Debit','Credit','Description']
-  const data = items.map(e=>({
+  const safeItems = Array.isArray(items) ? items : []
+  const data = safeItems.map(e=>({
     [headers[0]]: e.journal.entry_number||'',
     [headers[1]]: e.journal.date||'',
     [headers[2]]: Number(e.debit||0),
