@@ -153,7 +153,21 @@ export default function Settings(){
       setToast({ type: 'error', message: 'فشل حفظ الإعدادات' }) 
     } finally { setSaving(false) }
   }
-  async function saveBranding(){ try { setSaving(true); await apiSettings.save('settings_branding', branding); setToast({ type: 'success', message: 'تم حفظ الهوية' }) } catch (e) { setToast({ type: 'error', message: 'فشل حفظ الهوية' }) } finally { setSaving(false) } }
+  async function saveBranding(){ 
+    try { 
+      setSaving(true); 
+      await apiSettings.save('settings_branding', branding); 
+      setToast({ type: 'success', message: 'تم حفظ الهوية' }) 
+    } catch (e) { 
+      console.error('[Settings] Save branding error:', e)
+      const msg = String(e?.message || e?.response?.data?.error || '').toLowerCase()
+      if (msg.includes('too large') || msg.includes('payload') || e?.status === 413) {
+        setToast({ type: 'error', message: 'حجم الشعار كبير جداً. جرب تصغير حجم الصورة.' })
+      } else {
+        setToast({ type: 'error', message: 'فشل حفظ الهوية' }) 
+      }
+    } finally { setSaving(false) } 
+  }
   async function saveFooter(){ try { setSaving(true); await apiSettings.save('settings_footer', footerCfg); setToast({ type: 'success', message: 'تم حفظ التذييل' }) } catch (e) { setToast({ type: 'error', message: 'فشل حفظ التذييل' }) } finally { setSaving(false) } }
   // دالة لتحميل إعدادات الفرع عند تغيير الفرع
   async function loadBranchSettings(code) {
@@ -188,7 +202,15 @@ export default function Settings(){
       const key = `settings_branch_${slug}`
       await apiSettings.save(key, branchSettings)
       try { alert('تم الحفظ بنجاح') } catch {}
-    } catch (e) { try { alert('فشل حفظ الإعدادات') } catch {} } finally { setSaving(false) }
+    } catch (e) {
+      console.error('[Settings] Save branch error:', e)
+      const msg = String(e?.message || e?.response?.data?.error || '').toLowerCase()
+      if (msg.includes('too large') || msg.includes('payload') || e?.status === 413) {
+        try { alert('حجم البيانات كبير جداً. جرب تصغير حجم الشعار.') } catch {}
+      } else {
+        try { alert('فشل حفظ الإعدادات: ' + (e?.message || 'خطأ غير معروف')) } catch {}
+      }
+    } finally { setSaving(false) }
   }
 
   const actionsById = useMemo(()=>{ const m={}; for (const a of actions) m[a.id]=a; return m },[actions])
