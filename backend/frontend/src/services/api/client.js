@@ -1,6 +1,27 @@
 import axios from 'axios';
+import { normalizeArray } from '../../utils/normalize';
 
 const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== 'undefined' ? (window.__API__ || (window.location.origin + '/api')) : 'http://localhost:4000/api')
+
+/**
+ * CRITICAL: Auto-normalize API responses
+ * This ensures .map(), .filter(), etc. never crash
+ */
+export function normalizeResponse(data) {
+  // If it looks like a list endpoint response, normalize to array
+  if (data === null || data === undefined) return [];
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === 'object') {
+    // Common patterns: { items: [] }, { data: [] }, { rows: [] }
+    if (Array.isArray(data.items)) return data.items;
+    if (Array.isArray(data.data)) return data.data;
+    if (Array.isArray(data.rows)) return data.rows;
+    if (Array.isArray(data.list)) return data.list;
+    if (Array.isArray(data.results)) return data.results;
+  }
+  // Return as-is for single object responses
+  return data;
+}
 
 // 1. Create Centralized Axios Instance
 const api = axios.create({

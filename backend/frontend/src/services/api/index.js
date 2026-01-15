@@ -1,6 +1,21 @@
 import api, { request } from './client';
 import employees from './employees';
 import payroll from './payroll';
+import { normalizeArray } from '../../utils/normalize';
+
+/**
+ * CRITICAL: Wrapper to ensure list endpoints always return arrays
+ * This prevents "map is not a function" errors throughout the app
+ */
+const safeList = async (requestFn) => {
+  try {
+    const result = await requestFn();
+    return normalizeArray(result);
+  } catch (e) {
+    console.error('[API] List request failed:', e);
+    return [];
+  }
+};
 
 export const auth = {
   register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
@@ -14,7 +29,7 @@ export const auth = {
 export const partners = {
   list: (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/partners${query ? `?${query}` : ''}`)
+    return safeList(() => request(`/partners${query ? `?${query}` : ''}`))
   },
   create: (data) => request('/partners', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/partners/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -24,7 +39,7 @@ export const partners = {
 export const products = {
   list: (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/products${query ? `?${query}` : ''}`)
+    return safeList(() => request(`/products${query ? `?${query}` : ''}`))
   },
   create: (data) => request('/products', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -34,9 +49,11 @@ export const products = {
 }
 
 export const invoices = {
-  list: (params = {}) => {
+  list: async (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/invoices${query ? `?${query}` : ''}`)
+    const result = await request(`/invoices${query ? `?${query}` : ''}`)
+    // Handle both { items: [] } and [] formats
+    return { items: normalizeArray(result?.items || result) }
   },
   get: (id) => request(`/invoices/${id}`),
   nextNumber: (params = {}) => {
@@ -50,15 +67,19 @@ export const invoices = {
 }
 
 export const payments = {
-  list: (params = {}) => {
+  list: async (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/payments${query ? `?${query}` : ''}`)
+    const result = await request(`/payments${query ? `?${query}` : ''}`)
+    return { items: normalizeArray(result?.items || result) }
   },
   create: (data) => request('/payments', { method: 'POST', body: JSON.stringify(data) }),
 }
 
 export const accounts = {
-  tree: () => request('/accounts'),
+  tree: async () => {
+    const result = await request('/accounts')
+    return normalizeArray(result)
+  },
   create: (data) => request('/accounts', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id, params = {}) => {
@@ -71,7 +92,7 @@ export const accounts = {
 export const orders = {
   list: (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/orders${query ? `?${query}` : ''}`)
+    return safeList(() => request(`/orders${query ? `?${query}` : ''}`))
   },
   get: (id) => request(`/orders/${id}`),
   create: (data = {}) => request('/orders', { method: 'POST', body: JSON.stringify(data) }),
@@ -88,9 +109,10 @@ export const purchaseOrders = {
 }
 
 export const supplierInvoices = {
-  list: (params = {}) => {
+  list: async (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/supplier-invoices${query ? `?${query}` : ''}`)
+    const result = await request(`/supplier-invoices${query ? `?${query}` : ''}`)
+    return { items: normalizeArray(result?.items || result) }
   },
   get: (id) => request(`/invoices/${id}`),
   nextNumber: () => request('/supplier-invoices/next-number'),
@@ -101,9 +123,10 @@ export const supplierInvoices = {
 }
 
 export const journal = {
-  list: (params = {}) => {
+  list: async (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/journal${query ? `?${query}` : ''}`)
+    const result = await request(`/journal${query ? `?${query}` : ''}`)
+    return { items: normalizeArray(result?.items || result) }
   },
   get: (id) => request(`/journal/${id}`),
   create: (data) => request('/journal', { method: 'POST', body: JSON.stringify(data) }),
@@ -111,9 +134,10 @@ export const journal = {
   postEntry: (id) => request(`/journal/${id}/post`, { method: 'POST' }),
   returnToDraft: (id) => request(`/journal/${id}/return-to-draft`, { method: 'POST' }),
   reverse: (id) => request(`/journal/${id}/reverse`, { method: 'POST' }),
-  byAccount: (id, params = {}) => {
+  byAccount: async (id, params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/journal/account/${id}${query ? `?${query}` : ''}`)
+    const result = await request(`/journal/account/${id}${query ? `?${query}` : ''}`)
+    return normalizeArray(result)
   },
   findByRelated: (params = {}) => {
     const query = new URLSearchParams(params).toString()
@@ -130,9 +154,10 @@ export const journal = {
 }
 
 export const expenses = {
-  list: (params = {}) => {
+  list: async (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/expenses${query ? `?${query}` : ''}`)
+    const result = await request(`/expenses${query ? `?${query}` : ''}`)
+    return { items: normalizeArray(result?.items || result) }
   },
   get: (id) => request(`/expenses/${id}`),
   create: (data) => request('/expenses', { method: 'POST', body: JSON.stringify(data) }),
@@ -225,7 +250,7 @@ export const settings = {
 }
 
 export const users = {
-  list: () => request('/users'),
+  list: () => safeList(() => request('/users')),
   create: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   toggle: (id) => request(`/users/${id}/toggle`, { method: 'POST' }),
@@ -236,28 +261,34 @@ export const users = {
 }
 
 export const roles = {
-  list: () => request('/roles'),
+  list: () => safeList(() => request('/roles')),
   get: (id) => request(`/roles/${id}`),
   create: (data) => request('/roles', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/roles/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  rolePermissions: (id) => request(`/roles/${id}/role-permissions`),
+  rolePermissions: async (id) => {
+    const result = await request(`/roles/${id}/role-permissions`)
+    return normalizeArray(result)
+  },
   saveRolePermissions: (id, list) => request(`/roles/${id}/role-permissions`, { method: 'PUT', body: JSON.stringify(list) }),
-  branchPermissions: (id) => request(`/roles/${id}/branch-permissions`),
+  branchPermissions: async (id) => {
+    const result = await request(`/roles/${id}/branch-permissions`)
+    return normalizeArray(result)
+  },
   saveBranchPermissions: (id, list) => request(`/roles/${id}/branch-permissions`, { method: 'PUT', body: JSON.stringify(list) }),
   addBranchPermission: (id, data) => request(`/roles/${id}/branch-permissions`, { method: 'POST', body: JSON.stringify(data) }),
   deleteBranchPermission: (id, branchId) => request(`/roles/${id}/branch-permissions/${branchId}`, { method: 'DELETE' }),
 }
 
 export const actions = {
-  list: () => request('/actions')
+  list: () => safeList(() => request('/actions'))
 }
 
 export const screens = {
-  list: () => request('/screens')
+  list: () => safeList(() => request('/screens'))
 }
 
 export const branches = {
-  list: () => request('/branches')
+  list: () => safeList(() => request('/branches'))
 }
 
 export { employees, payroll };
