@@ -150,13 +150,15 @@ app.use((req, res, next) => {
 });
 
 // 5️⃣ Request Logging Middleware (only for non-static requests)
+// NOTE: This logs BEFORE authentication, so userId will always be 'anon' at this point
+// The actual user info is logged in authenticateToken middleware after token validation
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
   const method = req.method || 'UNKNOWN';
   const url = req.url || req.path || '/';
-  const userId = req.user?.id || 'anon';
-  const userEmail = req.user?.email || 'anon';
-  console.log(`[REQUEST] ${timestamp} | ${method} ${url} | userId=${userId} email=${userEmail}`);
+  // Check if Authorization header is present (but don't validate token here)
+  const hasAuthHeader = !!req.headers['authorization'];
+  console.log(`[REQUEST] ${timestamp} | ${method} ${url} | auth_header=${hasAuthHeader ? 'present' : 'missing'}`);
   next();
 });
 
