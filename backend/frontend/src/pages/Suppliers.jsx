@@ -271,7 +271,7 @@ useEffect(() => {
     setExportingExcel(true)
     try {
       const header = ['Name','VAT','CR','Email','Phone','Status','Vendor Type']
-      const data = items.map(x => [x.name||'', x.tax_id||'', x.cr_number||'', x.email||'', x.phone||'', String(x.status||'active'), x.vendor_type||''])
+      const data = (Array.isArray(items) ? items : []).map(x => [x.name||'', x.tax_id||'', x.cr_number||'', x.email||'', x.phone||'', String(x.status||'active'), x.vendor_type||''])
       const ws = XLSX.utils.aoa_to_sheet([header, ...data])
       ws['!cols'] = [ { wch: 22 }, { wch: 14 }, { wch: 12 }, { wch: 26 }, { wch: 16 }, { wch: 12 }, { wch: 16 } ]
       const wb = XLSX.utils.book_new()
@@ -751,7 +751,7 @@ useEffect(() => {
               <>
                 <select className="border rounded p-2" value={supInvFilters.partner_id} onChange={e=>setSupInvFilters({...supInvFilters, partner_id: e.target.value})}>
                   <option value="">{lang==='ar'?'اختر المورد':'Select Supplier'}</option>
-                  {items.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  {(Array.isArray(items) ? items : []).map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
                 </select>
                 <input type="date" className="border rounded p-2" value={supInvFilters.from} onChange={e=>setSupInvFilters({...supInvFilters, from: e.target.value})} />
                 <input type="date" className="border rounded p-2" value={supInvFilters.to} onChange={e=>setSupInvFilters({...supInvFilters, to: e.target.value})} />
@@ -760,7 +760,7 @@ useEffect(() => {
               <>
                 <select className="border rounded p-2" value={supInvFilters.partner_id} onChange={e=>setSupInvFilters({...supInvFilters, partner_id: e.target.value})}>
                   <option value="">{lang==='ar'?'اختر المورد':'Select Supplier'}</option>
-                  {items.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  {(Array.isArray(items) ? items : []).map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
                 </select>
               </>
             )}
@@ -913,7 +913,7 @@ useEffect(() => {
         {loading ? (<div className="text-sm text-gray-600">{lang==='ar'?'جار التحميل...':'Loading...'}</div>) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map(item => (
+          {(Array.isArray(items) ? items : []).map(item => (
             <motion.div key={item.id} whileHover={{ scale: 1.02 }} className="rounded-xl border bg-white p-4 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-semibold text-gray-800 flex items-center gap-2">

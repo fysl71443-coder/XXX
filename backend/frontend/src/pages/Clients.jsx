@@ -343,8 +343,9 @@ export default function Clients() {
   }, [payRows])
 
   const paymentsSummary = useMemo(() => {
-    const totalPaid = payRows.reduce((s,p)=> s + parseFloat(p.amount||0), 0)
-    const ids = Object.keys(invLedgerById)
+    const safePayRows = Array.isArray(payRows) ? payRows : []
+    const totalPaid = safePayRows.reduce((s,p)=> s + parseFloat(p.amount||0), 0)
+    const ids = Object.keys(invLedgerById || {})
     const totalRemaining = ids.reduce((s,id)=> s + Number(invLedgerById[id]?.remaining||0), 0)
     return { totalPaid, totalRemaining }
   }, [payRows, invLedgerById])
@@ -641,7 +642,7 @@ export default function Clients() {
                 <>
                   <select className="border rounded px-2 py-1" value={payFilters.partner_id} onChange={e=>setPayFilters({...payFilters, partner_id: e.target.value})}>
                     <option value="">العميل</option>
-                    {items.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
+                    {(Array.isArray(items) ? items : []).map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
                   </select>
                   <input type="date" className="border rounded px-2 py-1" value={payFilters.from} onChange={e=>setPayFilters({...payFilters, from: e.target.value})} />
                   <input type="date" className="border rounded px-2 py-1" value={payFilters.to} onChange={e=>setPayFilters({...payFilters, to: e.target.value})} />
@@ -733,7 +734,7 @@ export default function Clients() {
                 <label className="block text-xs text-gray-600 mb-1">{lang==='ar'?'اختر العميل':'Select Customer'}</label>
                 <select className="w-full border rounded px-2 py-1" value={payFilters.partner_id} onChange={e=>setPayFilters({...payFilters, partner_id: e.target.value})}>
                   <option value="">{lang==='ar'?'اختر':'Choose'}</option>
-                  {items.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
+                  {(Array.isArray(items) ? items : []).map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
                 </select>
               </div>
               <div>
@@ -750,7 +751,7 @@ export default function Clients() {
               </div>
               <div className="flex justify-end">
                 <button className="px-3 py-2 bg-emerald-600 text-white rounded flex items-center gap-2" onClick={()=>{
-                  const rows = payRows.filter(p=>{ const s=String(search||'').trim().toLowerCase(); if(!s) return true; const name=(p.partner&&p.partner.name)?String(p.partner.name).toLowerCase():''; const inv=String(p.invoice?.invoice_number||p.invoice_id||'').toLowerCase(); return name.includes(s)||inv.includes(s) })
+                  const rows = (Array.isArray(payRows) ? payRows : []).filter(p=>{ const s=String(search||'').trim().toLowerCase(); if(!s) return true; const name=(p.partner&&p.partner.name)?String(p.partner.name).toLowerCase():''; const inv=String(p.invoice?.invoice_number||p.invoice_id||'').toLowerCase(); return name.includes(s)||inv.includes(s) })
                   const data = rows.map(p=>({
                     التاريخ: p.date,
                     العميل: (p.partner && p.partner.name) ? p.partner.name : (p.partner_id ? (partnerById.get(p.partner_id)?.name || '-') : 'عميل نقدي'),
@@ -784,7 +785,7 @@ export default function Clients() {
                 {payLoading ? (
                   <tr><td className="p-2 text-sm text-gray-600" colSpan={7}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>
                 ) : (
-                  payRows.filter(p => {
+                  (Array.isArray(payRows) ? payRows : []).filter(p => {
                     const s = String(search||'').trim().toLowerCase()
                     if (!s) return true
                     const name = (p.partner && p.partner.name) ? String(p.partner.name).toLowerCase() : ''
@@ -821,7 +822,7 @@ export default function Clients() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.filter(c=> String(c.payment_term||'').toLowerCase()!=='immediate').map(c=>{
+                  {(Array.isArray(items) ? items : []).filter(c=> String(c.payment_term||'').toLowerCase()!=='immediate').map(c=>{
                     const last = lastPaidByPartner.get(c.id)
                     return (
                       <tr key={c.id} className="border-b odd:bg-white even:bg-gray-50 hover:bg-blue-50/50">
@@ -847,7 +848,7 @@ export default function Clients() {
                 </tr>
               </thead>
               <tbody>
-                {paged.map(item => (
+                {(Array.isArray(paged) ? paged : []).map(item => (
                   <tr key={item.id} className="border-b odd:bg-white even:bg-gray-50 hover:bg-blue-50/50">
                     <td className="p-2 font-medium">{item.name}</td>
                     <td className="p-2 text-gray-600">{item.email||'-'}</td>
@@ -895,7 +896,7 @@ export default function Clients() {
                   </tr>
                 </thead>
                 <tbody>
-                  {items.map(p => {
+                  {(Array.isArray(items) ? items : []).map(p => {
                     const last = lastPaidByPartner.get(p.id)
                     return (
                       <tr key={p.id} className="border-b odd:bg-white even:bg-gray-50">
