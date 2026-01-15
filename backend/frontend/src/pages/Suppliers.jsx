@@ -375,7 +375,8 @@ useEffect(() => {
 
   const supplierById = useMemo(() => {
     const m = new Map()
-    items.forEach(p => m.set(p.id, p))
+    const safeItems = Array.isArray(items) ? items : []
+    safeItems.forEach(p => m.set(p.id, p))
     return m
   }, [items])
 

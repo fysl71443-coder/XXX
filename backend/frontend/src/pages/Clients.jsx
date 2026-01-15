@@ -66,7 +66,8 @@ export default function Clients() {
   
   const partnerById = useMemo(() => {
     const m = new Map()
-    items.forEach(p => m.set(p.id, p))
+    const safeItems = Array.isArray(items) ? items : []
+    safeItems.forEach(p => m.set(p.id, p))
     return m
   }, [items])
   
@@ -252,10 +253,11 @@ export default function Clients() {
     (async()=>{
       try {
         const res = await invoices.list({ type:'sale', pageSize: 2000 })
-        const rows = res?.items||res||[]
+        const rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])
         const totInv = rows.reduce((s,inv)=> s + (Number(inv.paid_amount||0) + Number(inv.remaining_amount||0)), 0)
         const byLastPay = new Map()
-        payRows.forEach(p => {
+        const safePayRows = Array.isArray(payRows) ? payRows : []
+        safePayRows.forEach(p => {
           const id = Number(p.invoice_id||p.invoice?.id||0)
           const prev = byLastPay.get(id)
           const curr = new Date(p.date)
@@ -302,7 +304,7 @@ export default function Clients() {
         if (payFilters.from) params.from = payFilters.from
         if (payFilters.to) params.to = payFilters.to
         const res = await invoices.list(params)
-        const rows = (res?.items||res||[])
+        const rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])
         const totalsMap = {}
         const ledgerMap = {}
         rows.forEach(inv => {
@@ -321,7 +323,8 @@ export default function Clients() {
 
   const lastPaidByPartner = useMemo(() => {
     const by = new Map()
-    payRows.forEach(p => {
+    const safePayRows = Array.isArray(payRows) ? payRows : []
+    safePayRows.forEach(p => {
       const prev = by.get(p.partner_id)
       if (!prev || new Date(p.date) > new Date(prev.date)) by.set(p.partner_id, p)
     })
@@ -330,7 +333,8 @@ export default function Clients() {
 
   const paidByInvoice = useMemo(() => {
     const by = new Map()
-    payRows.forEach(p => {
+    const safePayRows = Array.isArray(payRows) ? payRows : []
+    safePayRows.forEach(p => {
       const k = p.invoice_id || 0
       const prev = by.get(k) || 0
       by.set(k, prev + parseFloat(p.amount||0))
@@ -563,7 +567,7 @@ export default function Clients() {
   }
 
   const filtered = useMemo(() => {
-    let rows = items
+    let rows = Array.isArray(items) ? items : []
     if (search) rows = rows.filter(x => (`${x.name||''} ${x.email||''} ${x.phone||''}`).toLowerCase().includes(search.toLowerCase()))
     if (filters.customerType) rows = rows.filter(x => (filters.customerType==='Company' ? /شركة|company/i.test(x.name||'') : !/شركة|company/i.test(x.name||'')))
     if (filters.vatStatus) rows = rows.filter(x => (filters.vatStatus==='VAT' ? /\d{15}/.test(x.tax_id||'') : !/\d{15}/.test(x.tax_id||'')))

@@ -53,8 +53,12 @@ export default class ErrorBoundary extends Component {
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50" dir="rtl">
           <div className="bg-white border rounded shadow p-6 text-center max-w-2xl mx-4">
-            <div className="text-xl font-bold mb-2 text-red-600">حدث خطأ غير متوقع</div>
-            <div className="text-gray-600 mb-4">أعد تحميل الصفحة أو سجل الدخول مرة أخرى</div>
+            <div className="text-xl font-bold mb-2 text-red-600">حدث خطأ في الصفحة</div>
+            <div className="text-gray-600 mb-4">
+              حدث خطأ تقني. جرب إعادة تحميل الصفحة.
+              <br />
+              <span className="text-sm text-gray-400">هذا ليس مشكلة في تسجيل الدخول.</span>
+            </div>
             {process.env.NODE_ENV === 'development' && error && (
               <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded text-right text-sm">
                 <div className="font-semibold text-red-700 mb-2">تفاصيل الخطأ (Development فقط):</div>
@@ -74,12 +78,12 @@ export default class ErrorBoundary extends Component {
               >
                 إعادة تحميل الصفحة
               </button>
-              <a 
-                href="/login" 
-                className="px-4 py-2 bg-primary-600 text-white rounded inline-block hover:bg-primary-700"
+              <button 
+                onClick={() => window.history.back()} 
+                className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
               >
-                تسجيل الدخول
-              </a>
+                العودة للخلف
+              </button>
             </div>
           </div>
         </div>
