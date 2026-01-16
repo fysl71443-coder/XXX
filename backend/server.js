@@ -1370,6 +1370,307 @@ app.use("/journal", authenticateToken, async (req, res, next) => {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
+
+// ==================== JOURNAL ENTRIES API ====================
+// List journal entries with filters
+app.get("/journal", authenticateToken, authorize("journal", "view"), async (req, res) => {
+  try {
+    const {
+      status, page = 1, pageSize = 20, from, to, type, source,
+      reference_prefix, search, account_id, account_ids, accounts_scope,
+      min_amount, max_amount, outliersOnly, outliers_threshold,
+      unbalancedOnly, summary, period, quarter
+    } = req.query || {};
+    
+    let query = `
+      SELECT je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, 
+             je.status, je.created_at,
+             COALESCE(SUM(jp.debit), 0) as total_debit,
+             COALESCE(SUM(jp.credit), 0) as total_credit
+      FROM journal_entries je
+      LEFT JOIN journal_postings jp ON jp.journal_entry_id = je.id
+      WHERE 1=1
+    `;
+    const params = [];
+    let paramIndex = 1;
+    
+    if (status) {
+      query += ` AND je.status = $${paramIndex++}`;
+      params.push(status);
+    }
+    if (from) {
+      query += ` AND je.date >= $${paramIndex++}`;
+      params.push(from);
+    }
+    if (to) {
+      query += ` AND je.date <= $${paramIndex++}`;
+      params.push(to);
+    }
+    if (search) {
+      query += ` AND (je.description ILIKE $${paramIndex++} OR je.entry_number::text LIKE $${paramIndex++})`;
+      params.push(`%${search}%`, `%${search}%`);
+    }
+    
+    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at`;
+    
+    // Order and paginate
+    query += ` ORDER BY je.date DESC, je.entry_number DESC`;
+    
+    const { rows } = await pool.query(query, params);
+    
+    // Calculate totals
+    const items = (rows || []).map(row => ({
+      ...row,
+      total_debit: Number(row.total_debit || 0),
+      total_credit: Number(row.total_credit || 0),
+      postings: [] // Will be loaded separately if needed
+    }));
+    
+    res.json({ items, total: items.length });
+  } catch (e) {
+    console.error('[JOURNAL] Error listing entries:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Duplicate /api/journal routes - reuse same handlers (defined below)
+
+// Get single journal entry with postings
+app.get("/journal/:id", authenticateToken, authorize("journal", "view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const { rows: entryRows } = await pool.query(
+      'SELECT * FROM journal_entries WHERE id = $1',
+      [id]
+    );
+    if (!entryRows || !entryRows[0]) {
+      return res.status(404).json({ error: "not_found" });
+    }
+    
+    const { rows: postingsRows } = await pool.query(
+      `SELECT jp.*, a.account_number, a.name as account_name 
+       FROM journal_postings jp
+       LEFT JOIN accounts a ON a.id = jp.account_id
+       WHERE jp.journal_entry_id = $1`,
+      [id]
+    );
+    
+    res.json({
+      ...entryRows[0],
+      postings: (postingsRows || []).map(p => ({
+        ...p,
+        debit: Number(p.debit || 0),
+        credit: Number(p.credit || 0)
+      }))
+    });
+  } catch (e) {
+    console.error('[JOURNAL] Error getting entry:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.get("/api/journal/:id", authenticateToken, authorize("journal", "view"), async (req, res) => {
+  req.url = req.url.replace('/api/journal', '/journal');
+  return require('./server.js').app._router.handle(req, res);
+});
+
+// Create journal entry (draft)
+app.post("/journal", authenticateToken, authorize("journal", "create"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const b = req.body || {};
+    const postings = Array.isArray(b.postings) ? b.postings : [];
+    
+    // Generate entry number
+    const { rows: lastEntry } = await client.query(
+      'SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1'
+    );
+    const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
+    
+    // Create entry
+    const { rows: entryRows } = await client.query(
+      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [
+        entryNumber,
+        String(b.description || ''),
+        b.date || new Date(),
+        b.reference_type || null,
+        b.reference_id || null,
+        'draft'
+      ]
+    );
+    
+    const entry = entryRows[0];
+    
+    // Create postings
+    for (const p of postings) {
+      await client.query(
+        `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+         VALUES ($1, $2, $3, $4)`,
+        [
+          entry.id,
+          Number(p.account_id || 0),
+          Number(p.debit || 0),
+          Number(p.credit || 0)
+        ]
+      );
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch with postings
+    const { rows: postingsRows } = await pool.query(
+      `SELECT jp.*, a.account_number, a.name as account_name 
+       FROM journal_postings jp
+       LEFT JOIN accounts a ON a.id = jp.account_id
+       WHERE jp.journal_entry_id = $1`,
+      [entry.id]
+    );
+    
+    res.json({
+      ...entry,
+      postings: (postingsRows || []).map(p => ({
+        ...p,
+        debit: Number(p.debit || 0),
+        credit: Number(p.credit || 0)
+      }))
+    });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[JOURNAL] Error creating entry:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/journal", authenticateToken, authorize("journal", "create"), async (req, res) => {
+  req.url = req.url.replace('/api/journal', '/journal');
+  req.method = 'POST';
+  return require('./server.js').app._router.handle(req, res);
+});
+
+// Update journal entry
+app.put("/journal/:id", authenticateToken, authorize("journal", "edit"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    const b = req.body || {};
+    
+    // Update entry
+    await client.query(
+      `UPDATE journal_entries 
+       SET description = COALESCE($1, description),
+           date = COALESCE($2, date),
+           reference_type = COALESCE($3, reference_type),
+           reference_id = COALESCE($4, reference_id)
+       WHERE id = $5`,
+      [b.description || null, b.date || null, b.reference_type || null, b.reference_id || null, id]
+    );
+    
+    // Update postings if provided
+    if (Array.isArray(b.postings)) {
+      await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [id]);
+      for (const p of b.postings) {
+        await client.query(
+          `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+           VALUES ($1, $2, $3, $4)`,
+          [id, Number(p.account_id || 0), Number(p.debit || 0), Number(p.credit || 0)]
+        );
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch updated entry
+    const { rows: entryRows } = await pool.query('SELECT * FROM journal_entries WHERE id = $1', [id]);
+    const { rows: postingsRows } = await pool.query(
+      `SELECT jp.*, a.account_number, a.name as account_name 
+       FROM journal_postings jp
+       LEFT JOIN accounts a ON a.id = jp.account_id
+       WHERE jp.journal_entry_id = $1`,
+      [id]
+    );
+    
+    res.json({
+      ...entryRows[0],
+      postings: (postingsRows || []).map(p => ({
+        ...p,
+        debit: Number(p.debit || 0),
+        credit: Number(p.credit || 0)
+      }))
+    });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[JOURNAL] Error updating entry:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
+app.put("/api/journal/:id", authenticateToken, authorize("journal", "edit"), async (req, res) => {
+  req.url = req.url.replace('/api/journal', '/journal');
+  req.method = 'PUT';
+  return require('./server.js').app._router.handle(req, res);
+});
+
+// Post journal entry
+app.post("/journal/:id/post", authenticateToken, authorize("journal", "post"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    await pool.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['posted', id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[JOURNAL] Error posting entry:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/journal/:id/post", authenticateToken, authorize("journal", "post"), async (req, res) => {
+  req.url = req.url.replace('/api/journal', '/journal');
+  req.method = 'POST';
+  return require('./server.js').app._router.handle(req, res);
+});
+
+// Return to draft
+app.post("/journal/:id/return-to-draft", authenticateToken, authorize("journal", "edit"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    await pool.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['draft', id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[JOURNAL] Error returning to draft:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/journal/:id/return-to-draft", authenticateToken, authorize("journal", "edit"), async (req, res) => {
+  req.url = req.url.replace('/api/journal', '/journal');
+  req.method = 'POST';
+  return require('./server.js').app._router.handle(req, res);
+});
+
+// Delete journal entry
+app.delete("/journal/:id", authenticateToken, authorize("journal", "delete"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    await pool.query('DELETE FROM journal_entries WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[JOURNAL] Error deleting entry:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.delete("/api/journal/:id", authenticateToken, authorize("journal", "delete"), async (req, res) => {
+  req.url = req.url.replace('/api/journal', '/journal');
+  req.method = 'DELETE';
+  return require('./server.js').app._router.handle(req, res);
+});
 app.use("/ledger", authenticateToken, async (req, res, next) => {
   // Skip if this is not an API request
   if (!isApiRequest(req)) {
