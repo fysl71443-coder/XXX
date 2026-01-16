@@ -2692,15 +2692,37 @@ async function handleUpdateOrder(req, res) {
   try {
     const id = Number(req.params.id||0);
     const b = req.body || {};
-    const lines = Array.isArray(b.lines) ? JSON.stringify(b.lines) : (b.lines || null);
-    const { rows } = await pool.query('UPDATE orders SET branch=COALESCE($1,branch), table_code=COALESCE($2,table_code), lines=COALESCE($3,lines), status=COALESCE($4,status), updated_at=NOW() WHERE id=$5 RETURNING id, branch, table_code, lines, status', [b.branch||null, (b.table||b.table_code||null), lines, b.status||null, id]);
-    const order = rows && rows[0];
-    if (order && order.lines && typeof order.lines === 'string') {
-      try {
-        order.lines = JSON.parse(order.lines);
-      } catch {}
+    // Handle lines - convert to JSON string with jsonb cast if provided
+    let linesJson = null;
+    if (b.lines !== undefined) {
+      if (Array.isArray(b.lines)) {
+        linesJson = JSON.stringify(b.lines);
+      } else if (b.lines) {
+        linesJson = typeof b.lines === 'string' ? b.lines : JSON.stringify(b.lines);
+      }
     }
-    res.json(order);
+    
+    const { rows } = await pool.query(
+      'UPDATE orders SET branch=COALESCE($1,branch), table_code=COALESCE($2,table_code), lines=COALESCE($3::jsonb,lines), status=COALESCE($4,status), updated_at=NOW() WHERE id=$5 RETURNING id, branch, table_code, lines, status', 
+      [b.branch||null, (b.table||b.table_code||null), linesJson, b.status||null, id]
+    );
+    const order = rows && rows[0];
+    
+    // Parse lines back for response
+    let parsedLines = [];
+    if (order && order.lines) {
+      if (Array.isArray(order.lines)) {
+        parsedLines = order.lines;
+      } else if (typeof order.lines === 'string') {
+        try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = []; }
+      }
+    }
+    
+    res.json({
+      ...order,
+      lines: parsedLines,
+      items: parsedLines
+    });
   } catch (e) { 
     console.error('[ORDERS] Error updating order:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
