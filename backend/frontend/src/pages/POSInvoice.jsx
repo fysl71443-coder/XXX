@@ -677,7 +677,7 @@ export default function POSInvoice(){
         } catch {}
       }
       if (!id) { showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang)); return }
-      const safeItems = Array.isArray(items) ? items : [];
+      // safeItems already defined above, reuse it
       const untaxed = safeItems.reduce((s,it)=> s + Number(it.qty||0)*Number(it.price||0),0)
       const tax = (untaxed - totals.discount) * (Number(taxPct||0)/100)
       const total = untaxed - totals.discount + tax
@@ -1266,7 +1266,8 @@ export default function POSInvoice(){
                   ))}
                 </tbody>
                 </table>
-              )}
+                );
+              })()}
               </>
           )}
           </div>
