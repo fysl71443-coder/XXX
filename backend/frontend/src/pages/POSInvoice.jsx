@@ -138,7 +138,7 @@ export default function POSInvoice(){
       try {
         const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
         function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
-        const found = (Array.isArray(list)?list:[]).find(o=>{ try { const arr=JSON.parse(o.lines||'[]')||[]; const meta=arr.find(x=>x&&x.type==='meta'); const items=arr.filter(x=>x&&x.type==='item'); return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 } catch { return false } })
+        const found = (Array.isArray(list)?list:[]).find(o=>{ try { const arr = Array.isArray(o.lines) ? o.lines : (typeof o.lines === 'string' ? JSON.parse(o.lines||'[]') : []); const meta=arr.find(x=>x&&x.type==='meta'); const items=arr.filter(x=>x&&x.type==='item'); return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 } catch { return false } })
         if (found && found.id) navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true })
         else if (Array.isArray(list) && list.length>0 && list[0]?.id) navigate(`/pos/${branch}/tables/${table}?order=${list[0].id}`, { replace: true })
       } catch {}
@@ -207,7 +207,7 @@ export default function POSInvoice(){
         await pos.tableState(branch).catch(()=>({ busy: [] }))
         const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
         function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
-        const found = (Array.isArray(list)?list:[]).find(o=>{ try { const arr=JSON.parse(o.lines||'[]')||[]; const meta=arr.find(x=>x&&x.type==='meta'); const items=arr.filter(x=>x&&x.type==='item'); return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 } catch { return false } })
+        const found = (Array.isArray(list)?list:[]).find(o=>{ try { const arr = Array.isArray(o.lines) ? o.lines : (typeof o.lines === 'string' ? JSON.parse(o.lines||'[]') : []); const meta=arr.find(x=>x&&x.type==='meta'); const items=arr.filter(x=>x&&x.type==='item'); return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 } catch { return false } })
         if (found && found.id) { try { navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true }) } catch {} }
       } catch {}
     } finally {
@@ -589,7 +589,7 @@ export default function POSInvoice(){
       } catch {}
       try {
         const o = await apiOrders.get(id)
-        const arr = (function(){ try { return Array.isArray(o?.lines) ? o.lines : JSON.parse(o?.lines||'[]')||[] } catch { return [] } })()
+        const arr = (function(){ try { if (Array.isArray(o?.lines)) return o.lines; if (typeof o?.lines === 'string') { const parsed = JSON.parse(o?.lines||'[]'); return Array.isArray(parsed) ? parsed : []; } return []; } catch { return [] } })()
       const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
       const safeOrderItems = Array.isArray(orderItems)?orderItems:[]
       itemsRef.current = safeOrderItems
