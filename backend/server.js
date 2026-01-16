@@ -1695,136 +1695,165 @@ app.post("/accounts/seed-default", authenticateToken, authorize("accounting", "c
       await pool.query('DELETE FROM accounts');
     }
     
-    // شجرة حسابات كاملة متوافقة مع النظام السعودي
+    // شجرة حسابات كاملة متوافقة مع النظام السعودي - الهيكل النهائي
     const defaultAccounts = [
       // ═══════════════════════════════════════════════════════════════
-      // 1000 - الأصول (Assets)
+      // 0001 - الأصول (Assets)
       // ═══════════════════════════════════════════════════════════════
-      { account_number: '1000', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
+      { account_number: '0001', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
       
-      // 1100 - الأصول المتداولة
-      { account_number: '1100', name: 'الأصول المتداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
-      { account_number: '1110', name: 'النقدية والصندوق', name_en: 'Cash on Hand', type: 'cash', nature: 'debit', parent_number: '1100' },
-      { account_number: '1111', name: 'صندوق فرع CHINA TOWN', name_en: 'Cash - China Town', type: 'cash', nature: 'debit', parent_number: '1110' },
-      { account_number: '1112', name: 'صندوق فرع PLACE INDIA', name_en: 'Cash - Place India', type: 'cash', nature: 'debit', parent_number: '1110' },
-      { account_number: '1120', name: 'البنوك', name_en: 'Banks', type: 'bank', nature: 'debit', parent_number: '1100' },
-      { account_number: '1121', name: 'البنك الأهلي', name_en: 'Al Ahli Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
-      { account_number: '1122', name: 'بنك الراجحي', name_en: 'Al Rajhi Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
-      { account_number: '1123', name: 'بنك الإنماء', name_en: 'Alinma Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
-      { account_number: '1130', name: 'الذمم المدينة', name_en: 'Accounts Receivable', type: 'asset', nature: 'debit', parent_number: '1100' },
-      { account_number: '1131', name: 'ذمم العملاء', name_en: 'Customer Receivables', type: 'asset', nature: 'debit', parent_number: '1130' },
+      // 1100 - أصول متداولة
+      { account_number: '1100', name: 'أصول متداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '0001' },
+      
+      // 1110 - النقد وما في حكمه
+      { account_number: '1110', name: 'النقد وما في حكمه', name_en: 'Cash and Cash Equivalents', type: 'cash', nature: 'debit', parent_number: '1100' },
+      { account_number: '1111', name: 'صندوق رئيسي', name_en: 'Main Cash', type: 'cash', nature: 'debit', parent_number: '1110' },
+      { account_number: '1112', name: 'صندوق فرعي', name_en: 'Sub Cash', type: 'cash', nature: 'debit', parent_number: '1110' },
+      
+      // 1120 - بنوك
+      { account_number: '1120', name: 'بنوك', name_en: 'Banks', type: 'bank', nature: 'debit', parent_number: '1100' },
+      { account_number: '1121', name: 'بنك الراجحي', name_en: 'Al Rajhi Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
+      { account_number: '1122', name: 'بنك الأهلي', name_en: 'Al Ahli Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
+      { account_number: '1123', name: 'بنك الرياض', name_en: 'Riyad Bank', type: 'bank', nature: 'debit', parent_number: '1120' },
+      
+      // 1130 - الشيكات
+      { account_number: '1130', name: 'الشيكات', name_en: 'Checks', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1131', name: 'شيكات واردة', name_en: 'Incoming Checks', type: 'asset', nature: 'debit', parent_number: '1130' },
       { account_number: '1132', name: 'شيكات تحت التحصيل', name_en: 'Checks Under Collection', type: 'asset', nature: 'debit', parent_number: '1130' },
-      { account_number: '1133', name: 'سلف الموظفين', name_en: 'Employee Advances', type: 'asset', nature: 'debit', parent_number: '1130' },
-      { account_number: '1140', name: 'المخزون', name_en: 'Inventory', type: 'asset', nature: 'debit', parent_number: '1100' },
-      { account_number: '1141', name: 'مخزون المواد الغذائية', name_en: 'Food Inventory', type: 'asset', nature: 'debit', parent_number: '1140' },
-      { account_number: '1142', name: 'مخزون المشروبات', name_en: 'Beverages Inventory', type: 'asset', nature: 'debit', parent_number: '1140' },
-      { account_number: '1143', name: 'مخزون مواد التعبئة', name_en: 'Packaging Inventory', type: 'asset', nature: 'debit', parent_number: '1140' },
-      { account_number: '1150', name: 'مصروفات مدفوعة مقدماً', name_en: 'Prepaid Expenses', type: 'asset', nature: 'debit', parent_number: '1100' },
-      { account_number: '1160', name: 'ضريبة القيمة المضافة المدفوعة', name_en: 'VAT Input', type: 'asset', nature: 'debit', parent_number: '1100' },
       
-      // 1200 - الأصول الثابتة
-      { account_number: '1200', name: 'الأصول الثابتة', name_en: 'Fixed Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
-      { account_number: '1210', name: 'المباني والإنشاءات', name_en: 'Buildings', type: 'asset', nature: 'debit', parent_number: '1200' },
-      { account_number: '1220', name: 'الأثاث والتجهيزات', name_en: 'Furniture & Fixtures', type: 'asset', nature: 'debit', parent_number: '1200' },
-      { account_number: '1230', name: 'معدات المطبخ', name_en: 'Kitchen Equipment', type: 'asset', nature: 'debit', parent_number: '1200' },
-      { account_number: '1240', name: 'أجهزة الكمبيوتر', name_en: 'Computer Equipment', type: 'asset', nature: 'debit', parent_number: '1200' },
-      { account_number: '1250', name: 'السيارات', name_en: 'Vehicles', type: 'asset', nature: 'debit', parent_number: '1200' },
-      { account_number: '1290', name: 'مجمع الإهلاك', name_en: 'Accumulated Depreciation', type: 'asset', nature: 'credit', parent_number: '1200' },
+      // 1140 - الذمم المدينة
+      { account_number: '1140', name: 'الذمم المدينة', name_en: 'Accounts Receivable', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1141', name: 'عملاء', name_en: 'Customers', type: 'asset', nature: 'debit', parent_number: '1140' },
+      { account_number: '1142', name: 'ذمم مدينة أخرى', name_en: 'Other Receivables', type: 'asset', nature: 'debit', parent_number: '1140' },
+      
+      // 1150 - سلف وعهد
+      { account_number: '1150', name: 'سلف وعهد', name_en: 'Advances and Deposits', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1151', name: 'سلف موظفين', name_en: 'Employee Advances', type: 'asset', nature: 'debit', parent_number: '1150' },
+      { account_number: '1152', name: 'عهد نقدية', name_en: 'Cash Deposits', type: 'asset', nature: 'debit', parent_number: '1150' },
+      
+      // 1160 - المخزون
+      { account_number: '1160', name: 'المخزون', name_en: 'Inventory', type: 'asset', nature: 'debit', parent_number: '1100' },
+      { account_number: '1161', name: 'مخزون بضائع', name_en: 'Merchandise Inventory', type: 'asset', nature: 'debit', parent_number: '1160' },
+      { account_number: '1162', name: 'مخزون مواد', name_en: 'Materials Inventory', type: 'asset', nature: 'debit', parent_number: '1160' },
+      
+      // 1170 - ضريبة القيمة المضافة - مدخلات (VAT Input)
+      { account_number: '1170', name: 'ضريبة القيمة المضافة – مدخلات', name_en: 'VAT Input', type: 'asset', nature: 'debit', parent_number: '1100' },
+      
+      // 1200 - أصول غير متداولة
+      { account_number: '1200', name: 'أصول غير متداولة', name_en: 'Non-Current Assets', type: 'asset', nature: 'debit', parent_number: '0001' },
+      
+      // 1210 - ممتلكات ومعدات
+      { account_number: '1210', name: 'ممتلكات ومعدات', name_en: 'Property and Equipment', type: 'asset', nature: 'debit', parent_number: '1200' },
+      { account_number: '1211', name: 'أجهزة', name_en: 'Equipment', type: 'asset', nature: 'debit', parent_number: '1210' },
+      { account_number: '1212', name: 'أثاث', name_en: 'Furniture', type: 'asset', nature: 'debit', parent_number: '1210' },
+      { account_number: '1213', name: 'سيارات', name_en: 'Vehicles', type: 'asset', nature: 'debit', parent_number: '1210' },
+      
+      // 1220 - مجمع الإهلاك
+      { account_number: '1220', name: 'مجمع الإهلاك', name_en: 'Accumulated Depreciation', type: 'asset', nature: 'credit', parent_number: '1200' },
+      { account_number: '1221', name: 'مجمع إهلاك أجهزة', name_en: 'Accumulated Depreciation - Equipment', type: 'asset', nature: 'credit', parent_number: '1220' },
+      { account_number: '1222', name: 'مجمع إهلاك سيارات', name_en: 'Accumulated Depreciation - Vehicles', type: 'asset', nature: 'credit', parent_number: '1220' },
       
       // ═══════════════════════════════════════════════════════════════
-      // 2000 - الالتزامات (Liabilities)
+      // 0002 - الالتزامات (Liabilities)
       // ═══════════════════════════════════════════════════════════════
-      { account_number: '2000', name: 'الالتزامات', name_en: 'Liabilities', type: 'liability', nature: 'credit' },
+      { account_number: '0002', name: 'الالتزامات', name_en: 'Liabilities', type: 'liability', nature: 'credit' },
       
-      // 2100 - الالتزامات المتداولة
-      { account_number: '2100', name: 'الالتزامات المتداولة', name_en: 'Current Liabilities', type: 'liability', nature: 'credit', parent_number: '2000' },
+      // 2100 - التزامات متداولة
+      { account_number: '2100', name: 'التزامات متداولة', name_en: 'Current Liabilities', type: 'liability', nature: 'credit', parent_number: '0002' },
+      
+      // 2110 - الذمم الدائنة
       { account_number: '2110', name: 'الذمم الدائنة', name_en: 'Accounts Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
-      { account_number: '2111', name: 'ذمم الموردين', name_en: 'Supplier Payables', type: 'liability', nature: 'credit', parent_number: '2110' },
-      { account_number: '2120', name: 'ضريبة القيمة المضافة المستحقة', name_en: 'VAT Output', type: 'liability', nature: 'credit', parent_number: '2100' },
-      { account_number: '2130', name: 'الرواتب المستحقة', name_en: 'Salaries Payable', type: 'liability', nature: 'credit', parent_number: '2100' },
-      { account_number: '2131', name: 'رواتب الموظفين المستحقة', name_en: 'Employee Salaries Payable', type: 'liability', nature: 'credit', parent_number: '2130' },
-      { account_number: '2132', name: 'التأمينات الاجتماعية المستحقة', name_en: 'GOSI Payable', type: 'liability', nature: 'credit', parent_number: '2130' },
-      { account_number: '2140', name: 'إيرادات مقبوضة مقدماً', name_en: 'Unearned Revenue', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2111', name: 'موردون', name_en: 'Suppliers', type: 'liability', nature: 'credit', parent_number: '2110' },
+      
+      // 2120 - مستحقات موظفين
+      { account_number: '2120', name: 'مستحقات موظفين', name_en: 'Employee Payables', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2121', name: 'رواتب مستحقة', name_en: 'Salaries Payable', type: 'liability', nature: 'credit', parent_number: '2120' },
+      { account_number: '2122', name: 'بدلات مستحقة', name_en: 'Allowances Payable', type: 'liability', nature: 'credit', parent_number: '2120' },
+      
+      // 2130 - مستحقات حكومية
+      { account_number: '2130', name: 'مستحقات حكومية', name_en: 'Government Payables', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2131', name: 'التأمينات الاجتماعية (GOSI)', name_en: 'GOSI Payable', type: 'liability', nature: 'credit', parent_number: '2130' },
+      { account_number: '2132', name: 'رسوم قوى', name_en: 'Labor Fees', type: 'liability', nature: 'credit', parent_number: '2130' },
+      { account_number: '2133', name: 'رسوم مقيم', name_en: 'Residency Fees', type: 'liability', nature: 'credit', parent_number: '2130' },
+      
+      // 2140 - ضرائب مستحقة
+      { account_number: '2140', name: 'ضرائب مستحقة', name_en: 'Tax Payables', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2141', name: 'ضريبة القيمة المضافة – مستحقة', name_en: 'VAT Output', type: 'liability', nature: 'credit', parent_number: '2140' },
+      { account_number: '2142', name: 'ضرائب أخرى', name_en: 'Other Taxes', type: 'liability', nature: 'credit', parent_number: '2140' },
+      
+      // 2150 - مصروفات مستحقة
       { account_number: '2150', name: 'مصروفات مستحقة', name_en: 'Accrued Expenses', type: 'liability', nature: 'credit', parent_number: '2100' },
+      { account_number: '2151', name: 'كهرباء مستحقة', name_en: 'Electricity Payable', type: 'liability', nature: 'credit', parent_number: '2150' },
+      { account_number: '2152', name: 'ماء مستحق', name_en: 'Water Payable', type: 'liability', nature: 'credit', parent_number: '2150' },
+      { account_number: '2153', name: 'اتصالات مستحقة', name_en: 'Telecom Payable', type: 'liability', nature: 'credit', parent_number: '2150' },
       
-      // 2200 - الالتزامات طويلة الأجل
-      { account_number: '2200', name: 'الالتزامات طويلة الأجل', name_en: 'Long-term Liabilities', type: 'liability', nature: 'credit', parent_number: '2000' },
-      { account_number: '2210', name: 'القروض البنكية', name_en: 'Bank Loans', type: 'liability', nature: 'credit', parent_number: '2200' },
-      { account_number: '2220', name: 'مكافأة نهاية الخدمة', name_en: 'End of Service Benefits', type: 'liability', nature: 'credit', parent_number: '2200' },
-      
-      // ═══════════════════════════════════════════════════════════════
-      // 3000 - حقوق الملكية (Equity)
-      // ═══════════════════════════════════════════════════════════════
-      { account_number: '3000', name: 'حقوق الملكية', name_en: 'Equity', type: 'equity', nature: 'credit' },
-      { account_number: '3100', name: 'رأس المال', name_en: 'Capital', type: 'equity', nature: 'credit', parent_number: '3000' },
-      { account_number: '3200', name: 'الأرباح المحتجزة', name_en: 'Retained Earnings', type: 'equity', nature: 'credit', parent_number: '3000' },
-      { account_number: '3300', name: 'أرباح/خسائر العام الحالي', name_en: 'Current Year P/L', type: 'equity', nature: 'credit', parent_number: '3000' },
-      { account_number: '3400', name: 'المسحوبات الشخصية', name_en: 'Owner Withdrawals', type: 'equity', nature: 'debit', parent_number: '3000' },
+      // 2200 - التزامات غير متداولة
+      { account_number: '2200', name: 'التزامات غير متداولة', name_en: 'Non-Current Liabilities', type: 'liability', nature: 'credit', parent_number: '0002' },
+      { account_number: '2210', name: 'قروض طويلة الأجل', name_en: 'Long-term Loans', type: 'liability', nature: 'credit', parent_number: '2200' },
       
       // ═══════════════════════════════════════════════════════════════
-      // 4000 - الإيرادات (Revenue)
+      // 0003 - حقوق الملكية (Equity)
       // ═══════════════════════════════════════════════════════════════
-      { account_number: '4000', name: 'الإيرادات', name_en: 'Revenue', type: 'revenue', nature: 'credit' },
-      { account_number: '4100', name: 'إيرادات المبيعات', name_en: 'Sales Revenue', type: 'revenue', nature: 'credit', parent_number: '4000' },
-      { account_number: '4110', name: 'مبيعات فرع CHINA TOWN', name_en: 'Sales - China Town', type: 'revenue', nature: 'credit', parent_number: '4100' },
-      { account_number: '4120', name: 'مبيعات فرع PLACE INDIA', name_en: 'Sales - Place India', type: 'revenue', nature: 'credit', parent_number: '4100' },
-      { account_number: '4130', name: 'مبيعات التوصيل', name_en: 'Delivery Sales', type: 'revenue', nature: 'credit', parent_number: '4100' },
-      { account_number: '4200', name: 'إيرادات أخرى', name_en: 'Other Revenue', type: 'revenue', nature: 'credit', parent_number: '4000' },
-      { account_number: '4300', name: 'مردودات المبيعات', name_en: 'Sales Returns', type: 'revenue', nature: 'debit', parent_number: '4000' },
-      { account_number: '4400', name: 'خصومات المبيعات', name_en: 'Sales Discounts', type: 'revenue', nature: 'debit', parent_number: '4000' },
+      { account_number: '0003', name: 'حقوق الملكية', name_en: 'Equity', type: 'equity', nature: 'credit' },
+      { account_number: '3100', name: 'رأس المال', name_en: 'Capital', type: 'equity', nature: 'credit', parent_number: '0003' },
+      { account_number: '3200', name: 'الأرباح المحتجزة', name_en: 'Retained Earnings', type: 'equity', nature: 'credit', parent_number: '0003' },
+      { account_number: '3300', name: 'جاري المالك', name_en: 'Owner Current Account', type: 'equity', nature: 'credit', parent_number: '0003' },
       
       // ═══════════════════════════════════════════════════════════════
-      // 5000 - المصروفات (Expenses)
+      // 0004 - الإيرادات (Revenue)
       // ═══════════════════════════════════════════════════════════════
-      { account_number: '5000', name: 'المصروفات', name_en: 'Expenses', type: 'expense', nature: 'debit' },
+      { account_number: '0004', name: 'الإيرادات', name_en: 'Revenue', type: 'revenue', nature: 'credit' },
       
-      // 5100 - تكلفة المبيعات
-      { account_number: '5100', name: 'تكلفة المبيعات', name_en: 'Cost of Goods Sold', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5110', name: 'تكلفة المواد الغذائية', name_en: 'Food Cost', type: 'expense', nature: 'debit', parent_number: '5100' },
-      { account_number: '5120', name: 'تكلفة المشروبات', name_en: 'Beverage Cost', type: 'expense', nature: 'debit', parent_number: '5100' },
-      { account_number: '5130', name: 'تكلفة التعبئة والتغليف', name_en: 'Packaging Cost', type: 'expense', nature: 'debit', parent_number: '5100' },
+      // 4100 - الإيرادات التشغيلية حسب الفرع
+      { account_number: '4100', name: 'الإيرادات التشغيلية', name_en: 'Operating Revenue', type: 'revenue', nature: 'credit', parent_number: '0004' },
       
-      // 5200 - مصروفات تشغيلية
-      { account_number: '5200', name: 'مصروفات تشغيلية', name_en: 'Operating Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5210', name: 'الإيجار', name_en: 'Rent Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
-      { account_number: '5220', name: 'الكهرباء', name_en: 'Electricity Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
-      { account_number: '5230', name: 'المياه', name_en: 'Water Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
-      { account_number: '5240', name: 'الاتصالات والإنترنت', name_en: 'Telecom & Internet', type: 'expense', nature: 'debit', parent_number: '5200' },
-      { account_number: '5250', name: 'الصيانة والإصلاحات', name_en: 'Maintenance & Repairs', type: 'expense', nature: 'debit', parent_number: '5200' },
-      { account_number: '5260', name: 'النظافة والتعقيم', name_en: 'Cleaning & Sanitation', type: 'expense', nature: 'debit', parent_number: '5200' },
-      { account_number: '5270', name: 'الغاز', name_en: 'Gas Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
+      // China Town
+      { account_number: '4111', name: 'مبيعات نقدية – China Town', name_en: 'Cash Sales - China Town', type: 'revenue', nature: 'credit', parent_number: '4100' },
+      { account_number: '4112', name: 'مبيعات آجلة – China Town', name_en: 'Credit Sales - China Town', type: 'revenue', nature: 'credit', parent_number: '4100' },
+      { account_number: '4113', name: 'إيرادات خدمات – China Town', name_en: 'Service Revenue - China Town', type: 'revenue', nature: 'credit', parent_number: '4100' },
       
-      // 5300 - مصروفات إدارية وعمومية
-      { account_number: '5300', name: 'مصروفات إدارية وعمومية', name_en: 'Administrative Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5310', name: 'الرواتب والأجور', name_en: 'Salaries & Wages', type: 'expense', nature: 'debit', parent_number: '5300' },
-      { account_number: '5311', name: 'رواتب الموظفين', name_en: 'Employee Salaries', type: 'expense', nature: 'debit', parent_number: '5310' },
-      { account_number: '5312', name: 'بدل السكن', name_en: 'Housing Allowance', type: 'expense', nature: 'debit', parent_number: '5310' },
-      { account_number: '5313', name: 'بدل النقل', name_en: 'Transport Allowance', type: 'expense', nature: 'debit', parent_number: '5310' },
-      { account_number: '5314', name: 'بدلات أخرى', name_en: 'Other Allowances', type: 'expense', nature: 'debit', parent_number: '5310' },
-      { account_number: '5315', name: 'العمل الإضافي', name_en: 'Overtime', type: 'expense', nature: 'debit', parent_number: '5310' },
-      { account_number: '5320', name: 'التأمينات الاجتماعية', name_en: 'GOSI Expense', type: 'expense', nature: 'debit', parent_number: '5300' },
-      { account_number: '5330', name: 'التأمين الطبي', name_en: 'Medical Insurance', type: 'expense', nature: 'debit', parent_number: '5300' },
-      { account_number: '5340', name: 'مصروفات التدريب', name_en: 'Training Expense', type: 'expense', nature: 'debit', parent_number: '5300' },
-      { account_number: '5350', name: 'القرطاسية والمطبوعات', name_en: 'Stationery & Printing', type: 'expense', nature: 'debit', parent_number: '5300' },
-      { account_number: '5360', name: 'الرسوم الحكومية', name_en: 'Government Fees', type: 'expense', nature: 'debit', parent_number: '5300' },
-      { account_number: '5370', name: 'الاستشارات المهنية', name_en: 'Professional Fees', type: 'expense', nature: 'debit', parent_number: '5300' },
-      { account_number: '5380', name: 'الإهلاك', name_en: 'Depreciation Expense', type: 'expense', nature: 'debit', parent_number: '5300' },
+      // Place India
+      { account_number: '4121', name: 'مبيعات نقدية – Place India', name_en: 'Cash Sales - Place India', type: 'revenue', nature: 'credit', parent_number: '4100' },
+      { account_number: '4122', name: 'مبيعات آجلة – Place India', name_en: 'Credit Sales - Place India', type: 'revenue', nature: 'credit', parent_number: '4100' },
+      { account_number: '4123', name: 'إيرادات خدمات – Place India', name_en: 'Service Revenue - Place India', type: 'revenue', nature: 'credit', parent_number: '4100' },
       
-      // 5400 - مصروفات مالية
-      { account_number: '5400', name: 'مصروفات مالية', name_en: 'Financial Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5410', name: 'عمولات البنوك', name_en: 'Bank Charges', type: 'expense', nature: 'debit', parent_number: '5400' },
-      { account_number: '5420', name: 'عمولات نقاط البيع', name_en: 'POS Fees', type: 'expense', nature: 'debit', parent_number: '5400' },
-      { account_number: '5430', name: 'فوائد القروض', name_en: 'Loan Interest', type: 'expense', nature: 'debit', parent_number: '5400' },
+      // 4200 - إيرادات أخرى
+      { account_number: '4200', name: 'إيرادات أخرى', name_en: 'Other Revenue', type: 'revenue', nature: 'credit', parent_number: '0004' },
+      { account_number: '4210', name: 'إيرادات غير تشغيلية', name_en: 'Non-Operating Revenue', type: 'revenue', nature: 'credit', parent_number: '4200' },
+      { account_number: '4220', name: 'خصم مكتسب من الموردين', name_en: 'Discount Received from Suppliers', type: 'revenue', nature: 'credit', parent_number: '4200' },
       
-      // 5500 - مصروفات التسويق
-      { account_number: '5500', name: 'مصروفات التسويق', name_en: 'Marketing Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5510', name: 'الإعلانات', name_en: 'Advertising', type: 'expense', nature: 'debit', parent_number: '5500' },
-      { account_number: '5520', name: 'العروض والتخفيضات', name_en: 'Promotions', type: 'expense', nature: 'debit', parent_number: '5500' },
+      // ═══════════════════════════════════════════════════════════════
+      // 0005 - المصروفات (Expenses)
+      // ═══════════════════════════════════════════════════════════════
+      { account_number: '0005', name: 'المصروفات', name_en: 'Expenses', type: 'expense', nature: 'debit' },
       
-      // 5600 - مصروفات أخرى
-      { account_number: '5600', name: 'مصروفات أخرى', name_en: 'Other Expenses', type: 'expense', nature: 'debit', parent_number: '5000' },
-      { account_number: '5610', name: 'خسائر متنوعة', name_en: 'Miscellaneous Losses', type: 'expense', nature: 'debit', parent_number: '5600' },
-      { account_number: '5620', name: 'غرامات وجزاءات', name_en: 'Fines & Penalties', type: 'expense', nature: 'debit', parent_number: '5600' },
+      // 5100 - مصروفات تشغيلية
+      { account_number: '5100', name: 'مصروفات تشغيلية', name_en: 'Operating Expenses', type: 'expense', nature: 'debit', parent_number: '0005' },
+      { account_number: '5110', name: 'تكلفة مبيعات', name_en: 'Cost of Goods Sold', type: 'expense', nature: 'debit', parent_number: '5100' },
+      { account_number: '5120', name: 'مصروف كهرباء', name_en: 'Electricity Expense', type: 'expense', nature: 'debit', parent_number: '5100' },
+      { account_number: '5130', name: 'مصروف ماء', name_en: 'Water Expense', type: 'expense', nature: 'debit', parent_number: '5100' },
+      { account_number: '5140', name: 'مصروف اتصالات', name_en: 'Telecom Expense', type: 'expense', nature: 'debit', parent_number: '5100' },
+      
+      // 5200 - مصروفات إدارية وعمومية
+      { account_number: '5200', name: 'مصروفات إدارية وعمومية', name_en: 'Administrative and General Expenses', type: 'expense', nature: 'debit', parent_number: '0005' },
+      { account_number: '5210', name: 'رواتب وأجور', name_en: 'Salaries and Wages', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5220', name: 'بدلات', name_en: 'Allowances', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5230', name: 'مصروفات حكومية', name_en: 'Government Expenses', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5240', name: 'مصروف غرامات', name_en: 'Fines Expense', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5250', name: 'مصروفات بنكية', name_en: 'Bank Expenses', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5260', name: 'مصروفات متنوعة', name_en: 'Miscellaneous Expenses', type: 'expense', nature: 'debit', parent_number: '5200' },
+      { account_number: '5270', name: 'خصم ممنوح للعملاء', name_en: 'Discount Given to Customers', type: 'expense', nature: 'debit', parent_number: '5200' },
+      
+      // 5300 - مصروفات مالية
+      { account_number: '5300', name: 'مصروفات مالية', name_en: 'Financial Expenses', type: 'expense', nature: 'debit', parent_number: '0005' },
+      { account_number: '5310', name: 'فوائد بنكية', name_en: 'Bank Interest', type: 'expense', nature: 'debit', parent_number: '5300' },
+      
+      // ═══════════════════════════════════════════════════════════════
+      // 0006 - حسابات نظامية / رقابية (اختيارية)
+      // ═══════════════════════════════════════════════════════════════
+      { account_number: '0006', name: 'حسابات نظامية / رقابية', name_en: 'System/Control Accounts', type: 'asset', nature: 'debit' },
+      { account_number: '6100', name: 'فروقات جرد', name_en: 'Inventory Differences', type: 'asset', nature: 'debit', parent_number: '0006' },
+      { account_number: '6200', name: 'فروقات نقدية', name_en: 'Cash Differences', type: 'asset', nature: 'debit', parent_number: '0006' },
     ];
     
     // Insert accounts
@@ -1849,21 +1878,11 @@ app.post("/accounts/seed-default", authenticateToken, authorize("accounting", "c
 });
 
 // /api/accounts/seed-default - same handler as /accounts/seed-default
+// NOTE: This endpoint shares the same account structure as /accounts/seed-default
+// If you need to update accounts, update both handlers or extract to a shared function
 app.post("/api/accounts/seed-default", authenticateToken, authorize("accounting", "create"), async (req, res) => {
-  try {
-    const forceRecreate = req.body?.force === true;
-    const { rows: existing } = await pool.query('SELECT COUNT(*) as count FROM accounts');
-    if (!forceRecreate && existing && existing[0] && Number(existing[0].count) > 0) {
-      return res.status(400).json({ error: "accounts_exist", message: "Accounts already exist. Use force=true to recreate." });
-    }
-    
-    if (forceRecreate) {
-      await pool.query('DELETE FROM journal_postings');
-      await pool.query('DELETE FROM accounts');
-    }
-    
-    // Same accounts as /accounts/seed-default
-    const defaultAccounts = [
+  // Delegate to the same logic - you can extract to a shared function if needed
+  return app._router.stack.find(layer => layer.route?.path === '/accounts/seed-default')?.route.stack[0]?.handle(req, res);
       { account_number: '1000', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
       { account_number: '1100', name: 'الأصول المتداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
       { account_number: '1110', name: 'النقدية والصندوق', name_en: 'Cash on Hand', type: 'cash', nature: 'debit', parent_number: '1100' },
@@ -2656,7 +2675,7 @@ async function getOrCreatePartnerAccount(partnerId, partnerType) {
     }
 
     // Get parent account based on type
-    const parentAccountNumber = partnerType === 'supplier' ? '2111' : '1131'; // Suppliers: 2111, Customers: 1131
+    const parentAccountNumber = partnerType === 'supplier' ? '2111' : '1141'; // Suppliers: 2111 (موردون), Customers: 1141 (عملاء)
     const parentAccountId = await getAccountIdByNumber(parentAccountNumber);
     if (!parentAccountId) {
       console.warn(`[ACCOUNTING] Parent account ${parentAccountNumber} not found for partner ${partnerId}`);
@@ -2695,30 +2714,42 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
 
     const postings = [];
     
+    // Determine sales account based on branch and payment method
+    // Default: Cash sales - China Town (4111)
+    let salesAccountNumber = '4111';
+    if (branch) {
+      const branchLower = String(branch).toLowerCase();
+      if (branchLower.includes('place_india') || branchLower.includes('palace_india')) {
+        salesAccountNumber = paymentMethod && String(paymentMethod).toLowerCase() === 'credit' ? '4122' : '4121';
+      } else {
+        salesAccountNumber = paymentMethod && String(paymentMethod).toLowerCase() === 'credit' ? '4112' : '4111';
+      }
+    }
+
     // Get customer account (if credit sale)
     if (customerId && paymentMethod && String(paymentMethod).toLowerCase() === 'credit') {
       const customerAccountId = await getOrCreatePartnerAccount(customerId, 'customer');
       if (customerAccountId) {
-        // Debit: Customer Receivable
+        // Debit: Customer Receivable (حساب فرعي تحت 1141)
         postings.push({ account_id: customerAccountId, debit: total, credit: 0 });
       }
     } else {
-      // Cash sale - use cash account (1101)
-      const cashAccountId = await getAccountIdByNumber('1101');
+      // Cash sale - use main cash account (1111 - صندوق رئيسي)
+      const cashAccountId = await getAccountIdByNumber('1111');
       if (cashAccountId) {
         postings.push({ account_id: cashAccountId, debit: total, credit: 0 });
       }
     }
 
-    // Credit: Sales Revenue (4101)
-    const salesAccountId = await getAccountIdByNumber('4101');
+    // Credit: Sales Revenue (حسب الفرع وطريقة الدفع)
+    const salesAccountId = await getAccountIdByNumber(salesAccountNumber);
     if (salesAccountId) {
       postings.push({ account_id: salesAccountId, debit: 0, credit: subtotal - discount });
     }
 
-    // Credit: VAT Output (2120) if tax > 0
+    // Credit: VAT Output (2141) if tax > 0
     if (tax > 0) {
-      const vatAccountId = await getAccountIdByNumber('2120');
+      const vatAccountId = await getAccountIdByNumber('2141');
       if (vatAccountId) {
         postings.push({ account_id: vatAccountId, debit: 0, credit: tax });
       }
