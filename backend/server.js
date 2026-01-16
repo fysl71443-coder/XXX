@@ -2568,36 +2568,57 @@ async function handleGetOrders(req, res) {
     query += ' ORDER BY id DESC';
     
     const { rows } = await pool.query(query, params);
+    console.log(`[ORDERS] GET /api/orders - Found ${rows?.length || 0} orders for branch=${branch}, table=${table}, status=${status}`);
+    
     // Parse lines from JSONB/JSON string to array - handle all cases
     const orders = (rows || []).map(order => {
       // Ensure lines is always an array
       let lines = [];
       try {
+        // Debug: Log raw lines data type
+        const linesType = typeof order.lines;
+        const linesIsArray = Array.isArray(order.lines);
+        console.log(`[ORDERS] Order ${order.id}: lines type=${linesType}, isArray=${linesIsArray}, value=`, order.lines ? (linesIsArray ? `${order.lines.length} items` : String(order.lines).substring(0, 100)) : 'null');
+        
         if (order.lines === null || order.lines === undefined) {
           lines = [];
         } else if (Array.isArray(order.lines)) {
           // PostgreSQL JSONB returns as array directly
           lines = order.lines;
+          console.log(`[ORDERS] Order ${order.id}: Parsed ${lines.length} lines from array`);
         } else if (typeof order.lines === 'string') {
           // If stored as JSON string, parse it
           const parsed = JSON.parse(order.lines);
           lines = Array.isArray(parsed) ? parsed : [];
+          console.log(`[ORDERS] Order ${order.id}: Parsed ${lines.length} lines from JSON string`);
         } else if (typeof order.lines === 'object') {
-          // If it's an object but not array, wrap it or convert
-          lines = Array.isArray(order.lines) ? order.lines : [];
+          // If it's an object but not array, try to convert
+          if (Array.isArray(order.lines)) {
+            lines = order.lines;
+          } else {
+            // Single object - wrap in array
+            lines = [order.lines];
+            console.log(`[ORDERS] Order ${order.id}: Wrapped object in array`);
+          }
         }
       } catch (e) {
         console.error('[ORDERS] Error parsing lines for order', order.id, e);
+        console.error('[ORDERS] Raw lines value:', order.lines);
         lines = [];
       }
       
-      return {
+      const result = {
         ...order,
         lines: lines,
         // Also add items alias for frontend compatibility
         items: lines
       };
+      
+      console.log(`[ORDERS] Order ${order.id} response: ${result.lines.length} lines/items`);
+      return result;
     });
+    
+    console.log(`[ORDERS] Returning ${orders.length} orders with lines parsed`);
     res.json(orders);
   } catch (e) { 
     console.error('[ORDERS] Error listing orders:', e);
@@ -2986,49 +3007,78 @@ async function handleSaveDraft(req, res) {
     const lines = Array.isArray(b.lines) ? b.lines : (Array.isArray(b.items) ? b.items : []);
     const order_id = b.order_id || null;
     
+    console.log(`[POS] saveDraft - branch=${branch}, table=${table_code}, order_id=${order_id}`);
+    console.log(`[POS] saveDraft - Received lines/items:`, Array.isArray(lines) ? `${lines.length} items` : 'not array', lines);
+    
     // Ensure lines is a valid array
     const cleanedLines = Array.isArray(lines) ? lines.filter(line => line && (line.id || line.product_id || line.name)) : [];
     
+    console.log(`[POS] saveDraft - Cleaned lines: ${cleanedLines.length} items`);
+    if (cleanedLines.length > 0) {
+      console.log(`[POS] saveDraft - Sample line:`, JSON.stringify(cleanedLines[0]).substring(0, 200));
+    }
+    
+    // For PostgreSQL JSONB, we can pass the array directly - PostgreSQL handles it
+    // But to be safe, we'll use JSON.stringify
+    const linesJson = JSON.stringify(cleanedLines);
+    
     if (order_id) {
       // Update existing order
+      console.log(`[POS] saveDraft - Updating order ${order_id}`);
       const { rows } = await pool.query(
-        'UPDATE orders SET lines=$1, updated_at=NOW() WHERE id=$2 RETURNING id, branch, table_code, lines, status',
-        [JSON.stringify(cleanedLines), order_id]
+        'UPDATE orders SET lines=$1::jsonb, updated_at=NOW() WHERE id=$2 RETURNING id, branch, table_code, lines, status',
+        [linesJson, order_id]
       );
       const order = rows && rows[0];
-      // Parse lines back for response
+      console.log(`[POS] saveDraft - Updated order ${order_id}, lines type after update:`, typeof order?.lines);
+      
+      // Parse lines back for response - PostgreSQL JSONB returns as object
+      let parsedLines = cleanedLines;
       if (order && order.lines) {
-        if (typeof order.lines === 'string') {
-          try { order.lines = JSON.parse(order.lines); } catch {}
+        if (Array.isArray(order.lines)) {
+          parsedLines = order.lines;
+        } else if (typeof order.lines === 'string') {
+          try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = cleanedLines; }
         }
       }
+      
+      console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for order ${order_id}`);
       return res.json({
         ...order,
-        lines: Array.isArray(order?.lines) ? order.lines : cleanedLines,
-        items: Array.isArray(order?.lines) ? order.lines : cleanedLines
+        lines: parsedLines,
+        items: parsedLines
       });
     }
     
     // Create new order
+    console.log(`[POS] saveDraft - Creating new order`);
     const { rows } = await pool.query(
-      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, lines, status',
-      [branch, table_code, JSON.stringify(cleanedLines), 'DRAFT']
+      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3::jsonb,$4) RETURNING id, branch, table_code, lines, status',
+      [branch, table_code, linesJson, 'DRAFT']
     );
     const order = rows && rows[0];
+    console.log(`[POS] saveDraft - Created order ${order?.id}, lines type:`, typeof order?.lines);
+    
     // Parse lines back for response
+    let parsedLines = cleanedLines;
     if (order && order.lines) {
-      if (typeof order.lines === 'string') {
-        try { order.lines = JSON.parse(order.lines); } catch {}
+      if (Array.isArray(order.lines)) {
+        parsedLines = order.lines;
+      } else if (typeof order.lines === 'string') {
+        try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = cleanedLines; }
       }
     }
+    
+    console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for new order ${order?.id}`);
     res.json({
       ...order,
-      lines: Array.isArray(order?.lines) ? order.lines : cleanedLines,
-      items: Array.isArray(order?.lines) ? order.lines : cleanedLines,
+      lines: parsedLines,
+      items: parsedLines,
       order_id: order?.id || null
     });
   } catch (e) { 
     console.error('[POS] saveDraft error:', e);
+    console.error('[POS] saveDraft error stack:', e?.stack);
     res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
   }
 }
