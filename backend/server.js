@@ -2349,6 +2349,48 @@ app.get("/api/employees", authenticateToken, async (req, res) => {
     res.json([]); 
   }
 });
+app.get("/employees/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const { rows } = await pool.query(`
+      SELECT id, full_name, first_name, last_name, national_id, nationality, birth_date, gender, 
+             employee_number, status, phone, email, hire_date, contract_type, contract_duration_months, 
+             probation_days, pay_type, hourly_rate, basic_salary, housing_allowance, transport_allowance, 
+             other_allowances, payment_method, iban, gosi_subscription_no, gosi_enrolled, 
+             gosi_employee_rate, gosi_employer_rate, gosi_enroll_date, gosi_status, mudad_contract_id, 
+             mudad_status, mudad_last_sync, department, payroll_expense_account_code, 
+             gosi_liability_account_code, payroll_payable_account_code, created_at, updated_at 
+      FROM employees 
+      WHERE id = $1
+      LIMIT 1
+    `, [id]);
+    res.json(rows && rows[0] || null);
+  } catch (e) { 
+    console.error('[EMPLOYEE] Error getting employee:', e);
+    res.status(404).json({ error: "not_found" }); 
+  }
+});
+app.get("/api/employees/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id||0);
+    const { rows } = await pool.query(`
+      SELECT id, full_name, first_name, last_name, national_id, nationality, birth_date, gender, 
+             employee_number, status, phone, email, hire_date, contract_type, contract_duration_months, 
+             probation_days, pay_type, hourly_rate, basic_salary, housing_allowance, transport_allowance, 
+             other_allowances, payment_method, iban, gosi_subscription_no, gosi_enrolled, 
+             gosi_employee_rate, gosi_employer_rate, gosi_enroll_date, gosi_status, mudad_contract_id, 
+             mudad_status, mudad_last_sync, department, payroll_expense_account_code, 
+             gosi_liability_account_code, payroll_payable_account_code, created_at, updated_at 
+      FROM employees 
+      WHERE id = $1
+      LIMIT 1
+    `, [id]);
+    res.json(rows && rows[0] || null);
+  } catch (e) { 
+    console.error('[EMPLOYEE] Error getting employee:', e);
+    res.status(404).json({ error: "not_found" }); 
+  }
+});
 async function handleCreateEmployee(req, res) {
   try {
     console.log('[EMPLOYEE] Creating employee | userId=', req.user?.id, 'email=', req.user?.email);
