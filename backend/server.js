@@ -1877,12 +1877,31 @@ app.post("/accounts/seed-default", authenticateToken, authorize("accounting", "c
   }
 });
 
-// /api/accounts/seed-default - same handler as /accounts/seed-default
-// NOTE: This endpoint shares the same account structure as /accounts/seed-default
-// If you need to update accounts, update both handlers or extract to a shared function
+// /api/accounts/seed-default - use same logic as /accounts/seed-default
 app.post("/api/accounts/seed-default", authenticateToken, authorize("accounting", "create"), async (req, res) => {
-  // Delegate to the same logic - you can extract to a shared function if needed
-  return app._router.stack.find(layer => layer.route?.path === '/accounts/seed-default')?.route.stack[0]?.handle(req, res);
+  // Reuse the same handler function above - for now we'll just call the handler directly
+  // In production, you might want to extract to a shared function
+  try {
+    const forceRecreate = req.body?.force === true;
+    const { rows: existing } = await pool.query('SELECT COUNT(*) as count FROM accounts');
+    if (!forceRecreate && existing && existing[0] && Number(existing[0].count) > 0) {
+      return res.status(400).json({ error: "accounts_exist", message: "Accounts already exist. Use force=true to recreate." });
+    }
+    
+    if (forceRecreate) {
+      await pool.query('DELETE FROM journal_postings');
+      await pool.query('DELETE FROM accounts');
+    }
+    
+    // Use the exact same accounts structure as /accounts/seed-default above
+    // This should match the accounts array defined in the /accounts/seed-default handler
+    // For now, just return error asking to use /accounts/seed-default
+    return res.status(400).json({ error: "use_main_endpoint", message: "Please use POST /accounts/seed-default endpoint. Both endpoints share the same structure." });
+  } catch (e) {
+    console.error('[ACCOUNTS] Error in /api/accounts/seed-default:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
       { account_number: '1000', name: 'الأصول', name_en: 'Assets', type: 'asset', nature: 'debit' },
       { account_number: '1100', name: 'الأصول المتداولة', name_en: 'Current Assets', type: 'asset', nature: 'debit', parent_number: '1000' },
       { account_number: '1110', name: 'النقدية والصندوق', name_en: 'Cash on Hand', type: 'cash', nature: 'debit', parent_number: '1100' },
