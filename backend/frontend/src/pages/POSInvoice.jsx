@@ -154,7 +154,27 @@ export default function POSInvoice(){
     try {
       try { await pos.tableState(branch).catch(()=>({ busy: [] })) } catch {}
       const o = await apiOrders.get(effectiveId)
-      const arr = (function(){ try { return Array.isArray(o?.lines) ? o.lines : JSON.parse(o?.lines||'[]')||[] } catch { return [] } })()
+      if (!o) {
+        console.warn('[POSInvoice] Order not found:', effectiveId);
+        throw new Error('Order not found');
+      }
+      // CRITICAL: Parse lines safely - backend returns lines as JSON string or array
+      const arr = (function(){ 
+        try { 
+          if (Array.isArray(o.lines)) return o.lines;
+          if (typeof o.lines === 'string') {
+            const parsed = JSON.parse(o.lines);
+            return Array.isArray(parsed) ? parsed : [];
+          }
+          return []; 
+        } catch (e) { 
+          console.error('[POSInvoice] Error parsing lines:', e, 'lines=', o.lines);
+          return []; 
+        } 
+      })()
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[POSInvoice] Order loaded:', { id: o.id, linesType: typeof o.lines, arrLength: arr.length });
+      }
       const meta = arr.find(x=> x && x.type==='meta') || {}
       setCustomerName(String(meta.customer_name||''))
       setCustomerPhone(String(meta.customer_phone||''))
@@ -170,9 +190,13 @@ export default function POSInvoice(){
         try { setMultiOpen(true) } catch {}
       }
         const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
-        const safeOrderItems2 = Array.isArray(orderItems)?orderItems:[]
+        const safeOrderItems2 = Array.isArray(orderItems) ? orderItems : []
+        // CRITICAL: Always ensure items is an array, never null/undefined
         itemsRef.current = safeOrderItems2
         setItems(safeOrderItems2)
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[POSInvoice] Hydrated items:', { count: safeOrderItems2.length, items: safeOrderItems2 });
+        }
       const bnorm = String(branch||'').toLowerCase()==='palace_india' ? 'place_india' : String(branch||'').toLowerCase()
       try { localStorage.setItem(`pos_order_${branch}_${table}`, String(effectiveId)); localStorage.setItem(`pos_order_${bnorm}_${table}`, String(effectiveId)) } catch {}
       try { localStorage.setItem('current_branch', bnorm) } catch {}
@@ -294,7 +318,16 @@ export default function POSInvoice(){
     setItems(next)
     pendingChangesRef.current = true
   }
-  const totals = useMemo(()=>{ const subtotal = items.reduce((s,it)=> s + Number(it.qty||0)*Number(it.price||0),0); const discBase = subtotal * (Number(discountPct||0)/100); const rowDisc = items.reduce((s,it)=> s + (Number(it.discount||0)/100) * (Number(it.qty||0)*Number(it.price||0)),0); const taxable = Math.max(0, subtotal - discBase - rowDisc); const tax = taxable * (Number(taxPct||0)/100); const total = taxable + tax; return { subtotal, tax, discount: discBase+rowDisc, total } },[items, discountPct, taxPct])
+  const totals = useMemo(()=>{ 
+    const safeItems = Array.isArray(items) ? items : [];
+    const subtotal = safeItems.reduce((s,it)=> s + Number(it.qty||0)*Number(it.price||0),0); 
+    const discBase = subtotal * (Number(discountPct||0)/100); 
+    const rowDisc = safeItems.reduce((s,it)=> s + (Number(it.discount||0)/100) * (Number(it.qty||0)*Number(it.price||0)),0); 
+    const taxable = Math.max(0, subtotal - discBase - rowDisc); 
+    const tax = taxable * (Number(taxPct||0)/100); 
+    const total = taxable + tax; 
+    return { subtotal, tax, discount: discBase+rowDisc, total } 
+  },[items, discountPct, taxPct])
   
   
   useEffect(()=>{ if (String(selectedPartnerType||'')!=='credit' && paymentMethod==='credit') { setPaymentMethod('cash') } },[selectedPartnerType])
@@ -624,7 +657,8 @@ export default function POSInvoice(){
         if (!s) { showAlert('الفرع مطلوب','لا يمكن إنشاء أو إصدار فاتورة بدون فرع'); return }
       }
       if (!paymentMethod && process.env.NODE_ENV!=='test') { showAlert(t('errors.payment_method_required', lang), t('errors.choose_payment_before_issue', lang)); return }
-      if (items.length===0) { showAlert(t('errors.no_items', lang), t('errors.add_items_first', lang)); return }
+      const safeItems = Array.isArray(items) ? items : [];
+      if (safeItems.length===0) { showAlert(t('errors.no_items', lang), t('errors.add_items_first', lang)); return }
       if (String(selectedPartnerType||'')==='credit' && !discountApplied) { setPlatformDiscountOpen(true); showAlert(t('errors.discount_required', lang), t('errors.discount_note', lang)); return }
       const pid = await resolvePartner();
       let id = await saveDraft();
@@ -643,7 +677,8 @@ export default function POSInvoice(){
         } catch {}
       }
       if (!id) { showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang)); return }
-      const untaxed = items.reduce((s,it)=> s + Number(it.qty||0)*Number(it.price||0),0)
+      const safeItems = Array.isArray(items) ? items : [];
+      const untaxed = safeItems.reduce((s,it)=> s + Number(it.qty||0)*Number(it.price||0),0)
       const tax = (untaxed - totals.discount) * (Number(taxPct||0)/100)
       const total = untaxed - totals.discount + tax
       const creditSale = String(paymentMethod||'').toLowerCase()==='credit'
@@ -716,7 +751,10 @@ export default function POSInvoice(){
           const itemsResp = await apiInvoices.items(inv.id)
           const arrItems = Array.isArray(itemsResp?.items) ? itemsResp.items : []
           printItems = arrItems.map(it => ({ name: it.name || (it.product_name || ''), qty: Number(it.quantity||0), price: Number(it.unit_price||0) }))
-        } catch { printItems = items.map(it => ({ name: it.name||'', qty: Number(it.qty||0), price: Number(it.price||0) })) }
+        } catch { 
+          const safeItems = Array.isArray(items) ? items : [];
+          printItems = safeItems.map(it => ({ name: it.name||'', qty: Number(it.qty||0), price: Number(it.price||0) })) 
+        }
         try {
           const data = {
             logoBase64: logoSrc,
@@ -814,7 +852,10 @@ export default function POSInvoice(){
         const itemsResp2 = await apiInvoices.items(inv.id)
         const arrItems2 = Array.isArray(itemsResp2?.items) ? itemsResp2.items : []
         printItems2 = arrItems2.map(it => ({ name: it.name || (it.product_name || ''), qty: Number(it.quantity||0), price: Number(it.unit_price||0) }))
-      } catch { printItems2 = items.map(it => ({ name: it.name||'', qty: Number(it.qty||0), price: Number(it.price||0) })) }
+      } catch { 
+        const safeItems = Array.isArray(items) ? items : [];
+        printItems2 = safeItems.map(it => ({ name: it.name||'', qty: Number(it.qty||0), price: Number(it.price||0) })) 
+      }
       try {
           const data = {
             logoBase64: logoSrc2,
@@ -1183,18 +1224,35 @@ export default function POSInvoice(){
             <div className="text-sm text-gray-600">{lang==='ar'?'جار التحميل...':'Loading...'}</div>
           ) : (
               <>
-              {items.length===0 && tableBusy ? (
-                <div className="text-sm text-red-600">{lang==='ar'?'فشل تحميل المسودة':'Draft loading error'}</div>
-              ) : (
-                <table className="w-full text-right border-collapse">
-                <thead>
-                  <tr className="border-b bg-emerald-700 text-white">
-                    <th className="p-2">{t('labels.item', lang)}</th>
-                    <th className="p-2">{t('labels.qty', lang)}</th>
-                  </tr>
-                </thead>
-                <tbody data-testid="receipt-items" data-ready={items.length > 0 ? 'true' : 'false'}>
-                  {items.map((it, i)=> (
+              {(() => {
+                // CRITICAL: Protect items - always ensure it's an array
+                const safeItems = Array.isArray(items) ? items : [];
+                if (process.env.NODE_ENV === 'development') {
+                  console.log('[RECEIPT SUMMARY DEBUG]', { 
+                    items: safeItems, 
+                    itemsLength: safeItems.length, 
+                    tableBusy, 
+                    orderId,
+                    itemsType: typeof items,
+                    isArray: Array.isArray(items)
+                  });
+                }
+                
+                // Only show error if table is busy AND no items (meaning draft should exist but doesn't)
+                if (safeItems.length === 0 && tableBusy && orderId) {
+                  return <div className="text-sm text-red-600">{lang==='ar'?'فشل تحميل المسودة':'Draft loading error'}</div>;
+                }
+                
+                return (
+                  <table className="w-full text-right border-collapse">
+                  <thead>
+                    <tr className="border-b bg-emerald-700 text-white">
+                      <th className="p-2">{t('labels.item', lang)}</th>
+                      <th className="p-2">{t('labels.qty', lang)}</th>
+                    </tr>
+                  </thead>
+                  <tbody data-testid="receipt-items" data-ready={safeItems.length > 0 ? 'true' : 'false'}>
+                    {safeItems.map((it, i)=> (
                     <tr data-testid="invoice-row" key={i} className="border-b hover:bg-gray-50 transition-colors">
                       <td className="p-2 text-right">{it.name}</td>
                       <td className="p-2 text-center">
@@ -1216,7 +1274,11 @@ export default function POSInvoice(){
           <div className="mt-3">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded shadow w-full" onClick={()=> setSupervisorOpen(true)}>{t('labels.cancel_invoice', lang)}</button>
-              <button className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded shadow w-full" onClick={()=>{ if (items.length===0 && !orderId){ showAlert('لا توجد أصناف','أضف أصنافًا أولاً قبل طباعة الطلب'); return } print({ type:'thermal', template:'posKitchen', data:{ lang: lang, branchName: branch?.replace(/_/g,' '), tableNumber: Number(table||0), items, currencyIcon: currencyIcon, currencyCode: currencyCode }, autoPrint:true }) }}>{t('labels.print_order', lang)}</button>
+              <button className="px-4 py-2 bg-gray-900 hover:bg-black text-white rounded shadow w-full" onClick={()=>{ 
+                const safeItems = Array.isArray(items) ? items : [];
+                if (safeItems.length===0 && !orderId){ showAlert('لا توجد أصناف','أضف أصنافًا أولاً قبل طباعة الطلب'); return } 
+                print({ type:'thermal', template:'posKitchen', data:{ lang: lang, branchName: branch?.replace(/_/g,' '), tableNumber: Number(table||0), items: safeItems, currencyIcon: currencyIcon, currencyCode: currencyCode }, autoPrint:true }) 
+              }}>{t('labels.print_order', lang)}</button>
               <button className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded shadow w-full" onClick={()=> setCashCalcOpen(true)}>{t('labels.cash_calc', lang)}</button>
               <button className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded shadow w-full" onClick={issue}>{t('labels.issue_invoice', lang)}</button>
             </div>
