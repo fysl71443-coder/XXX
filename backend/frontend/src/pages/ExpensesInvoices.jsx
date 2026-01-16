@@ -71,8 +71,8 @@ export default function ExpensesInvoices(){
     }
   }
 
-  const rows = useMemo(()=> list, [list])
-  const filteredRows = useMemo(()=> rows, [rows])
+  const rows = useMemo(()=> Array.isArray(list) ? list : [], [list])
+  const filteredRows = useMemo(()=> Array.isArray(rows) ? rows : [], [rows])
   const canCreate = can('expenses:create')
   const canPost = can('expenses:post')
   const canEdit = can('expenses:edit')
@@ -220,7 +220,7 @@ export default function ExpensesInvoices(){
               </tr>
             </thead>
             <tbody>
-              {filteredRows.map(r => (
+              {(Array.isArray(filteredRows) ? filteredRows : []).map(r => (
                 <tr key={r.id} className="border-b odd:bg-white even:bg-gray-50 hover:bg-blue-50/50">
                   <td className="p-2 text-center"><input type="checkbox" checked={selectedIds.includes(r.id)} onChange={()=>toggleSelect(r.id)} /></td>
                   <td className="p-2">{r.invoice_number||''}</td>

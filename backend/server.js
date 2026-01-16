@@ -3466,13 +3466,15 @@ async function handleSaveDraft(req, res) {
       }
       
       console.log(`[POS] saveDraft - SUCCESS - Updated order ${order_id}, returning ${parsedLines.length} lines`);
-      return res.json({
+      const response = {
         ...order,
         lines: parsedLines,
         items: parsedLines,
         order_id: order.id,
         invoice: null  // No invoice for draft orders
-      });
+      };
+      console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}`);
+      return res.json(response);
     }
     
     // Create new order
@@ -3504,13 +3506,15 @@ async function handleSaveDraft(req, res) {
     }
     
     console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for new order ${order.id}`);
-    res.json({
+    const response = {
       ...order,
       lines: parsedLines,
       items: parsedLines,
       order_id: order.id,
       invoice: null  // No invoice for draft orders
-    });
+    };
+    console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}`);
+    res.json(response);
   } catch (e) { 
     console.error('[POS] saveDraft error:', e);
     console.error('[POS] saveDraft error message:', e?.message);
