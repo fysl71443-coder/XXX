@@ -2027,7 +2027,7 @@ app.use("/preview", authenticateToken, async (req, res, next) => {
 app.get("/partners", authenticateToken, async (req, res) => {
   try {
     const type = String(req.query?.type || "").toLowerCase();
-    const { rows } = await pool.query('SELECT id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at FROM partners ORDER BY id DESC');
+    const { rows } = await pool.query('SELECT id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at FROM partners ORDER BY id DESC');
     const list = Array.isArray(rows) ? rows.map(r => ({ ...r, contact_info: r.contact_info || null })) : [];
     const filtered = list.filter(p => !type || String(p.type||"").toLowerCase() === type);
     res.json(filtered);
@@ -2036,7 +2036,7 @@ app.get("/partners", authenticateToken, async (req, res) => {
 app.get("/api/partners", authenticateToken, async (req, res) => {
   try {
     const type = String(req.query?.type || "").toLowerCase();
-    const { rows } = await pool.query('SELECT id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at FROM partners ORDER BY id DESC');
+    const { rows } = await pool.query('SELECT id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at FROM partners ORDER BY id DESC');
     const list = Array.isArray(rows) ? rows.map(r => ({ ...r, contact_info: r.contact_info || null })) : [];
     const filtered = list.filter(p => !type || String(p.type||"").toLowerCase() === type);
     res.json(filtered);
@@ -2050,11 +2050,28 @@ app.post("/partners", authenticateToken, authorize("clients","create"), async (r
     const customer_type = b.customer_type || null;
     const contact_info = b.contact_info ? (typeof b.contact_info === 'object' ? b.contact_info : null) : null;
     const { rows } = await pool.query(
-      'INSERT INTO partners(name, type, email, phone, customer_type, contact_info) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      'INSERT INTO partners(name, type, email, phone, customer_type, contact_info) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at',
       [name, type, email, phone, customer_type, contact_info]
     );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
+    const partner = rows && rows[0];
+    if (partner) {
+      // Create account automatically for new partner
+      const accountId = await getOrCreatePartnerAccount(partner.id, type);
+      if (accountId) {
+        const { rows: updatedRows } = await pool.query(
+          'UPDATE partners SET account_id = $1 WHERE id = $2 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at',
+          [accountId, partner.id]
+        );
+        if (updatedRows && updatedRows[0]) {
+          return res.json(updatedRows[0]);
+        }
+      }
+    }
+    res.json(partner);
+  } catch (e) { 
+    console.error('[PARTNERS] Error creating partner:', e);
+    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  }
 });
 app.post("/api/partners", authenticateToken, authorize("clients","create"), async (req, res) => {
   try {
@@ -2064,11 +2081,28 @@ app.post("/api/partners", authenticateToken, authorize("clients","create"), asyn
     const customer_type = b.customer_type || null;
     const contact_info = b.contact_info ? (typeof b.contact_info === 'object' ? b.contact_info : null) : null;
     const { rows } = await pool.query(
-      'INSERT INTO partners(name, type, email, phone, customer_type, contact_info) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      'INSERT INTO partners(name, type, email, phone, customer_type, contact_info) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at',
       [name, type, email, phone, customer_type, contact_info]
     );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
+    const partner = rows && rows[0];
+    if (partner) {
+      // Create account automatically for new partner
+      const accountId = await getOrCreatePartnerAccount(partner.id, type);
+      if (accountId) {
+        const { rows: updatedRows } = await pool.query(
+          'UPDATE partners SET account_id = $1 WHERE id = $2 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at',
+          [accountId, partner.id]
+        );
+        if (updatedRows && updatedRows[0]) {
+          return res.json(updatedRows[0]);
+        }
+      }
+    }
+    res.json(partner);
+  } catch (e) { 
+    console.error('[PARTNERS] Error creating partner:', e);
+    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  }
 });
 app.put("/partners/:id", authenticateToken, authorize("clients","edit"), async (req, res) => {
   try {
