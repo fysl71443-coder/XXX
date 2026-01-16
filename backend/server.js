@@ -207,12 +207,15 @@ async function ensureSchema() {
         customer_type TEXT,
         contact_info JSONB,
         tags TEXT[],
+        account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
         status TEXT DEFAULT 'active',
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Add account_id column if it doesn't exist (for existing databases)
+    await pool.query('ALTER TABLE partners ADD COLUMN IF NOT EXISTS account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS employees (
         id SERIAL PRIMARY KEY,
@@ -2072,7 +2075,7 @@ app.put("/partners/:id", authenticateToken, authorize("clients","edit"), async (
     const id = Number(req.params.id||0);
     const b = req.body || {};
     const { rows } = await pool.query(
-      'UPDATE partners SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), customer_type=COALESCE($4,customer_type), contact_info=COALESCE($5,contact_info), updated_at=NOW() WHERE id=$6 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      'UPDATE partners SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), customer_type=COALESCE($4,customer_type), contact_info=COALESCE($5,contact_info), updated_at=NOW() WHERE id=$6 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at',
       [b.name||null, b.email||null, b.phone||null, b.customer_type||null, (typeof b.contact_info==='object'? b.contact_info : null), id]
     );
     res.json(rows && rows[0]);
@@ -2083,7 +2086,7 @@ app.put("/api/partners/:id", authenticateToken, authorize("clients","edit"), asy
     const id = Number(req.params.id||0);
     const b = req.body || {};
     const { rows } = await pool.query(
-      'UPDATE partners SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), customer_type=COALESCE($4,customer_type), contact_info=COALESCE($5,contact_info), updated_at=NOW() WHERE id=$6 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, created_at',
+      'UPDATE partners SET name=COALESCE($1,name), email=COALESCE($2,email), phone=COALESCE($3,phone), customer_type=COALESCE($4,customer_type), contact_info=COALESCE($5,contact_info), updated_at=NOW() WHERE id=$6 RETURNING id, name, type, email, phone, customer_type, contact_info, status, is_active, account_id, created_at',
       [b.name||null, b.email||null, b.phone||null, b.customer_type||null, (typeof b.contact_info==='object'? b.contact_info : null), id]
     );
     res.json(rows && rows[0]);
@@ -2588,6 +2591,138 @@ app.post("/pos/saveDraft", authenticateToken, authorize("sales","create", { bran
     res.json(rows && rows[0]);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
+// ============================================================================
+// ACCOUNTING HELPER FUNCTIONS
+// ============================================================================
+
+/**
+ * Get account ID by account number
+ */
+async function getAccountIdByNumber(accountNumber) {
+  if (!accountNumber) return null;
+  try {
+    const { rows } = await pool.query('SELECT id FROM accounts WHERE account_number = $1 OR account_code = $1 LIMIT 1', [String(accountNumber)]);
+    return rows && rows[0] ? rows[0].id : null;
+  } catch (e) {
+    console.error('[ACCOUNTING] Error getting account by number:', accountNumber, e);
+    return null;
+  }
+}
+
+/**
+ * Get or create partner account (customer/supplier sub-account)
+ */
+async function getOrCreatePartnerAccount(partnerId, partnerType) {
+  if (!partnerId) return null;
+  try {
+    // Check if partner already has an account
+    const { rows: partnerRows } = await pool.query('SELECT account_id, name FROM partners WHERE id = $1', [partnerId]);
+    if (partnerRows && partnerRows[0] && partnerRows[0].account_id) {
+      return partnerRows[0].account_id;
+    }
+
+    // Get parent account based on type
+    const parentAccountNumber = partnerType === 'supplier' ? '2111' : '1131'; // Suppliers: 2111, Customers: 1131
+    const parentAccountId = await getAccountIdByNumber(parentAccountNumber);
+    if (!parentAccountId) {
+      console.warn(`[ACCOUNTING] Parent account ${parentAccountNumber} not found for partner ${partnerId}`);
+      return null;
+    }
+
+    // Get partner name
+    const partnerName = partnerRows && partnerRows[0] ? partnerRows[0].name : `Partner ${partnerId}`;
+
+    // Create sub-account for partner
+    const { rows: accountRows } = await pool.query(
+      'INSERT INTO accounts(account_number, account_code, name, type, nature, parent_id, opening_balance, allow_manual_entry) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+      [null, null, partnerName, partnerType === 'supplier' ? 'liability' : 'asset', partnerType === 'supplier' ? 'credit' : 'debit', parentAccountId, 0, false]
+    );
+
+    const accountId = accountRows && accountRows[0] ? accountRows[0].id : null;
+    if (accountId) {
+      // Update partner with account_id
+      await pool.query('UPDATE partners SET account_id = $1 WHERE id = $2', [accountId, partnerId]);
+    }
+    return accountId;
+  } catch (e) {
+    console.error('[ACCOUNTING] Error getting/creating partner account:', partnerId, e);
+    return null;
+  }
+}
+
+/**
+ * Create journal entry for invoice
+ */
+async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discount, tax, total, paymentMethod, branch) {
+  try {
+    // Get next entry number
+    const { rows: lastEntry } = await pool.query('SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1');
+    const entryNumber = lastEntry && lastEntry[0] ? lastEntry[0].entry_number + 1 : 1;
+
+    const postings = [];
+    
+    // Get customer account (if credit sale)
+    if (customerId && paymentMethod && String(paymentMethod).toLowerCase() === 'credit') {
+      const customerAccountId = await getOrCreatePartnerAccount(customerId, 'customer');
+      if (customerAccountId) {
+        // Debit: Customer Receivable
+        postings.push({ account_id: customerAccountId, debit: total, credit: 0 });
+      }
+    } else {
+      // Cash sale - use cash account (1101)
+      const cashAccountId = await getAccountIdByNumber('1101');
+      if (cashAccountId) {
+        postings.push({ account_id: cashAccountId, debit: total, credit: 0 });
+      }
+    }
+
+    // Credit: Sales Revenue (4101)
+    const salesAccountId = await getAccountIdByNumber('4101');
+    if (salesAccountId) {
+      postings.push({ account_id: salesAccountId, debit: 0, credit: subtotal - discount });
+    }
+
+    // Credit: VAT Output (2120) if tax > 0
+    if (tax > 0) {
+      const vatAccountId = await getAccountIdByNumber('2120');
+      if (vatAccountId) {
+        postings.push({ account_id: vatAccountId, debit: 0, credit: tax });
+      }
+    }
+
+    // Validate postings balance
+    const totalDebit = postings.reduce((sum, p) => sum + Number(p.debit || 0), 0);
+    const totalCredit = postings.reduce((sum, p) => sum + Number(p.credit || 0), 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      console.error('[ACCOUNTING] Journal entry unbalanced:', { totalDebit, totalCredit, postings });
+      return null;
+    }
+
+    // Create journal entry
+    const { rows: entryRows } = await pool.query(
+      'INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [entryNumber, `فاتورة مبيعات #${invoiceId}`, new Date(), 'invoice', invoiceId]
+    );
+
+    const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+    if (!entryId) return null;
+
+    // Create postings
+    for (const posting of postings) {
+      await pool.query(
+        'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1,$2,$3,$4)',
+        [entryId, posting.account_id, posting.debit, posting.credit]
+      );
+    }
+
+    console.log(`[ACCOUNTING] Created journal entry #${entryNumber} for invoice ${invoiceId}`);
+    return entryId;
+  } catch (e) {
+    console.error('[ACCOUNTING] Error creating journal entry for invoice:', invoiceId, e);
+    return null;
+  }
+}
+
 // POS Issue Invoice - both paths for compatibility
 async function handleIssueInvoice(req, res) {
   try {
@@ -2605,11 +2740,33 @@ async function handleIssueInvoice(req, res) {
     const payment_method = b.payment_method || null;
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const status = String(b.status||'posted');
+    
+    // Insert invoice
     const { rows } = await pool.query(
       'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, number, status, total, branch',
       [number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch]
     );
-    res.json(rows && rows[0]);
+    
+    const invoice = rows && rows[0];
+    if (!invoice) {
+      return res.status(500).json({ error: "server_error", details: "Failed to create invoice" });
+    }
+
+    // Create journal entry automatically
+    if (status === 'posted' && total > 0) {
+      await createInvoiceJournalEntry(
+        invoice.id,
+        customer_id,
+        subtotal,
+        discount_amount,
+        tax_amount,
+        total,
+        payment_method,
+        branch
+      );
+    }
+
+    res.json(invoice);
   } catch (e) { 
     console.error('[POS] issueInvoice error:', e);
     res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
