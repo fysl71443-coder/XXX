@@ -11,6 +11,7 @@ export default function Login() {
   const { refresh, login } = useAuth()
   const params = new URLSearchParams(location.search || '')
   const next = params.get('next') || '/'
+  const showSessionExpired = params.get('expired') === 'true'
   const [lang, setLang] = useState(localStorage.getItem('lang')||'ar')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -124,6 +125,16 @@ export default function Login() {
                 {lang==='ar'?'English':'العربية'}
               </button>
             </div>
+
+            {showSessionExpired && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-3 text-sm text-amber-100"
+              >
+                {lang==='ar'?'انتهت جلسة المستخدم. يرجى تسجيل الدخول مرة أخرى':'Your session has expired. Please sign in again'}
+              </motion.div>
+            )}
 
             <form className="space-y-4" onSubmit={onSubmit}>
               <div className="relative">

@@ -56,13 +56,37 @@ export async function authenticateToken(req, res, next) {
     
     if (!token) {
       console.log(`[AUTH] REJECTED: No token | ${method} ${path}`)
-      return res.status(401).json({ error: "unauthorized" });
+      
+      // Check if this is an API request (JSON) or a page request (HTML)
+      // API requests should get JSON response, page requests should redirect
+      const acceptsJson = req.headers['accept']?.includes('application/json');
+      const isApiRequest = path.startsWith('/api/') || acceptsJson || req.headers['x-requested-with'] === 'XMLHttpRequest';
+      
+      if (isApiRequest) {
+        // API request - return JSON error
+        return res.status(401).json({ error: "unauthorized" });
+      } else {
+        // Page request - redirect to login (preserve intended destination)
+        const redirectUrl = `/login?next=${encodeURIComponent(path)}`;
+        console.log(`[AUTH] Redirecting to login: ${redirectUrl}`);
+        return res.redirect(redirectUrl);
+      }
     }
     
     const payload = jwt.verify(token, String(process.env.JWT_SECRET));
     if (!payload?.id) {
       console.log(`[AUTH] REJECTED: Invalid token payload | ${method} ${path}`)
-      return res.status(401).json({ error: "unauthorized" });
+      
+      // Check if this is an API request or page request
+      const acceptsJson = req.headers['accept']?.includes('application/json');
+      const isApiRequest = path.startsWith('/api/') || acceptsJson || req.headers['x-requested-with'] === 'XMLHttpRequest';
+      
+      if (isApiRequest) {
+        return res.status(401).json({ error: "unauthorized" });
+      } else {
+        const redirectUrl = `/login?next=${encodeURIComponent(path)}`;
+        return res.redirect(redirectUrl);
+      }
     }
     
     if (!pool) {
@@ -80,7 +104,17 @@ export async function authenticateToken(req, res, next) {
     
     if (!user) {
       console.log(`[AUTH] REJECTED: User not found | userId=${payload.id} ${method} ${path}`)
-      return res.status(401).json({ error: "unauthorized" });
+      
+      // Check if this is an API request or page request
+      const acceptsJson = req.headers['accept']?.includes('application/json');
+      const isApiRequest = path.startsWith('/api/') || acceptsJson || req.headers['x-requested-with'] === 'XMLHttpRequest';
+      
+      if (isApiRequest) {
+        return res.status(401).json({ error: "unauthorized" });
+      } else {
+        const redirectUrl = `/login?next=${encodeURIComponent(path)}`;
+        return res.redirect(redirectUrl);
+      }
     }
     
     // Use centralized admin check
@@ -133,6 +167,16 @@ export async function authenticateToken(req, res, next) {
     const method = req.method || 'UNKNOWN'
     const path = req.path || req.url || 'UNKNOWN'
     console.error(`[AUTH] ERROR: ${e?.message || 'unknown'} | ${method} ${path}`, e?.stack)
-    return res.status(401).json({ error: "unauthorized" });
+    
+    // Check if this is an API request or page request
+    const acceptsJson = req.headers['accept']?.includes('application/json');
+    const isApiRequest = path.startsWith('/api/') || acceptsJson || req.headers['x-requested-with'] === 'XMLHttpRequest';
+    
+    if (isApiRequest) {
+      return res.status(401).json({ error: "unauthorized" });
+    } else {
+      const redirectUrl = `/login?next=${encodeURIComponent(path)}`;
+      return res.redirect(redirectUrl);
+    }
   }
 }

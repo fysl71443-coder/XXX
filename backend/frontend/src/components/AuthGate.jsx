@@ -65,10 +65,11 @@ export default function AuthGate({ children }) {
   }
   
   // 2️⃣ Auth check complete - no user means not authenticated
-  // Redirect to login
+  // Redirect to login with a friendly message
   if (!isLoggedIn || !user || !token) {
     console.log('[AuthGate] NOT AUTHENTICATED - Redirecting to login');
-    return <Navigate to={`/login?next=${encodeURIComponent(location.pathname || '/')}`} replace />;
+    const nextPath = location.pathname !== '/login' ? location.pathname : '/';
+    return <Navigate to={`/login?next=${encodeURIComponent(nextPath)}`} replace />;
   }
   
   // 3️⃣ Authenticated - render children
