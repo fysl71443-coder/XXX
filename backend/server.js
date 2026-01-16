@@ -49,8 +49,22 @@ app.use(express.static(buildPath));
 
 // 2️⃣ Public paths that never need auth
 app.get('/favicon.ico', (req, res) => res.status(204).end());
-app.get('/manifest.json', express.static(buildPath));
-app.get('/robots.txt', express.static(buildPath));
+app.get('/manifest.json', (req, res) => {
+  res.sendFile(path.join(buildPath, 'manifest.json'), (err) => {
+    if (err) {
+      console.warn('[STATIC] manifest.json not found, returning 404');
+      res.status(404).end();
+    }
+  });
+});
+app.get('/robots.txt', (req, res) => {
+  res.sendFile(path.join(buildPath, 'robots.txt'), (err) => {
+    if (err) {
+      console.warn('[STATIC] robots.txt not found, returning 404');
+      res.status(404).end();
+    }
+  });
+});
 
 // 2.5️⃣ CRITICAL: SPA Fallback for Frontend Routes
 // This MUST come before API routes to prevent conflicts
