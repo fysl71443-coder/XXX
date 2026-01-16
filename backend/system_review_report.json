@@ -1,0 +1,12 @@
+{
+  "timestamp": "2026-01-16T15:19:40.247Z",
+  "database": {},
+  "tables": {},
+  "data": {},
+  "issues": [
+    "Database schema review error: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a",
+    "Data integrity review error: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a",
+    "Relationship review error: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a"
+  ],
+  "recommendations": []
+}

@@ -9,9 +9,42 @@ const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');
 
-// Database connection
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://china_town_db_czwv_user:Z3avbH9Vxfdb3CnRVHmF7hDTkhjBuRla@dpg-d5hsjmali9vc73am1v60-a/china_town_db_czwv';
-const pool = new Pool({ connectionString: DATABASE_URL });
+// Database connection - try multiple sources
+let DATABASE_URL = process.env.DATABASE_URL;
+
+// Try command line argument
+if (!DATABASE_URL && process.argv[2]) {
+  DATABASE_URL = process.argv[2];
+}
+
+if (!DATABASE_URL) {
+  // Try to read from .env file
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const envPath = path.join(__dirname, '..', '..', '.env');
+    if (fs.existsSync(envPath)) {
+      const envContent = fs.readFileSync(envPath, 'utf8');
+      const match = envContent.match(/DATABASE_URL=(.+)/);
+      if (match) {
+        DATABASE_URL = match[1].trim();
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read .env file:', e.message);
+  }
+}
+
+// Fallback to provided connection string
+if (!DATABASE_URL) {
+  DATABASE_URL = 'postgresql://china_town_db_czwv_user:Z3avbH9Vxfdb3CnRVHmF7hDTkhjBuRla@dpg-d5hsjmali9vc73am1v60-a/china_town_db_czwv';
+}
+
+console.log('Connecting to database...');
+const pool = new Pool({ 
+  connectionString: DATABASE_URL,
+  ssl: DATABASE_URL.includes('render.com') || DATABASE_URL.includes('dpg-') ? { rejectUnauthorized: false } : false
+});
 
 const report = {
   timestamp: new Date().toISOString(),
