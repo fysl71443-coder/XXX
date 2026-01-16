@@ -77,7 +77,7 @@ export default function POSInvoice(){
   const [addCustOpen, setAddCustOpen] = useState(false)
   const [newCustName, setNewCustName] = useState('')
   const [newCustPhone, setNewCustPhone] = useState('')
-  const [newCustDiscount, setNewCustDiscount] = useState(0)
+  const [newCustDiscount, setNewCustDiscount] = useState('')
   const [custError, setCustError] = useState('')
   const [platformDiscountOpen, setPlatformDiscountOpen] = useState(false)
   const [platformDiscount, setPlatformDiscount] = useState(0)
@@ -1041,25 +1041,79 @@ export default function POSInvoice(){
   async function saveNewCustomer(){
     const nm = String(newCustName||'').trim()
     const ph = String(newCustPhone||'').trim()
-    const d = Math.max(0, Number(newCustDiscount||0))
+    // Parse discount - handle empty string, null, undefined as 0
+    const dRaw = String(newCustDiscount||'').trim()
+    const d = dRaw === '' ? 0 : Math.max(0, Math.min(100, Number(dRaw||0)))
+    
     if (!ph) { setCustError('رقم الهاتف مطلوب'); return }
     const exists = partners.find(p=> String(p.phone||'').trim()===ph)
     if (exists) { setCustError('رقم الهاتف مستخدم') ; return }
-    if (d>0) { setCustError('لا يسمح بالخصم لعميل زائر'); return }
+    
+    // Validate discount range
+    if (!isFinite(d) || d < 0 || d > 100) {
+      setCustError('نسبة الخصم يجب أن تكون بين 0 و 100');
+      return;
+    }
+    
     setCustError('')
     try {
-      const payload = { name: nm||ph, type: 'عميل', phone: ph, customer_type: 'cash_walkin', discount_rate: 0, contact_info: JSON.stringify({ discount_pct: 0, walk_in: true }) }
-      const c = await apiPartners.create(payload)
-      const created = c || { id: null, name: nm||ph, phone: ph, contact_info: JSON.stringify({ discount_pct: d }) }
-      setPartners(prev=> [created, ...prev])
-      setPartnerId(Number(created.id||0))
-      setCustomerName(String(created.name||''))
-      setCustomerPhone(ph)
-      setDiscountPct(0)
-      setAddCustOpen(false)
-      setNewCustName(''); setNewCustPhone(''); setNewCustDiscount(0)
-    } catch {
-      setCustError('فشل الحفظ')
+      // If discount > 0, create as cash_registered customer (مسجل نقدي)
+      // Otherwise, create as cash_walkin (زائر)
+      const customerType = d > 0 ? 'cash_registered' : 'cash_walkin';
+      const payload = { 
+        name: nm||ph, 
+        type: 'customer', 
+        phone: ph, 
+        customer_type: customerType, 
+        discount_rate: d, 
+        contact_info: d > 0 ? JSON.stringify({ discount_pct: d }) : JSON.stringify({ discount_pct: 0, walk_in: true })
+      };
+      
+      const c = await apiPartners.create(payload);
+      
+      if (!c || !c.id) {
+        setCustError('فشل الحفظ - لم يتم إنشاء العميل');
+        return;
+      }
+      
+      // Add to partners list
+      setPartners(prev=> [c, ...prev]);
+      
+      // Set customer in form
+      setPartnerId(Number(c.id||0));
+      setCustomerName(String(c.name||nm||ph));
+      setCustomerPhone(ph);
+      
+      // CRITICAL: Parse discount from saved customer and apply it
+      const savedDiscount = parseDiscountFromPartner(c);
+      const customerTypeNormalized = normalizeCustomerType(c.customer_type, c.contact_info);
+      
+      // Apply discount from customer
+      if (customerTypeNormalized === 'cash_registered' && savedDiscount > 0) {
+        setSelectedPartnerType('cash_registered');
+        setDiscountLocked(true);
+        setPlatformDiscountOpen(false);
+        setPlatformDiscount(0);
+        setDiscountPct(savedDiscount);
+        setDiscountApplied(true);
+      } else {
+        // Walk-in customer - no discount
+        setSelectedPartnerType('cash_walkin');
+        setDiscountLocked(true);
+        setPlatformDiscountOpen(false);
+        setPlatformDiscount(0);
+        setDiscountPct(0);
+        setDiscountApplied(true);
+      }
+      
+      // Close modal and reset form
+      setAddCustOpen(false);
+      setNewCustName(''); 
+      setNewCustPhone(''); 
+      setNewCustDiscount('');
+    } catch (e) {
+      console.error('[POS] Error saving new customer:', e);
+      setCustError('فشل الحفظ: ' + (e?.message || 'خطأ غير معروف'));
     }
   }
   return (
@@ -1165,7 +1219,7 @@ export default function POSInvoice(){
               )}
             </div>
             <div className="col-span-3 flex items-end">
-              <button className="px-3 w-full h-10 border rounded-full bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2" onClick={()=>{ setNewCustName(customerName||''); setNewCustPhone(customerPhone||''); setNewCustDiscount(0); setCustError(''); setAddCustOpen(true) }}>
+              <button className="px-3 w-full h-10 border rounded-full bg-white hover:bg-gray-50 transition flex items-center justify-center gap-2" onClick={()=>{ setNewCustName(customerName||''); setNewCustPhone(customerPhone||''); setNewCustDiscount(''); setCustError(''); setAddCustOpen(true) }}>
                 <span>➕</span>
                 <span>{t('labels.add_customer', lang)}</span>
               </button>
@@ -1301,7 +1355,25 @@ export default function POSInvoice(){
               </div>
               <div>
                 <label className="text-sm text-gray-700">{t('labels.discount_pct', lang)}</label>
-                <input type="number" step="0.01" className="border rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-primary-300" value={newCustDiscount} onChange={e=> setNewCustDiscount(Number(e.target.value||0))} />
+                <input 
+                  type="number" 
+                  step="0.01" 
+                  min="0" 
+                  max="100"
+                  placeholder="0.00"
+                  className="border rounded p-2 w-full focus:outline-none focus:ring-2 focus:ring-primary-300" 
+                  value={newCustDiscount} 
+                  onChange={e=> {
+                    const val = e.target.value;
+                    // Allow empty string, or numeric value
+                    if (val === '' || (!isNaN(Number(val)) && Number(val) >= 0 && Number(val) <= 100)) {
+                      setNewCustDiscount(val);
+                    }
+                  }} 
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  {lang==='ar' ? 'اتركه فارغًا للعميل الزائر أو أدخل نسبة الخصم للعميل المسجل' : 'Leave empty for walk-in customer or enter discount % for registered customer'}
+                </div>
               </div>
               {custError ? (<div className="text-sm text-red-600">{custError}</div>) : null}
             </div>
