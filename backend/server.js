@@ -2568,14 +2568,35 @@ async function handleGetOrders(req, res) {
     query += ' ORDER BY id DESC';
     
     const { rows } = await pool.query(query, params);
-    // Parse lines from JSON string to array
+    // Parse lines from JSONB/JSON string to array - handle all cases
     const orders = (rows || []).map(order => {
-      if (order.lines && typeof order.lines === 'string') {
-        try {
-          order.lines = JSON.parse(order.lines);
-        } catch {}
+      // Ensure lines is always an array
+      let lines = [];
+      try {
+        if (order.lines === null || order.lines === undefined) {
+          lines = [];
+        } else if (Array.isArray(order.lines)) {
+          // PostgreSQL JSONB returns as array directly
+          lines = order.lines;
+        } else if (typeof order.lines === 'string') {
+          // If stored as JSON string, parse it
+          const parsed = JSON.parse(order.lines);
+          lines = Array.isArray(parsed) ? parsed : [];
+        } else if (typeof order.lines === 'object') {
+          // If it's an object but not array, wrap it or convert
+          lines = Array.isArray(order.lines) ? order.lines : [];
+        }
+      } catch (e) {
+        console.error('[ORDERS] Error parsing lines for order', order.id, e);
+        lines = [];
       }
-      return order;
+      
+      return {
+        ...order,
+        lines: lines,
+        // Also add items alias for frontend compatibility
+        items: lines
+      };
     });
     res.json(orders);
   } catch (e) { 
@@ -2591,12 +2612,37 @@ async function handleGetOrder(req, res) {
     const id = Number(req.params.id||0);
     const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, created_at FROM orders WHERE id=$1', [id]);
     const order = rows && rows[0];
-    if (order && order.lines && typeof order.lines === 'string') {
-      try {
-        order.lines = JSON.parse(order.lines);
-      } catch {}
+    if (!order) {
+      return res.json(null);
     }
-    res.json(order || null);
+    
+    // Parse lines from JSONB/JSON string to array - handle all cases
+    let lines = [];
+    try {
+      if (order.lines === null || order.lines === undefined) {
+        lines = [];
+      } else if (Array.isArray(order.lines)) {
+        // PostgreSQL JSONB returns as array directly
+        lines = order.lines;
+      } else if (typeof order.lines === 'string') {
+        // If stored as JSON string, parse it
+        const parsed = JSON.parse(order.lines);
+        lines = Array.isArray(parsed) ? parsed : [];
+      } else if (typeof order.lines === 'object') {
+        // If it's an object but not array, ensure it's array
+        lines = Array.isArray(order.lines) ? order.lines : [];
+      }
+    } catch (e) {
+      console.error('[ORDERS] Error parsing lines for order', id, e);
+      lines = [];
+    }
+    
+    res.json({
+      ...order,
+      lines: lines,
+      // Also add items alias for frontend compatibility
+      items: lines
+    });
   } catch (e) { 
     console.error('[ORDERS] Error getting order:', e);
     res.json(null); 
