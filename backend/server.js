@@ -3282,9 +3282,11 @@ async function handleSaveDraft(req, res) {
     const order_id = b.order_id ? Number(b.order_id) : null;
     
     // Handle both 'lines' and 'items' - frontend may send either
-    const lines = Array.isArray(b.lines) ? b.lines : (Array.isArray(b.items) ? b.items : []);
+    // If lines is already in the correct format (with type), use it
+    // Otherwise, if items is provided, convert it to the correct format
+    let rawLines = Array.isArray(b.lines) ? b.lines : (Array.isArray(b.items) ? b.items : []);
     
-    console.log(`[POS] saveDraft - branch=${branch}, table=${table_code}, order_id=${order_id}, lines_count=${lines.length}`);
+    console.log(`[POS] saveDraft - branch=${branch}, table=${table_code}, order_id=${order_id}, raw_lines_count=${rawLines.length}`);
     console.log(`[POS] saveDraft - Full payload:`, JSON.stringify({
       branch: b.branch,
       table: b.table,
@@ -3294,17 +3296,66 @@ async function handleSaveDraft(req, res) {
       items_count: Array.isArray(b.items) ? b.items.length : 0
     }));
     
-    // Ensure lines is a valid array - be more lenient with validation
-    // Accept any non-null item with at least one of: id, product_id, name, or any property
-    const cleanedLines = Array.isArray(lines) ? lines.filter(line => {
-      if (!line || typeof line !== 'object') return false;
-      // Accept if has id, product_id, name, or any numeric/string property
-      return !!(line.id || line.product_id || line.name || Object.keys(line).length > 0);
-    }) : [];
+    // Build lines array in the format expected by frontend:
+    // - Each item should have type: 'item'
+    // - One meta object with type: 'meta' containing branch, table, customer info, etc.
+    const linesArray = [];
     
-    console.log(`[POS] saveDraft - Cleaned lines: ${cleanedLines.length} items`);
-    if (cleanedLines.length > 0) {
-      console.log(`[POS] saveDraft - Sample line:`, JSON.stringify(cleanedLines[0]).substring(0, 200));
+    // Add meta object
+    const meta = {
+      type: 'meta',
+      branch: branch,
+      table: table_code,
+      customer_name: b.customerName || b.customer_name || '',
+      customer_phone: b.customerPhone || b.customer_phone || '',
+      customerId: b.customerId || null,
+      discountPct: Number(b.discountPct || b.discount_pct || 0),
+      taxPct: Number(b.taxPct || b.tax_pct || 15),
+      paymentMethod: b.paymentMethod || b.payment_method || '',
+      payLines: Array.isArray(b.payLines) ? b.payLines : []
+    };
+    linesArray.push(meta);
+    
+    // Process items - check if they already have type: 'item'
+    const items = Array.isArray(rawLines) ? rawLines : [];
+    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      
+      // If item already has type: 'item', use it as-is
+      if (item.type === 'item') {
+        linesArray.push(item);
+        continue;
+      }
+      
+      // If item has type: 'meta', skip it (we already have meta)
+      if (item.type === 'meta') {
+        continue;
+      }
+      
+      // Convert plain item to format with type: 'item'
+      const convertedItem = {
+        type: 'item',
+        product_id: item.id || item.product_id || null,
+        id: item.id || item.product_id || null,
+        name: item.name || '',
+        qty: Number(item.quantity || item.qty || 0),
+        quantity: Number(item.quantity || item.qty || 0),
+        price: Number(item.price || 0),
+        discount: Number(item.discount || 0)
+      };
+      
+      // Only add if it has valid product_id or name
+      if (convertedItem.product_id || convertedItem.name) {
+        linesArray.push(convertedItem);
+      }
+    }
+    
+    console.log(`[POS] saveDraft - Converted lines: ${linesArray.length} items (1 meta + ${linesArray.length - 1} items)`);
+    if (linesArray.length > 1) {
+      const sampleItem = linesArray.find(l => l.type === 'item');
+      if (sampleItem) {
+        console.log(`[POS] saveDraft - Sample item:`, JSON.stringify(sampleItem).substring(0, 200));
+      }
     }
     
     // Validate branch and table_code before insert
@@ -3314,7 +3365,7 @@ async function handleSaveDraft(req, res) {
     }
     
     // For PostgreSQL JSONB, we'll use JSON.stringify
-    const linesJson = JSON.stringify(cleanedLines);
+    const linesJson = JSON.stringify(linesArray);
     
     if (order_id) {
       // Update existing order
@@ -3333,7 +3384,7 @@ async function handleSaveDraft(req, res) {
       console.log(`[POS] saveDraft - Updated order ${order_id}, lines type:`, typeof order?.lines);
       
       // Parse lines back for response
-      let parsedLines = cleanedLines;
+      let parsedLines = linesArray;
       if (order && order.lines) {
         if (Array.isArray(order.lines)) {
           parsedLines = order.lines;
@@ -3371,7 +3422,7 @@ async function handleSaveDraft(req, res) {
     console.log(`[POS] saveDraft - SUCCESS - Created order ${order.id}, lines type:`, typeof order?.lines);
     
     // Parse lines back for response
-    let parsedLines = cleanedLines;
+    let parsedLines = linesArray;
     if (order && order.lines) {
       if (Array.isArray(order.lines)) {
         parsedLines = order.lines;
