@@ -219,16 +219,77 @@ async function ensureSchema() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS employees (
         id SERIAL PRIMARY KEY,
+        full_name TEXT,
         first_name TEXT,
         last_name TEXT,
+        national_id TEXT,
+        nationality TEXT DEFAULT 'SA',
+        birth_date DATE,
+        gender TEXT,
         employee_number TEXT,
         status TEXT DEFAULT 'active',
         phone TEXT,
         email TEXT,
+        hire_date DATE,
+        contract_type TEXT DEFAULT 'full_time',
+        contract_duration_months INTEGER,
+        probation_days INTEGER DEFAULT 90,
+        pay_type TEXT DEFAULT 'monthly',
+        hourly_rate NUMERIC(18,4) DEFAULT 0,
+        basic_salary NUMERIC(18,2) DEFAULT 0,
+        housing_allowance NUMERIC(18,2) DEFAULT 0,
+        transport_allowance NUMERIC(18,2) DEFAULT 0,
+        other_allowances NUMERIC(18,2) DEFAULT 0,
+        payment_method TEXT DEFAULT 'bank',
+        iban TEXT,
+        gosi_subscription_no TEXT,
+        gosi_enrolled BOOLEAN DEFAULT false,
+        gosi_employee_rate NUMERIC(5,4) DEFAULT 0.09,
+        gosi_employer_rate NUMERIC(5,4) DEFAULT 0.11,
+        gosi_enroll_date DATE,
+        gosi_status TEXT,
+        mudad_contract_id TEXT,
+        mudad_status TEXT,
+        mudad_last_sync TIMESTAMP WITH TIME ZONE,
+        department TEXT,
+        payroll_expense_account_code TEXT DEFAULT '5210',
+        gosi_liability_account_code TEXT DEFAULT '2120',
+        payroll_payable_account_code TEXT DEFAULT '2130',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Add new columns if they don't exist (for existing databases)
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS full_name TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS national_id TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS nationality TEXT DEFAULT 'SA'`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS birth_date DATE`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gender TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS hire_date DATE`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS contract_type TEXT DEFAULT 'full_time'`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS contract_duration_months INTEGER`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS probation_days INTEGER DEFAULT 90`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS pay_type TEXT DEFAULT 'monthly'`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS hourly_rate NUMERIC(18,4) DEFAULT 0`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS basic_salary NUMERIC(18,2) DEFAULT 0`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS housing_allowance NUMERIC(18,2) DEFAULT 0`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS transport_allowance NUMERIC(18,2) DEFAULT 0`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS other_allowances NUMERIC(18,2) DEFAULT 0`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS payment_method TEXT DEFAULT 'bank'`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS iban TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gosi_subscription_no TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gosi_enrolled BOOLEAN DEFAULT false`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gosi_employee_rate NUMERIC(5,4) DEFAULT 0.09`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gosi_employer_rate NUMERIC(5,4) DEFAULT 0.11`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gosi_enroll_date DATE`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gosi_status TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS mudad_contract_id TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS mudad_status TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS mudad_last_sync TIMESTAMP WITH TIME ZONE`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS department TEXT`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS payroll_expense_account_code TEXT DEFAULT '5210'`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS gosi_liability_account_code TEXT DEFAULT '2120'`);
+    await pool.query(`ALTER TABLE employees ADD COLUMN IF NOT EXISTS payroll_payable_account_code TEXT DEFAULT '2130'`);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS expenses (
         id SERIAL PRIMARY KEY,
@@ -2252,58 +2313,205 @@ app.delete("/api/partners/:id", authenticateToken, authorize("clients","delete")
 
 app.get("/employees", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, first_name, last_name, employee_number, status, phone, email, created_at FROM employees ORDER BY id DESC');
+    const { rows } = await pool.query(`
+      SELECT id, full_name, first_name, last_name, national_id, nationality, birth_date, gender, 
+             employee_number, status, phone, email, hire_date, contract_type, contract_duration_months, 
+             probation_days, pay_type, hourly_rate, basic_salary, housing_allowance, transport_allowance, 
+             other_allowances, payment_method, iban, gosi_subscription_no, gosi_enrolled, 
+             gosi_employee_rate, gosi_employer_rate, gosi_enroll_date, gosi_status, mudad_contract_id, 
+             mudad_status, mudad_last_sync, department, payroll_expense_account_code, 
+             gosi_liability_account_code, payroll_payable_account_code, created_at, updated_at 
+      FROM employees 
+      ORDER BY id DESC
+    `);
     res.json(rows || []);
-  } catch (e) { res.json([]); }
+  } catch (e) { 
+    console.error('[EMPLOYEES] Error listing:', e);
+    res.json([]); 
+  }
 });
 app.get("/api/employees", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, first_name, last_name, employee_number, status, phone, email, created_at FROM employees ORDER BY id DESC');
+    const { rows } = await pool.query(`
+      SELECT id, full_name, first_name, last_name, national_id, nationality, birth_date, gender, 
+             employee_number, status, phone, email, hire_date, contract_type, contract_duration_months, 
+             probation_days, pay_type, hourly_rate, basic_salary, housing_allowance, transport_allowance, 
+             other_allowances, payment_method, iban, gosi_subscription_no, gosi_enrolled, 
+             gosi_employee_rate, gosi_employer_rate, gosi_enroll_date, gosi_status, mudad_contract_id, 
+             mudad_status, mudad_last_sync, department, payroll_expense_account_code, 
+             gosi_liability_account_code, payroll_payable_account_code, created_at, updated_at 
+      FROM employees 
+      ORDER BY id DESC
+    `);
     res.json(rows || []);
-  } catch (e) { res.json([]); }
+  } catch (e) { 
+    console.error('[EMPLOYEES] Error listing:', e);
+    res.json([]); 
+  }
 });
-app.post("/employees", authenticateToken, authorize("employees","create"), async (req, res) => {
+async function handleCreateEmployee(req, res) {
   try {
+    console.log('[EMPLOYEE] Creating employee | userId=', req.user?.id, 'email=', req.user?.email);
     const b = req.body || {};
-    const { rows } = await pool.query(
-      'INSERT INTO employees(first_name,last_name,employee_number,status,phone,email) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
-      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||'active', b.phone||null, b.email||null]
-    );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.post("/api/employees", authenticateToken, authorize("employees","create"), async (req, res) => {
-  try {
-    const b = req.body || {};
-    const { rows } = await pool.query(
-      'INSERT INTO employees(first_name,last_name,employee_number,status,phone,email) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
-      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||'active', b.phone||null, b.email||null]
-    );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.put("/employees/:id", authenticateToken, authorize("employees","edit"), async (req, res) => {
+    console.log('[EMPLOYEE BODY]', JSON.stringify({ 
+      full_name: b.full_name, 
+      national_id: b.national_id, 
+      employee_number: b.employee_number,
+      basic_salary: b.basic_salary,
+      housing_allowance: b.housing_allowance,
+      status: b.status 
+    }));
+    
+    // Generate employee_number if not provided
+    let empNumber = b.employee_number;
+    if (!empNumber || String(empNumber).trim() === '') {
+      const { rows: lastEmp } = await pool.query('SELECT employee_number FROM employees WHERE employee_number IS NOT NULL AND employee_number != \'\' ORDER BY id DESC LIMIT 1');
+      const lastNum = lastEmp && lastEmp[0] ? String(lastEmp[0].employee_number||'').replace(/[^0-9]/g, '') : '';
+      const nextNum = lastNum ? String(Number(lastNum) + 1).padStart(6, '0') : '000001';
+      empNumber = `EMP${nextNum}`;
+    }
+    
+    // Split full_name into first_name and last_name if not provided
+    let firstName = b.first_name;
+    let lastName = b.last_name;
+    if (!firstName || !lastName) {
+      const fullName = String(b.full_name||'').trim();
+      const parts = fullName.split(/\s+/).filter(p => p);
+      if (parts.length > 0) {
+        firstName = firstName || parts[0];
+        lastName = lastName || parts.slice(1).join(' ') || parts[0];
+      }
+    }
+    
+    const { rows } = await pool.query(`
+      INSERT INTO employees(
+        full_name, first_name, last_name, national_id, nationality, birth_date, gender,
+        employee_number, status, phone, email, hire_date, contract_type, contract_duration_months,
+        probation_days, pay_type, hourly_rate, basic_salary, housing_allowance, transport_allowance,
+        other_allowances, payment_method, iban, gosi_subscription_no, gosi_enrolled,
+        gosi_employee_rate, gosi_employer_rate, gosi_enroll_date, gosi_status, mudad_contract_id,
+        mudad_status, mudad_last_sync, department, payroll_expense_account_code,
+        gosi_liability_account_code, payroll_payable_account_code
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
+        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36
+      ) RETURNING id, full_name, first_name, last_name, national_id, nationality, birth_date, gender,
+        employee_number, status, phone, email, hire_date, contract_type, contract_duration_months,
+        probation_days, pay_type, hourly_rate, basic_salary, housing_allowance, transport_allowance,
+        other_allowances, payment_method, iban, gosi_subscription_no, gosi_enrolled,
+        gosi_employee_rate, gosi_employer_rate, gosi_enroll_date, gosi_status, mudad_contract_id,
+        mudad_status, mudad_last_sync, department, payroll_expense_account_code,
+        gosi_liability_account_code, payroll_payable_account_code, created_at, updated_at
+    `, [
+      b.full_name||null, firstName||null, lastName||null, b.national_id||null, b.nationality||'SA',
+      b.birth_date||null, b.gender||null, empNumber, b.status||'active', b.phone||null, b.email||null,
+      b.hire_date||null, b.contract_type||'full_time', (b.contract_duration_months!=null?Number(b.contract_duration_months):null),
+      (b.probation_days!=null?Number(b.probation_days):90), b.pay_type||'monthly',
+      (b.hourly_rate!=null?Number(b.hourly_rate):null), (b.basic_salary!=null?Number(b.basic_salary):null),
+      (b.housing_allowance!=null?Number(b.housing_allowance):null), (b.transport_allowance!=null?Number(b.transport_allowance):null),
+      (b.other_allowances!=null?Number(b.other_allowances):null), b.payment_method||'bank', b.iban||null,
+      b.gosi_subscription_no||null, (b.gosi_enrolled!==undefined?Boolean(b.gosi_enrolled):false),
+      (b.gosi_employee_rate!=null?Number(b.gosi_employee_rate):0.09), (b.gosi_employer_rate!=null?Number(b.gosi_employer_rate):0.11),
+      b.gosi_enroll_date||null, b.gosi_status||null, b.mudad_contract_id||null, b.mudad_status||null,
+      b.mudad_last_sync||null, b.department||null, b.payroll_expense_account_code||'5210',
+      b.gosi_liability_account_code||'2120', b.payroll_payable_account_code||'2130'
+    ]);
+    
+    console.log('[EMPLOYEE] SUCCESS | id=', rows?.[0]?.id);
+    res.status(201).json(rows && rows[0]);
+  } catch (e) { 
+    console.error('[EMPLOYEE ERROR]', e);
+    console.error('[EMPLOYEE ERROR STACK]', e?.stack);
+    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  }
+}
+app.post("/employees", authenticateToken, authorize("employees","create"), handleCreateEmployee);
+app.post("/api/employees", authenticateToken, authorize("employees","create"), handleCreateEmployee);
+async function handleUpdateEmployee(req, res) {
   try {
     const id = Number(req.params.id||0);
     const b = req.body || {};
-    const { rows } = await pool.query(
-      'UPDATE employees SET first_name=COALESCE($1,first_name), last_name=COALESCE($2,last_name), employee_number=COALESCE($3,employee_number), status=COALESCE($4,status), phone=COALESCE($5,phone), email=COALESCE($6,email), updated_at=NOW() WHERE id=$7 RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
-      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||null, b.phone||null, b.email||null, id]
-    );
+    
+    // Split full_name into first_name and last_name if full_name is provided but first/last are not
+    let firstName = b.first_name;
+    let lastName = b.last_name;
+    if (b.full_name && (!firstName || !lastName)) {
+      const fullName = String(b.full_name||'').trim();
+      const parts = fullName.split(/\s+/).filter(p => p);
+      if (parts.length > 0) {
+        firstName = firstName || parts[0];
+        lastName = lastName || parts.slice(1).join(' ') || parts[0];
+      }
+    }
+    
+    const { rows } = await pool.query(`
+      UPDATE employees SET
+        full_name=COALESCE($1,full_name),
+        first_name=COALESCE($2,first_name),
+        last_name=COALESCE($3,last_name),
+        national_id=COALESCE($4,national_id),
+        nationality=COALESCE($5,nationality),
+        birth_date=COALESCE($6,birth_date),
+        gender=COALESCE($7,gender),
+        employee_number=COALESCE($8,employee_number),
+        status=COALESCE($9,status),
+        phone=COALESCE($10,phone),
+        email=COALESCE($11,email),
+        hire_date=COALESCE($12,hire_date),
+        contract_type=COALESCE($13,contract_type),
+        contract_duration_months=COALESCE($14,contract_duration_months),
+        probation_days=COALESCE($15,probation_days),
+        pay_type=COALESCE($16,pay_type),
+        hourly_rate=COALESCE($17,hourly_rate),
+        basic_salary=COALESCE($18,basic_salary),
+        housing_allowance=COALESCE($19,housing_allowance),
+        transport_allowance=COALESCE($20,transport_allowance),
+        other_allowances=COALESCE($21,other_allowances),
+        payment_method=COALESCE($22,payment_method),
+        iban=COALESCE($23,iban),
+        gosi_subscription_no=COALESCE($24,gosi_subscription_no),
+        gosi_enrolled=COALESCE($25,gosi_enrolled),
+        gosi_employee_rate=COALESCE($26,gosi_employee_rate),
+        gosi_employer_rate=COALESCE($27,gosi_employer_rate),
+        gosi_enroll_date=COALESCE($28,gosi_enroll_date),
+        gosi_status=COALESCE($29,gosi_status),
+        mudad_contract_id=COALESCE($30,mudad_contract_id),
+        mudad_status=COALESCE($31,mudad_status),
+        mudad_last_sync=COALESCE($32,mudad_last_sync),
+        department=COALESCE($33,department),
+        payroll_expense_account_code=COALESCE($34,payroll_expense_account_code),
+        gosi_liability_account_code=COALESCE($35,gosi_liability_account_code),
+        payroll_payable_account_code=COALESCE($36,payroll_payable_account_code),
+        updated_at=NOW()
+      WHERE id=$37
+      RETURNING id, full_name, first_name, last_name, national_id, nationality, birth_date, gender,
+        employee_number, status, phone, email, hire_date, contract_type, contract_duration_months,
+        probation_days, pay_type, hourly_rate, basic_salary, housing_allowance, transport_allowance,
+        other_allowances, payment_method, iban, gosi_subscription_no, gosi_enrolled,
+        gosi_employee_rate, gosi_employer_rate, gosi_enroll_date, gosi_status, mudad_contract_id,
+        mudad_status, mudad_last_sync, department, payroll_expense_account_code,
+        gosi_liability_account_code, payroll_payable_account_code, created_at, updated_at
+    `, [
+      b.full_name||null, firstName||null, lastName||null, b.national_id||null, b.nationality||null,
+      b.birth_date||null, b.gender||null, b.employee_number||null, b.status||null, b.phone||null,
+      b.email||null, b.hire_date||null, b.contract_type||null, (b.contract_duration_months!=null?Number(b.contract_duration_months):null),
+      (b.probation_days!=null?Number(b.probation_days):null), b.pay_type||null, (b.hourly_rate!=null?Number(b.hourly_rate):null),
+      (b.basic_salary!=null?Number(b.basic_salary):null), (b.housing_allowance!=null?Number(b.housing_allowance):null),
+      (b.transport_allowance!=null?Number(b.transport_allowance):null), (b.other_allowances!=null?Number(b.other_allowances):null),
+      b.payment_method||null, b.iban||null, b.gosi_subscription_no||null, (b.gosi_enrolled!==undefined?Boolean(b.gosi_enrolled):null),
+      (b.gosi_employee_rate!=null?Number(b.gosi_employee_rate):null), (b.gosi_employer_rate!=null?Number(b.gosi_employer_rate):null),
+      b.gosi_enroll_date||null, b.gosi_status||null, b.mudad_contract_id||null, b.mudad_status||null,
+      b.mudad_last_sync||null, b.department||null, b.payroll_expense_account_code||null,
+      b.gosi_liability_account_code||null, b.payroll_payable_account_code||null, id
+    ]);
     res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.put("/api/employees/:id", authenticateToken, authorize("employees","edit"), async (req, res) => {
-  try {
-    const id = Number(req.params.id||0);
-    const b = req.body || {};
-    const { rows } = await pool.query(
-      'UPDATE employees SET first_name=COALESCE($1,first_name), last_name=COALESCE($2,last_name), employee_number=COALESCE($3,employee_number), status=COALESCE($4,status), phone=COALESCE($5,phone), email=COALESCE($6,email), updated_at=NOW() WHERE id=$7 RETURNING id, first_name, last_name, employee_number, status, phone, email, created_at',
-      [b.first_name||null, b.last_name||null, b.employee_number||null, b.status||null, b.phone||null, b.email||null, id]
-    );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
+  } catch (e) { 
+    console.error('[EMPLOYEE] Error updating:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  }
+}
+app.put("/employees/:id", authenticateToken, authorize("employees","edit"), handleUpdateEmployee);
+app.put("/api/employees/:id", authenticateToken, authorize("employees","edit"), handleUpdateEmployee);
 app.delete("/employees/:id", authenticateToken, authorize("employees","delete"), async (req, res) => {
   try {
     const id = Number(req.params.id||0);
