@@ -3264,26 +3264,56 @@ app.post("/api/pos/issueInvoice", authenticateToken, authorize("sales","create",
 // POS Save Draft - both paths for compatibility
 async function handleSaveDraft(req, res) {
   try {
+    console.log('[POS] saveDraft - Request received | userId=', req.user?.id, 'email=', req.user?.email);
     const b = req.body || {};
-    const branch = b.branch || req.user?.default_branch || 'china_town';
+    
+    // Normalize branch - handle variations like 'palace_india' -> 'place_india'
+    let branch = b.branch || req.user?.default_branch || 'china_town';
+    if (branch) {
+      const branchLower = String(branch).toLowerCase().replace(/\s+/g, '_');
+      if (branchLower === 'palace_india' || branchLower === 'palce_india') {
+        branch = 'place_india';
+      } else {
+        branch = branchLower;
+      }
+    }
+    
     const table_code = b.table || b.table_code || null;
+    const order_id = b.order_id ? Number(b.order_id) : null;
+    
     // Handle both 'lines' and 'items' - frontend may send either
     const lines = Array.isArray(b.lines) ? b.lines : (Array.isArray(b.items) ? b.items : []);
-    const order_id = b.order_id || null;
     
-    console.log(`[POS] saveDraft - branch=${branch}, table=${table_code}, order_id=${order_id}`);
-    console.log(`[POS] saveDraft - Received lines/items:`, Array.isArray(lines) ? `${lines.length} items` : 'not array', lines);
+    console.log(`[POS] saveDraft - branch=${branch}, table=${table_code}, order_id=${order_id}, lines_count=${lines.length}`);
+    console.log(`[POS] saveDraft - Full payload:`, JSON.stringify({
+      branch: b.branch,
+      table: b.table,
+      table_code: b.table_code,
+      order_id: b.order_id,
+      lines_count: Array.isArray(b.lines) ? b.lines.length : 0,
+      items_count: Array.isArray(b.items) ? b.items.length : 0
+    }));
     
-    // Ensure lines is a valid array
-    const cleanedLines = Array.isArray(lines) ? lines.filter(line => line && (line.id || line.product_id || line.name)) : [];
+    // Ensure lines is a valid array - be more lenient with validation
+    // Accept any non-null item with at least one of: id, product_id, name, or any property
+    const cleanedLines = Array.isArray(lines) ? lines.filter(line => {
+      if (!line || typeof line !== 'object') return false;
+      // Accept if has id, product_id, name, or any numeric/string property
+      return !!(line.id || line.product_id || line.name || Object.keys(line).length > 0);
+    }) : [];
     
     console.log(`[POS] saveDraft - Cleaned lines: ${cleanedLines.length} items`);
     if (cleanedLines.length > 0) {
       console.log(`[POS] saveDraft - Sample line:`, JSON.stringify(cleanedLines[0]).substring(0, 200));
     }
     
-    // For PostgreSQL JSONB, we can pass the array directly - PostgreSQL handles it
-    // But to be safe, we'll use JSON.stringify
+    // Validate branch and table_code before insert
+    if (!branch || String(branch).trim() === '') {
+      console.error('[POS] saveDraft - Invalid branch:', branch);
+      return res.status(400).json({ error: "invalid_branch", details: "Branch is required" });
+    }
+    
+    // For PostgreSQL JSONB, we'll use JSON.stringify
     const linesJson = JSON.stringify(cleanedLines);
     
     if (order_id) {
@@ -3294,34 +3324,51 @@ async function handleSaveDraft(req, res) {
         [linesJson, order_id]
       );
       const order = rows && rows[0];
-      console.log(`[POS] saveDraft - Updated order ${order_id}, lines type after update:`, typeof order?.lines);
       
-      // Parse lines back for response - PostgreSQL JSONB returns as object
+      if (!order) {
+        console.error(`[POS] saveDraft - Order ${order_id} not found`);
+        return res.status(404).json({ error: "not_found", details: `Order ${order_id} not found` });
+      }
+      
+      console.log(`[POS] saveDraft - Updated order ${order_id}, lines type:`, typeof order?.lines);
+      
+      // Parse lines back for response
       let parsedLines = cleanedLines;
       if (order && order.lines) {
         if (Array.isArray(order.lines)) {
           parsedLines = order.lines;
         } else if (typeof order.lines === 'string') {
           try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = cleanedLines; }
+        } else if (typeof order.lines === 'object') {
+          // PostgreSQL JSONB may return as object - convert to array if possible
+          parsedLines = Array.isArray(order.lines) ? order.lines : cleanedLines;
         }
       }
       
-      console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for order ${order_id}`);
+      console.log(`[POS] saveDraft - SUCCESS - Updated order ${order_id}, returning ${parsedLines.length} lines`);
       return res.json({
         ...order,
         lines: parsedLines,
-        items: parsedLines
+        items: parsedLines,
+        order_id: order.id
       });
     }
     
     // Create new order
-    console.log(`[POS] saveDraft - Creating new order`);
+    console.log(`[POS] saveDraft - Creating new order for branch=${branch}, table=${table_code}`);
+    
     const { rows } = await pool.query(
-      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3::jsonb,$4) RETURNING id, branch, table_code, lines, status',
+      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3::jsonb,$4) RETURNING id, branch, table_code, lines, status, created_at',
       [branch, table_code, linesJson, 'DRAFT']
     );
     const order = rows && rows[0];
-    console.log(`[POS] saveDraft - Created order ${order?.id}, lines type:`, typeof order?.lines);
+    
+    if (!order || !order.id) {
+      console.error('[POS] saveDraft - Failed to create order - no ID returned');
+      return res.status(500).json({ error: "create_failed", details: "Failed to create order" });
+    }
+    
+    console.log(`[POS] saveDraft - SUCCESS - Created order ${order.id}, lines type:`, typeof order?.lines);
     
     // Parse lines back for response
     let parsedLines = cleanedLines;
@@ -3330,20 +3377,25 @@ async function handleSaveDraft(req, res) {
         parsedLines = order.lines;
       } else if (typeof order.lines === 'string') {
         try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = cleanedLines; }
+      } else if (typeof order.lines === 'object') {
+        parsedLines = Array.isArray(order.lines) ? order.lines : cleanedLines;
       }
     }
     
-    console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for new order ${order?.id}`);
+    console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for new order ${order.id}`);
     res.json({
       ...order,
       lines: parsedLines,
       items: parsedLines,
-      order_id: order?.id || null
+      order_id: order.id
     });
   } catch (e) { 
     console.error('[POS] saveDraft error:', e);
+    console.error('[POS] saveDraft error message:', e?.message);
     console.error('[POS] saveDraft error stack:', e?.stack);
-    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+    console.error('[POS] saveDraft error code:', e?.code);
+    console.error('[POS] saveDraft error detail:', e?.detail);
+    res.status(500).json({ error: "server_error", details: e?.message||"unknown", code: e?.code, detail: e?.detail }); 
   }
 }
 app.post("/api/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
