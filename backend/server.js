@@ -2813,16 +2813,8 @@ app.post("/pos/verify-cancel", authenticateToken, handleVerifyCancel);
 app.post("/api/pos/verify-cancel", authenticateToken, handleVerifyCancel);
 
 // Legacy saveDraft - kept for compatibility
-app.post("/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
-  try {
-    const b = req.body || {};
-    const branch = b.branch || req.user?.default_branch || 'china_town';
-    const table_code = String(b.table || b.table_code || '');
-    const lines = Array.isArray(b.lines) ? b.lines : [];
-    const { rows } = await pool.query('INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status', [branch, table_code, lines, 'DRAFT']);
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
+// Legacy /pos/saveDraft endpoint - delegate to handleSaveDraft for consistency
+app.post("/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
 // ============================================================================
 // ACCOUNTING HELPER FUNCTIONS
 // ============================================================================
