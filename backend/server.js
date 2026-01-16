@@ -2354,44 +2354,121 @@ app.get("/invoice_items/:id", authenticateToken, authorize("sales","view"), asyn
     res.json({ items: Array.isArray(lines) ? lines : [] });
   } catch (e) { res.json({ items: [] }); }
 });
-app.get("/orders", authenticateToken, authorize("sales","view"), async (req, res) => {
+// Orders API - both /orders and /api/orders paths
+async function handleGetOrders(req, res) {
   try {
-    const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, created_at FROM orders ORDER BY id DESC');
-    res.json(rows || []);
-  } catch (e) { res.json([]); }
-});
-app.get("/orders/:id", authenticateToken, authorize("sales","view"), async (req, res) => {
+    const branch = req.query?.branch || null;
+    const table = req.query?.table || null;
+    const status = req.query?.status || null;
+    let query = 'SELECT id, branch, table_code, lines, status, created_at FROM orders WHERE 1=1';
+    const params = [];
+    let paramIndex = 1;
+    
+    if (branch) {
+      query += ` AND branch = $${paramIndex}`;
+      params.push(branch);
+      paramIndex++;
+    }
+    if (table) {
+      query += ` AND table_code = $${paramIndex}`;
+      params.push(table);
+      paramIndex++;
+    }
+    if (status) {
+      const statuses = status.split(',').map(s => s.trim().toUpperCase());
+      query += ` AND status = ANY($${paramIndex})`;
+      params.push(statuses);
+      paramIndex++;
+    }
+    query += ' ORDER BY id DESC';
+    
+    const { rows } = await pool.query(query, params);
+    // Parse lines from JSON string to array
+    const orders = (rows || []).map(order => {
+      if (order.lines && typeof order.lines === 'string') {
+        try {
+          order.lines = JSON.parse(order.lines);
+        } catch {}
+      }
+      return order;
+    });
+    res.json(orders);
+  } catch (e) { 
+    console.error('[ORDERS] Error listing orders:', e);
+    res.json([]); 
+  }
+}
+app.get("/orders", authenticateToken, authorize("sales","view"), handleGetOrders);
+app.get("/api/orders", authenticateToken, authorize("sales","view"), handleGetOrders);
+
+async function handleGetOrder(req, res) {
   try {
     const id = Number(req.params.id||0);
     const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, created_at FROM orders WHERE id=$1', [id]);
-    res.json(rows && rows[0] || null);
-  } catch (e) { res.json(null); }
-});
-app.post("/orders", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+    const order = rows && rows[0];
+    if (order && order.lines && typeof order.lines === 'string') {
+      try {
+        order.lines = JSON.parse(order.lines);
+      } catch {}
+    }
+    res.json(order || null);
+  } catch (e) { 
+    console.error('[ORDERS] Error getting order:', e);
+    res.json(null); 
+  }
+}
+app.get("/orders/:id", authenticateToken, authorize("sales","view"), handleGetOrder);
+app.get("/api/orders/:id", authenticateToken, authorize("sales","view"), handleGetOrder);
+
+async function handleCreateOrder(req, res) {
   try {
     const b = req.body || {};
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const table_code = String(b.table || b.table_code || '');
     const lines = Array.isArray(b.lines) ? b.lines : [];
-    const { rows } = await pool.query('INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status', [branch, table_code, lines, 'DRAFT']);
+    const { rows } = await pool.query('INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status', [branch, table_code, JSON.stringify(lines), 'DRAFT']);
     res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.put("/orders/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  } catch (e) { 
+    console.error('[ORDERS] Error creating order:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  }
+}
+app.post("/orders", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleCreateOrder);
+app.post("/api/orders", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleCreateOrder);
+
+async function handleUpdateOrder(req, res) {
   try {
     const id = Number(req.params.id||0);
     const b = req.body || {};
-    const { rows } = await pool.query('UPDATE orders SET branch=COALESCE($1,branch), table_code=COALESCE($2,table_code), lines=COALESCE($3,lines), status=COALESCE($4,status), updated_at=NOW() WHERE id=$5 RETURNING id, branch, table_code, status', [b.branch||null, (b.table||b.table_code||null), (Array.isArray(b.lines)?b.lines:null), b.status||null, id]);
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.delete("/orders/:id", authenticateToken, authorize("sales","delete"), async (req, res) => {
+    const lines = Array.isArray(b.lines) ? JSON.stringify(b.lines) : (b.lines || null);
+    const { rows } = await pool.query('UPDATE orders SET branch=COALESCE($1,branch), table_code=COALESCE($2,table_code), lines=COALESCE($3,lines), status=COALESCE($4,status), updated_at=NOW() WHERE id=$5 RETURNING id, branch, table_code, lines, status', [b.branch||null, (b.table||b.table_code||null), lines, b.status||null, id]);
+    const order = rows && rows[0];
+    if (order && order.lines && typeof order.lines === 'string') {
+      try {
+        order.lines = JSON.parse(order.lines);
+      } catch {}
+    }
+    res.json(order);
+  } catch (e) { 
+    console.error('[ORDERS] Error updating order:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  }
+}
+app.put("/orders/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), handleUpdateOrder);
+app.put("/api/orders/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), handleUpdateOrder);
+
+async function handleDeleteOrder(req, res) {
   try {
     const id = Number(req.params.id||0);
     await pool.query('DELETE FROM orders WHERE id=$1', [id]);
     res.json({ ok: true, id });
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
+  } catch (e) { 
+    console.error('[ORDERS] Error deleting order:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  }
+}
+app.delete("/orders/:id", authenticateToken, authorize("sales","delete"), handleDeleteOrder);
+app.delete("/api/orders/:id", authenticateToken, authorize("sales","delete"), handleDeleteOrder);
 app.get("/payments", authenticateToken, authorize("sales","view"), async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT id, invoice_id, amount, method, date, branch, created_at FROM payments ORDER BY id DESC');
