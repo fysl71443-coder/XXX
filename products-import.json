@@ -1,0 +1,293 @@
+[
+  {
+    "section_name": "Appetizers",
+    "items": [
+      {"name": "Btr.fly prwn / ربينفراثة", "price": 41.74},
+      {"name": "Buternan / زبدة خبز", "price": 3.48},
+      {"name": "Feid wanton / ونتو مقلي", "price": 20.00},
+      {"name": "Fishcakes / كعلك االسماك", "price": 4.35},
+      {"name": "Fish finger / اصابع سمك", "price": 30.43},
+      {"name": "Frenchfry / بطاطسمغلي", "price": 12.17},
+      {"name": "Fried fish / ثمكمغلي", "price": 40.00},
+      {"name": "Fried prawns / ربينمقلي", "price": 41.74},
+      {"name": "Garlic nan / خبز ثوم", "price": 3.48},
+      {"name": "Gold.fri.prawns / ربيان مقلي زهبي", "price": 41.74},
+      {"name": "Homouse / حومس", "price": 10.43},
+      {"name": "Kaichai / كايساي", "price": 15.65},
+      {"name": "Mixeed app(L) / مقبلات مشكل", "price": 34.78},
+      {"name": "Mixeed app(M) / مقبلات مشكل", "price": 25.22},
+      {"name": "Plain nan / خبز عادي", "price": 0.87},
+      {"name": "Potato chope / ثوب بطاطس", "price": 3.48},
+      {"name": "Prwnballs / ربيان كرات", "price": 26.09},
+      {"name": "PrwnTempura / ربيان تمبورا", "price": 14.78},
+      {"name": "Prwn tost / توست ربين", "price": 24.35},
+      {"name": "Samusa / سمبوسا", "price": 0.87},
+      {"name": "Shrimpcoktail / كوكتيل ربيان", "price": 20.00},
+      {"name": "Springrolls / سبرنغ رول", "price": 15.65},
+      {"name": "Steamed sumai / عتي البحر", "price": 24.35},
+      {"name": "Tuna/Sami/ / كباتونثامي", "price": 4.35},
+      {"name": "Veg.cutlet / كتلت خضار", "price": 12.17},
+      {"name": "Veg tempura / خدر تمبور", "price": 13.91}
+    ]
+  },
+  {
+    "section_name": "BEEF & LAMB-لحم بقر وخروف",
+    "items": [
+      {"name": "Beef in black / لحم بقر فصوليا", "price": 38.26},
+      {"name": "Beef oyster / خروف محر", "price": 38.26},
+      {"name": "Beef rost / روست بقر", "price": 47.83},
+      {"name": "Beef steak / ستيك بقر", "price": 47.83},
+      {"name": "Chili beef / لحم بقر حار", "price": 38.26},
+      {"name": "Hunan bef / لحم هونان", "price": 38.26},
+      {"name": "Lambchop curry / ريث كري", "price": 41.74},
+      {"name": "Lamb&lek / خروف ليك", "price": 38.26},
+      {"name": "Lamb rost / روست غنم", "price": 47.83},
+      {"name": "Orng beef / لحم بقر بلتفو", "price": 38.26},
+      {"name": "S&s beef / لحم بقر حامض حلو", "price": 38.26}
+    ]
+  },
+  {
+    "section_name": "CHARCOLA GRILL / KEBABS- مشويـات",
+    "items": [
+      {"name": "Abdi Chicken Kebab / كباب دجاج عبدي", "price": 27.83},
+      {"name": "Afgani Chicken Kebab / كباب دجاج أفغاني", "price": 27.83},
+      {"name": "Angara Chicken Kebab / كباب دجاج أنجارا", "price": 38.26},
+      {"name": "Angara Mutton Kebab / كباب لحم الضأن أنجارا", "price": 38.26},
+      {"name": "Chicken Hariali Kebab / كباب دجاج هاريالي", "price": 38.26},
+      {"name": "Chicken Kalmi Kebab / كباب دجاج كالمي", "price": 38.26},
+      {"name": "Chicken Makmali Kebab / كباب دجاج مكملي", "price": 38.26},
+      {"name": "Chicken Malai Kebab / كباب دجاج مالاي", "price": 40.00},
+      {"name": "Chicken Sish kabab / ثيثكباب", "price": 38.26},
+      {"name": "Chicken Tangri Kebab / كباب دجاج تانجري", "price": 21.74},
+      {"name": "Chickntika(1/2) / دجاجتكا", "price": 27.83},
+      {"name": "Chickntika(ful) / دجاجتكا", "price": 40.00},
+      {"name": "Fish boti / سمك تكا", "price": 38.26},
+      {"name": "Fish Tikka / تكا السمك", "price": 38.26},
+      {"name": "Grilled Prawn / ربينمثوي", "price": 41.74},
+      {"name": "Grilwol fish(L) / سمك مثوي", "price": 69.57},
+      {"name": "Grilwol fish(M) / سمك مثوي", "price": 60.87},
+      {"name": "Lambchop / ريث غنم", "price": 41.74},
+      {"name": "Mixed gril / مثويمثكل", "price": 47.83},
+      {"name": "Mutton Hariali Kebab / كباب لحم الضأن هاريالي", "price": 38.26},
+      {"name": "Mutton Laziz Tikka / لحم ضأن لذيذ تيكا", "price": 40.00},
+      {"name": "Samrat kbab / ثمرت كباب", "price": 38.26}
+    ]
+  },
+  {
+    "section_name": "CHICKEN-دجـاج",
+    "items": [
+      {"name": "Chikngarlic / دجاج صلصة توم", "price": 38.26},
+      {"name": "Chkn 65 / دجاج", "price": 38.26},
+      {"name": "Chkn bmbo / دجاج بالفطر", "price": 38.26},
+      {"name": "Chkn chli onion / دجاج حار بابصل", "price": 38.26},
+      {"name": "Fried.ckn / دجاج مغلي", "price": 38.26},
+      {"name": "Kongpo chk / دجاج كونغبو", "price": 38.26},
+      {"name": "Manchurn chk / دجاج منتورين", "price": 38.26},
+      {"name": "Peking chk / دجاج بكين", "price": 38.26},
+      {"name": "Pineaple chk / دجاج اناناس", "price": 38.26},
+      {"name": "Sz.chili.ckn / دجاج سثون", "price": 38.26},
+      {"name": "Thai chkn / دجاج تاي", "price": 38.26}
+    ]
+  },
+  {
+    "section_name": "CHINESE SIZZLING-طبق ساخن",
+    "items": [
+      {"name": "Chk/bf balti/ / بلطي دجاج لحم", "price": 45.22},
+      {"name": "Duck sizling / سيزلنغ بط", "price": 50.43},
+      {"name": "Mix balti / مشك لبلتي", "price": 50.43},
+      {"name": "Prwn balti / روبن بلت", "price": 50.43},
+      {"name": "Seafood sizlng / سيزلنغ بحري", "price": 50.43},
+      {"name": "Sizling beef  / / سيزلنغ بقر غنم", "price": 45.22},
+      {"name": "Sizling chick / سيزلنغ دحاج", "price": 45.22},
+      {"name": "Sizling fish / سمك سيزلنغ", "price": 46.09},
+      {"name": "Sizling mixs / سيزلنغ مشكل", "price": 50.43},
+      {"name": "Sizling prwn / روبيان سيزلغن", "price": 50.43}
+    ]
+  },
+  {
+    "section_name": "Drinks",
+    "items": [
+      {"name": "Banana split / انقسم الموز", "price": 13.91},
+      {"name": "Champgn(L) / سعودي كوكتيل", "price": 50.43},
+      {"name": "Champgn(M) / سعودي كوكتيل", "price": 40.00},
+      {"name": "Champgn(S) / سعودي كوكتيل", "price": 20.00},
+      {"name": "Coca cola كوكا كولا", "price": 5.22},
+      {"name": "Cocktail juice / عصير كوكتيل", "price": 13.91},
+      {"name": "Fruit saladicecrem / سلطة فواكه", "price": 13.04},
+      {"name": "Fruit salad / سلطة فواكه", "price": 13.04},
+      {"name": "Ice cream", "price": 10.43},
+      {"name": "Iced tea(L) / شاي بارد", "price": 24.35},
+      {"name": "Iced tea(M) / شاي بارد", "price": 20.00},
+      {"name": "Iced tea(S) / شاي بارد", "price": 14.78},
+      {"name": "Orange juic / عصير برتقل", "price": 13.91},
+      {"name": "Pepsi بيبسي", "price": 5.22},
+      {"name": "Tea/coffee / شاي وقهوة", "price": 3.48},
+      {"name": "Water lrg / ماء كبير", "price": 4.35},
+      {"name": "Water sml / ماء صغير", "price": 1.74}
+    ]
+  },
+  {
+    "section_name": "HOUSE SPECIAL-مخصوص للبيت",
+    "items": [
+      {"name": "Duckrost / روست بط", "price": 52.17},
+      {"name": "Friduck / بط مقلي", "price": 50.43},
+      {"name": "King lobstr / امرربين كنج", "price": 100.00},
+      {"name": "Pekingduck / بط  كينج", "price": 50.43},
+      {"name": "R Tigr lobstr / امرربينرويلتاظر", "price": 180.00},
+      {"name": "Tiger lobstr / امرروبينتايظر", "price": 140.00},
+      {"name": "Whlsea lobstr / الرروبينهالسي", "price": 85.22}
+    ]
+  },
+  {
+    "section_name": "INDIAN DELICACY(CHICKEN)-دجاج هندي",
+    "items": [
+      {"name": "Bhuna / بونا", "price": 38.26},
+      {"name": "Btr chkn / دجاج بلزبدت", "price": 40.00},
+      {"name": "Btr dal / بتردال", "price": 26.96},
+      {"name": "Chikn curry / دجاج كري", "price": 38.26},
+      {"name": "Chkn 65 / دجاج", "price": 38.26},
+      {"name": "Chkn masala / دجاج ماسل", "price": 38.26},
+      {"name": "Chkn rost / دجاج روثت", "price": 38.26},
+      {"name": "Dal gosh", "price": 38.26},
+      {"name": "Fish curry / سمك كاري", "price": 38.26},
+      {"name": "Handi / هاندي", "price": 40.00},
+      {"name": "Karai / كراي", "price": 40.00},
+      {"name": "Korma / كورما", "price": 38.26},
+      {"name": "Lambchop curry / ريش كري", "price": 41.74},
+      {"name": "Muglai prwn / ربين مغلي", "price": 69.57},
+      {"name": "Muglai wlfish(L) / سمك مقلي كامل", "price": 69.57},
+      {"name": "Muglai wlfish(M) / سمك مقلي كامل", "price": 60.87},
+      {"name": "Prwn masala / روبيان مسالا", "price": 41.74},
+      {"name": "Tarka dal / عدس تاركا", "price": 26.09},
+      {"name": "Tikka masala / تكا مسالا", "price": 40.00}
+    ]
+  },
+  {
+    "section_name": "INDIAN DELICACY(FISH)-سمك هندي",
+    "items": [
+      {"name": "Fird wholfish (L) / سمك مغلي", "price": 69.57},
+      {"name": "Fird wholfish (M) / سمك مغلي", "price": 60.87},
+      {"name": "Fish ball / كراتسمك", "price": 40.00},
+      {"name": "Fish chi onion / سمك بصل محر", "price": 40.00},
+      {"name": "Fish inhotsauc / سمك سلسا حر", "price": 40.00},
+      {"name": "Fried fish / سمك مغلي", "price": 40.00},
+      {"name": "Sez fish / سمك سثون", "price": 40.00},
+      {"name": "Shanhi smokfish / سمك دوخنثنجي", "price": 40.00},
+      {"name": "S&S fish / سمك حمدحلو", "price": 40.00},
+      {"name": "Stmed fish / سمك البحر", "price": 41.74}
+    ]
+  },
+  {
+    "section_name": "INDIAN DELICACY(VEGETABLES)-خضروات هندية",
+    "items": [
+      {"name": "Alu motor / ألوماتور", "price": 27.83},
+      {"name": "Btr dal / بتردال", "price": 26.96},
+      {"name": "Chanamasal / ثانا مسالا", "price": 27.83},
+      {"name": "Kazu mtr / بازيلبل كاجو", "price": 27.83},
+      {"name": "Mix veg / خصر مشكل", "price": 30.43},
+      {"name": "Muglai veg / خضر مقلي", "price": 27.83},
+      {"name": "Okra masala / أوكر مسالا", "price": 27.83},
+      {"name": "Palak ponr / بلغبانير", "price": 27.83},
+      {"name": "Tarka dal / دالتاركا", "price": 26.09},
+      {"name": "Veg karai / خضركراي", "price": 34.78},
+      {"name": "Veg kofta / كفتخضار", "price": 27.83}
+    ]
+  },
+  {
+    "section_name": "NOODLES & CHOPSUEY- معكرونة",
+    "items": [
+      {"name": "Chickn noodl / مكرونة دجاج", "price": 27.83},
+      {"name": "Chinese chopsue / تثوبسويصيني", "price": 30.43},
+      {"name": "Fetucini ckn / فتوثينيدجاد", "price": 34.78},
+      {"name": "Mixd noodl / مكرونامثكل", "price": 30.43},
+      {"name": "Penne prwn / بانيروبين", "price": 40.00},
+      {"name": "Seafod noodl / نودلزبحريت", "price": 32.17},
+      {"name": "Stired noodls / مكرونتحفوقت", "price": 30.43},
+      {"name": "Sz noodls / مكرونتسثونحر", "price": 30.43},
+      {"name": "VEG NOODLES / مقارونخضر", "price": 24.34}
+    ]
+  },
+  {
+    "section_name": "PRAWNS-روبيـان",
+    "items": [
+      {"name": "Crbonshell / سلطونعليقزيف", "price": 47.83},
+      {"name": "Hunan prwn / روبينحونان", "price": 47.83},
+      {"name": "Mandarinpr / روبينمندرين", "price": 50.43},
+      {"name": "Monglianprwn / روبينمنغولي", "price": 47.83},
+      {"name": "Peking prwn / روبينبكين", "price": 47.83},
+      {"name": "Prwn garlic / روبينصلصتوم", "price": 45.22},
+      {"name": "Prwn musrum / روبينبلفطر", "price": 46.96},
+      {"name": "Prwn nut / روبينكاجو", "price": 50.43},
+      {"name": "Sp.mdrnprwn / روبينمندريتخاص", "price": 69.57},
+      {"name": "S&S prwn / روبينحامرحلو", "price": 47.83}
+    ]
+  },
+  {
+    "section_name": "RICE & BIRYANI-أرز & بريانـي",
+    "items": [
+      {"name": "Biriany rice / ارزبريني", "price": 18.26},
+      {"name": "chicken biryani / بيريانيدجاز", "price": 38.26},
+      {"name": "Chk frd rice / ورزمقليدجاج", "price": 26.09},
+      {"name": "Egg frd rice / ورزمغليبيض", "price": 24.35},
+      {"name": "Fetucini ckn / فتوثينيدجاد", "price": 34.78},
+      {"name": "Fish beriany / برينيثمك", "price": 38.26},
+      {"name": "Mixdstm rice / ارزمثكلمثكلبخر", "price": 30.43},
+      {"name": "Mixed frd rice / ارزمغليمثكل", "price": 30.43},
+      {"name": "Mutton briany / برينيخروف", "price": 38.26},
+      {"name": "Mutton kuzi / قوزيخروف", "price": 40.00},
+      {"name": "Penne prwn / بانيروبين", "price": 40.00},
+      {"name": "Prwn beriany / برينيروبين", "price": 40.00},
+      {"name": "Prwn frd rice / ارزمغليروبين", "price": 32.17},
+      {"name": "Steamd rice / ارزابيض", "price": 15.65},
+      {"name": "Stired noodls / مكرونتحفوقت", "price": 30.43},
+      {"name": "Veg beriany / برينيخضر", "price": 25.22},
+      {"name": "Veg.frd rice / ارزمقليخضر", "price": 24.35}
+    ]
+  },
+  {
+    "section_name": "SALADS",
+    "items": [
+      {"name": "Chickn/prwn mayo/ / سالتدحازربينبلميونيز", "price": 20.00},
+      {"name": "Fottous / فتوث", "price": 12.17},
+      {"name": "Grapleaves / ورقعنب", "price": 12.17},
+      {"name": "Greensald / ثلاتخصار", "price": 12.17},
+      {"name": "Hamouse / هاموس", "price": 10.43},
+      {"name": "Pangpang chik / دخازبانغبانغ", "price": 14.78},
+      {"name": "Prawnsalad / سلطتروبين", "price": 20.00},
+      {"name": "Rainbow salad / ثاطتقوسقز", "price": 14.78},
+      {"name": "Samrat sald / ثلاتسامرات", "price": 20.00},
+      {"name": "Sezchn.salad / سالتسثوان", "price": 18.26},
+      {"name": "Shrimpcoktail / كوكتيلربين", "price": 20.00},
+      {"name": "Tabbula / تبولت", "price": 12.17}
+    ]
+  },
+  {
+    "section_name": "SHAW FAW-شاو فاو",
+    "items": [
+      {"name": "Chicknsawfaw / ثوفودحاج", "price": 45.22},
+      {"name": "Prwn sawfaw / روبينثوفو", "price": 50.43},
+      {"name": "Seafood sawfaw / ثوفوبحري", "price": 50.43}
+    ]
+  },
+  {
+    "section_name": "SOUPS",
+    "items": [
+      {"name": "Chick lemon soupe, / ثوربتدجاجماليمون", "price": 26.09},
+      {"name": "Chine nodlesoup / ثوربتصينيمكارون", "price": 34.78},
+      {"name": "Corn soupe, / ثوربتدجاززرت", "price": 21.74},
+      {"name": "Cream of chick / ثوربتدحاجكريما", "price": 30.43},
+      {"name": "Dalsoup / ثوربتعدس", "price": 20.00},
+      {"name": "Duck soup / ثوربتبط", "price": 34.78},
+      {"name": "Hot&sour soup/ / ثوربتهوتهىساورتنين", "price": 21.74},
+      {"name": "H/Sbeancard / ثوربتبنكارد", "price": 21.74},
+      {"name": "lobstr soup / ثوربتامرروبين", "price": 85.22},
+      {"name": "Mixed ch soupe, / ثوربتصينيمثكلت", "price": 21.74},
+      {"name": "Prwn veg soupe, / ثوربتروبينخظر", "price": 26.09},
+      {"name": "Seafood soup / ثوربتبحري", "price": 30.43},
+      {"name": "Stm bt seafod soup / ثوربتبحريبوخاري", "price": 69.57},
+      {"name": "Thai soup / ثوربتتايلند", "price": 26.09},
+      {"name": "Tomium soup / ثوربتتومبام", "price": 30.43},
+      {"name": "Wantonsoup / ثوربتونطون", "price": 26.09}
+    ]
+  }
+]

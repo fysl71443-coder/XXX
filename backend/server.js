@@ -1502,6 +1502,185 @@ app.delete("/api/products/:id", authenticateToken, authorize("products", "delete
   }
 });
 
+// Bulk import products from sections/items structure
+app.post("/products/bulk-import", authenticateToken, authorize("products", "create"), async (req, res) => {
+  try {
+    const sections = Array.isArray(req.body) ? req.body : [];
+    if (sections.length === 0) {
+      return res.status(400).json({ error: "invalid_data", message: "Empty sections array" });
+    }
+
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let errors = [];
+
+    // Process each section
+    for (const section of sections) {
+      const sectionName = String(section.section_name || '').trim();
+      const items = Array.isArray(section.items) ? section.items : [];
+
+      if (!sectionName || items.length === 0) continue;
+
+      // Process each item in the section
+      for (const item of items) {
+        try {
+          const itemName = String(item.name || '').trim();
+          const itemPrice = Number(item.price || 0);
+
+          if (!itemName || itemPrice <= 0) {
+            errors.push({ item: itemName || 'unknown', error: 'Invalid name or price' });
+            continue;
+          }
+
+          // Parse name: "English / Arabic" format
+          let nameEn = '';
+          let nameAr = '';
+          const nameParts = itemName.split('/').map(s => s.trim()).filter(Boolean);
+          if (nameParts.length >= 2) {
+            nameEn = nameParts[0];
+            nameAr = nameParts.slice(1).join('/'); // Join remaining parts for Arabic
+          } else if (nameParts.length === 1) {
+            // If no separator, check if it's Arabic (contains Arabic characters)
+            const hasArabic = /[\u0600-\u06FF]/.test(nameParts[0]);
+            if (hasArabic) {
+              nameAr = nameParts[0];
+            } else {
+              nameEn = nameParts[0];
+            }
+          }
+
+          // Check if product already exists (by name)
+          const { rows: existing } = await pool.query(
+            'SELECT id FROM products WHERE name = $1 OR name_en = $2 LIMIT 1',
+            [nameAr || nameEn, nameEn || nameAr]
+          );
+
+          if (existing && existing[0]) {
+            // Update existing product
+            await pool.query(
+              `UPDATE products SET name=$1, name_en=$2, category=$3, price=$4, updated_at=NOW() WHERE id=$5`,
+              [nameAr || nameEn, nameEn || nameAr, sectionName, itemPrice, existing[0].id]
+            );
+            totalUpdated++;
+          } else {
+            // Create new product
+            await pool.query(
+              `INSERT INTO products(name, name_en, category, unit, price, cost, tax_rate, stock_quantity, min_stock, is_active) 
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+              [nameAr || nameEn, nameEn || nameAr, sectionName, 'unit', itemPrice, 0, 15, 0, 0, true]
+            );
+            totalCreated++;
+          }
+        } catch (itemError) {
+          console.error('[PRODUCTS] Error processing item:', item, itemError);
+          errors.push({ item: item.name || 'unknown', error: itemError?.message || 'unknown' });
+        }
+      }
+    }
+
+    console.log(`[PRODUCTS] Bulk import completed: ${totalCreated} created, ${totalUpdated} updated, ${errors.length} errors`);
+    res.json({ 
+      ok: true, 
+      created: totalCreated, 
+      updated: totalUpdated, 
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined
+    });
+  } catch (e) {
+    console.error('[PRODUCTS] Error in bulk import:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/products/bulk-import", authenticateToken, authorize("products", "create"), async (req, res) => {
+  try {
+    const sections = Array.isArray(req.body) ? req.body : [];
+    if (sections.length === 0) {
+      return res.status(400).json({ error: "invalid_data", message: "Empty sections array" });
+    }
+
+    let totalCreated = 0;
+    let totalUpdated = 0;
+    let errors = [];
+
+    // Process each section
+    for (const section of sections) {
+      const sectionName = String(section.section_name || '').trim();
+      const items = Array.isArray(section.items) ? section.items : [];
+
+      if (!sectionName || items.length === 0) continue;
+
+      // Process each item in the section
+      for (const item of items) {
+        try {
+          const itemName = String(item.name || '').trim();
+          const itemPrice = Number(item.price || 0);
+
+          if (!itemName || itemPrice <= 0) {
+            errors.push({ item: itemName || 'unknown', error: 'Invalid name or price' });
+            continue;
+          }
+
+          // Parse name: "English / Arabic" format
+          let nameEn = '';
+          let nameAr = '';
+          const nameParts = itemName.split('/').map(s => s.trim()).filter(Boolean);
+          if (nameParts.length >= 2) {
+            nameEn = nameParts[0];
+            nameAr = nameParts.slice(1).join('/'); // Join remaining parts for Arabic
+          } else if (nameParts.length === 1) {
+            // If no separator, check if it's Arabic (contains Arabic characters)
+            const hasArabic = /[\u0600-\u06FF]/.test(nameParts[0]);
+            if (hasArabic) {
+              nameAr = nameParts[0];
+            } else {
+              nameEn = nameParts[0];
+            }
+          }
+
+          // Check if product already exists (by name)
+          const { rows: existing } = await pool.query(
+            'SELECT id FROM products WHERE name = $1 OR name_en = $2 LIMIT 1',
+            [nameAr || nameEn, nameEn || nameAr]
+          );
+
+          if (existing && existing[0]) {
+            // Update existing product
+            await pool.query(
+              `UPDATE products SET name=$1, name_en=$2, category=$3, price=$4, updated_at=NOW() WHERE id=$5`,
+              [nameAr || nameEn, nameEn || nameAr, sectionName, itemPrice, existing[0].id]
+            );
+            totalUpdated++;
+          } else {
+            // Create new product
+            await pool.query(
+              `INSERT INTO products(name, name_en, category, unit, price, cost, tax_rate, stock_quantity, min_stock, is_active) 
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
+              [nameAr || nameEn, nameEn || nameAr, sectionName, 'unit', itemPrice, 0, 15, 0, 0, true]
+            );
+            totalCreated++;
+          }
+        } catch (itemError) {
+          console.error('[PRODUCTS] Error processing item:', item, itemError);
+          errors.push({ item: item.name || 'unknown', error: itemError?.message || 'unknown' });
+        }
+      }
+    }
+
+    console.log(`[PRODUCTS] Bulk import completed: ${totalCreated} created, ${totalUpdated} updated, ${errors.length} errors`);
+    res.json({ 
+      ok: true, 
+      created: totalCreated, 
+      updated: totalUpdated, 
+      errors: errors.length,
+      errorDetails: errors.length > 0 ? errors : undefined
+    });
+  } catch (e) {
+    console.error('[PRODUCTS] Error in bulk import:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
 app.use("/orders", authenticateToken, async (req, res, next) => {
   // Skip if this is not an API request
   if (!isApiRequest(req)) {
