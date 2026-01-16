@@ -1516,22 +1516,9 @@ app.use("/orders", authenticateToken, async (req, res, next) => {
   }
 });
 
-app.use("/supplier-invoices", authenticateToken, async (req, res, next) => {
-  // Skip if this is not an API request
-  if (!isApiRequest(req)) {
-    return next();
-  }
-  try {
-    const opts = { branchFrom: r => (r.query.branch || r.query.branch_code || r.body?.branch || r.body?.branch_code || null) }
-    if (req.method === "GET") return authorize("purchases", "view", opts)(req, res, next)
-    if (req.method === "POST") return authorize("purchases", "create", opts)(req, res, next)
-    if (req.method === "PUT") return authorize("purchases", "edit", opts)(req, res, next)
-    if (req.method === "DELETE") return authorize("purchases", "delete", opts)(req, res, next)
-    next()
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+// Supplier invoices middleware - REMOVED: This was causing requests to hang
+// The individual routes already have authorize() middleware
+// This middleware was intercepting requests and not calling next() properly, causing silent failures
 
 app.use("/payments", authenticateToken, async (req, res, next) => {
   // Skip if this is not an API request
@@ -2242,23 +2229,44 @@ app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { b
 });
 
 // Supplier Invoices
-app.get("/supplier-invoices", authenticateToken, authorize("purchases","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
+async function handleGetSupplierInvoices(req, res) {
   try {
     const { rows } = await pool.query('SELECT id, number, date, due_date, supplier_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, created_at FROM supplier_invoices ORDER BY id DESC');
     res.json({ items: rows || [] });
-  } catch (e) { res.json({ items: [] }); }
-});
-app.get("/supplier-invoices/next-number", authenticateToken, authorize("purchases","create"), async (req, res) => {
+  } catch (e) { 
+    console.error('[SUPPLIER INVOICES] Error listing:', e);
+    res.json({ items: [] }); 
+  }
+}
+app.get("/supplier-invoices", authenticateToken, authorize("purchases","view", { branchFrom: r => (r.query.branch || null) }), handleGetSupplierInvoices);
+app.get("/api/supplier-invoices", authenticateToken, authorize("purchases","view", { branchFrom: r => (r.query.branch || null) }), handleGetSupplierInvoices);
+async function handleGetSupplierInvoiceNextNumber(req, res) {
   try {
     const { rows } = await pool.query('SELECT number FROM supplier_invoices ORDER BY id DESC LIMIT 1');
     const last = rows && rows[0] ? String(rows[0].number||'') : '';
     const seq = (function(){ const m = /PI\/(\d{4})\/(\d+)/.exec(last); const year = (new Date()).getFullYear(); const nextN = m && Number(m[1])===year ? Number(m[2]||0)+1 : 1; return `PI/${year}/${String(nextN).padStart(10,'0')}` })();
     res.json({ next: seq });
-  } catch (e) { res.json({ next: null }); }
-});
-app.post("/supplier-invoices", authenticateToken, authorize("purchases","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  } catch (e) { 
+    console.error('[SUPPLIER INVOICES] Error getting next number:', e);
+    res.json({ next: null }); 
+  }
+}
+app.get("/supplier-invoices/next-number", authenticateToken, authorize("purchases","create"), handleGetSupplierInvoiceNextNumber);
+app.get("/api/supplier-invoices/next-number", authenticateToken, authorize("purchases","create"), handleGetSupplierInvoiceNextNumber);
+// Supplier Invoices - both /supplier-invoices and /api/supplier-invoices
+async function handleCreateSupplierInvoice(req, res) {
   try {
+    console.log('[SUPPLIER INVOICE] Creating invoice | userId=', req.user?.id, 'email=', req.user?.email);
     const b = req.body || {};
+    console.log('[SUPPLIER INVOICE BODY]', JSON.stringify({ 
+      number: b.number, 
+      date: b.date, 
+      supplier_id: b.supplier_id, 
+      lines_count: Array.isArray(b.lines) ? b.lines.length : 0,
+      status: b.status,
+      total: b.total 
+    }));
+    
     const lines = Array.isArray(b.lines) ? b.lines : [];
     const subtotal = Number(b.subtotal||0);
     const discount_pct = Number(b.discount_pct||0);
@@ -2267,38 +2275,69 @@ app.post("/supplier-invoices", authenticateToken, authorize("purchases","create"
     const tax_amount = Number(b.tax_amount||0);
     const total = Number(b.total||0);
     const branch = b.branch || req.user?.default_branch || 'china_town';
+    
+    // CRITICAL: Stringify lines array for JSONB storage
+    const linesJson = JSON.stringify(lines);
+    
+    console.log('[SUPPLIER INVOICE] Executing INSERT...');
     const { rows } = await pool.query(
       'INSERT INTO supplier_invoices(number, date, due_date, supplier_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch',
-      [b.number||null, b.date||null, b.due_date||null, b.supplier_id||null, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, b.payment_method||null, b.status||'draft', branch]
+      [b.number||null, b.date||null, b.due_date||null, b.supplier_id||null, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, b.payment_method||null, b.status||'draft', branch]
     );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); }
-});
-app.put("/supplier-invoices/:id", authenticateToken, authorize("purchases","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+    
+    console.log('[SUPPLIER INVOICE] SUCCESS | id=', rows?.[0]?.id);
+    res.status(201).json(rows && rows[0]);
+  } catch (e) { 
+    console.error('[SUPPLIER INVOICE ERROR]', e);
+    console.error('[SUPPLIER INVOICE ERROR STACK]', e?.stack);
+    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  }
+}
+app.post("/supplier-invoices", authenticateToken, authorize("purchases","create", { branchFrom: r => (r.body?.branch || null) }), handleCreateSupplierInvoice);
+app.post("/api/supplier-invoices", authenticateToken, authorize("purchases","create", { branchFrom: r => (r.body?.branch || null) }), handleCreateSupplierInvoice);
+async function handleUpdateSupplierInvoice(req, res) {
   try {
     const id = Number(req.params.id||0);
     const b = req.body || {};
+    const lines = Array.isArray(b.lines) ? JSON.stringify(b.lines) : (b.lines || null);
     const { rows } = await pool.query(
       'UPDATE supplier_invoices SET number=COALESCE($1,number), date=COALESCE($2,date), due_date=COALESCE($3,due_date), supplier_id=COALESCE($4,supplier_id), lines=COALESCE($5,lines), subtotal=COALESCE($6,subtotal), discount_pct=COALESCE($7,discount_pct), discount_amount=COALESCE($8,discount_amount), tax_pct=COALESCE($9,tax_pct), tax_amount=COALESCE($10,tax_amount), total=COALESCE($11,total), payment_method=COALESCE($12,payment_method), status=COALESCE($13,status), branch=COALESCE($14,branch), updated_at=NOW() WHERE id=$15 RETURNING id, number, status, total, branch',
-      [b.number||null, b.date||null, b.due_date||null, b.supplier_id||null, (Array.isArray(b.lines)?b.lines:null), (b.subtotal!=null?Number(b.subtotal):null), (b.discount_pct!=null?Number(b.discount_pct):null), (b.discount_amount!=null?Number(b.discount_amount):null), (b.tax_pct!=null?Number(b.tax_pct):null), (b.tax_amount!=null?Number(b.tax_amount):null), (b.total!=null?Number(b.total):null), b.payment_method||null, b.status||null, b.branch||null, id]
+      [b.number||null, b.date||null, b.due_date||null, b.supplier_id||null, lines, (b.subtotal!=null?Number(b.subtotal):null), (b.discount_pct!=null?Number(b.discount_pct):null), (b.discount_amount!=null?Number(b.discount_amount):null), (b.tax_pct!=null?Number(b.tax_pct):null), (b.tax_amount!=null?Number(b.tax_amount):null), (b.total!=null?Number(b.total):null), b.payment_method||null, b.status||null, b.branch||null, id]
     );
     res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.post("/supplier-invoices/:id/post", authenticateToken, authorize("purchases","edit"), async (req, res) => {
+  } catch (e) { 
+    console.error('[SUPPLIER INVOICES] Error updating:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  }
+}
+app.put("/supplier-invoices/:id", authenticateToken, authorize("purchases","edit", { branchFrom: r => (r.body?.branch || null) }), handleUpdateSupplierInvoice);
+app.put("/api/supplier-invoices/:id", authenticateToken, authorize("purchases","edit", { branchFrom: r => (r.body?.branch || null) }), handleUpdateSupplierInvoice);
+
+async function handlePostSupplierInvoice(req, res) {
   try {
     const id = Number(req.params.id||0);
     const { rows } = await pool.query('UPDATE supplier_invoices SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING id, number, status', ['posted', id]);
     res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.delete("/supplier-invoices/:id", authenticateToken, authorize("purchases","delete"), async (req, res) => {
+  } catch (e) { 
+    console.error('[SUPPLIER INVOICES] Error posting:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  }
+}
+app.post("/supplier-invoices/:id/post", authenticateToken, authorize("purchases","edit"), handlePostSupplierInvoice);
+app.post("/api/supplier-invoices/:id/post", authenticateToken, authorize("purchases","edit"), handlePostSupplierInvoice);
+
+async function handleDeleteSupplierInvoice(req, res) {
   try {
     const id = Number(req.params.id||0);
     await pool.query('DELETE FROM supplier_invoices WHERE id=$1', [id]);
     res.json({ ok: true, id });
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
+  } catch (e) { 
+    console.error('[SUPPLIER INVOICES] Error deleting:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  }
+}
+app.delete("/supplier-invoices/:id", authenticateToken, authorize("purchases","delete"), handleDeleteSupplierInvoice);
+app.delete("/api/supplier-invoices/:id", authenticateToken, authorize("purchases","delete"), handleDeleteSupplierInvoice);
 app.get("/invoices", authenticateToken, authorize("sales","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, created_at FROM invoices ORDER BY id DESC');
