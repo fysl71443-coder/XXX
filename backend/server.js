@@ -3993,22 +3993,34 @@ async function handleSaveDraft(req, res) {
         if (Array.isArray(order.lines)) {
           parsedLines = order.lines;
         } else if (typeof order.lines === 'string') {
-          try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = cleanedLines; }
+          try { 
+            const parsed = JSON.parse(order.lines);
+            parsedLines = Array.isArray(parsed) ? parsed : linesArray;
+          } catch (e) { 
+            console.warn('[POS] saveDraft - Failed to parse lines string:', e);
+            parsedLines = linesArray; 
+          }
         } else if (typeof order.lines === 'object') {
           // PostgreSQL JSONB may return as object - convert to array if possible
-          parsedLines = Array.isArray(order.lines) ? order.lines : cleanedLines;
+          parsedLines = Array.isArray(order.lines) ? order.lines : linesArray;
         }
+      }
+      
+      // CRITICAL: Ensure parsedLines is always an array
+      if (!Array.isArray(parsedLines)) {
+        console.warn('[POS] saveDraft - parsedLines is not an array, using linesArray');
+        parsedLines = linesArray;
       }
       
       console.log(`[POS] saveDraft - SUCCESS - Updated order ${order_id}, returning ${parsedLines.length} lines`);
       const response = {
         ...order,
         lines: parsedLines,
-        items: parsedLines,
+        items: parsedLines,  // Always include items alias
         order_id: order.id,
         invoice: null  // No invoice for draft orders
       };
-      console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}`);
+      console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}, lines: ${response.lines.length}, items: ${response.items.length}`);
       return res.json(response);
     }
     
@@ -4034,21 +4046,34 @@ async function handleSaveDraft(req, res) {
       if (Array.isArray(order.lines)) {
         parsedLines = order.lines;
       } else if (typeof order.lines === 'string') {
-        try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = cleanedLines; }
+        try { 
+          const parsed = JSON.parse(order.lines);
+          parsedLines = Array.isArray(parsed) ? parsed : linesArray;
+        } catch (e) { 
+          console.warn('[POS] saveDraft - Failed to parse lines string:', e);
+          parsedLines = linesArray; 
+        }
       } else if (typeof order.lines === 'object') {
-        parsedLines = Array.isArray(order.lines) ? order.lines : cleanedLines;
+        // PostgreSQL JSONB may return as object - convert to array if possible
+        parsedLines = Array.isArray(order.lines) ? order.lines : linesArray;
       }
+    }
+    
+    // CRITICAL: Ensure parsedLines is always an array
+    if (!Array.isArray(parsedLines)) {
+      console.warn('[POS] saveDraft - parsedLines is not an array, using linesArray');
+      parsedLines = linesArray;
     }
     
     console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for new order ${order.id}`);
     const response = {
       ...order,
       lines: parsedLines,
-      items: parsedLines,
+      items: parsedLines,  // Always include items alias
       order_id: order.id,
       invoice: null  // No invoice for draft orders
     };
-    console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}`);
+    console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}, lines: ${response.lines.length}, items: ${response.items.length}`);
     res.json(response);
   } catch (e) { 
     console.error('[POS] saveDraft error:', e);
