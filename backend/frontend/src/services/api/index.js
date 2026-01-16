@@ -125,23 +125,23 @@ export const supplierInvoices = {
 export const journal = {
   list: async (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    const result = await request(`/journal${query ? `?${query}` : ''}`)
+    const result = await request(`/api/journal${query ? `?${query}` : ''}`)
     return { items: normalizeArray(result?.items || result) }
   },
-  get: (id) => request(`/journal/${id}`),
-  create: (data) => request('/journal', { method: 'POST', body: JSON.stringify(data) }),
-  update: (id, data) => request(`/journal/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  postEntry: (id) => request(`/journal/${id}/post`, { method: 'POST' }),
-  returnToDraft: (id) => request(`/journal/${id}/return-to-draft`, { method: 'POST' }),
-  reverse: (id) => request(`/journal/${id}/reverse`, { method: 'POST' }),
+  get: (id) => request(`/api/journal/${id}`),
+  create: (data) => request('/api/journal', { method: 'POST', body: JSON.stringify(data) }),
+  update: (id, data) => request(`/api/journal/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  postEntry: (id) => request(`/api/journal/${id}/post`, { method: 'POST' }),
+  returnToDraft: (id) => request(`/api/journal/${id}/return-to-draft`, { method: 'POST' }),
+  reverse: (id) => request(`/api/journal/${id}/reverse`, { method: 'POST' }),
   byAccount: async (id, params = {}) => {
     const query = new URLSearchParams(params).toString()
-    const result = await request(`/journal/account/${id}${query ? `?${query}` : ''}`)
+    const result = await request(`/api/journal/account/${id}${query ? `?${query}` : ''}`)
     return normalizeArray(result)
   },
   findByRelated: (params = {}) => {
     const query = new URLSearchParams(params).toString()
-    return request(`/journal/by-related/search${query ? `?${query}` : ''}`)
+    return request(`/api/journal/by-related/search${query ? `?${query}` : ''}`)
   },
   remove: (id, opts) => {
     const o = typeof opts === 'string' ? { password: opts } : (opts || {})
@@ -149,7 +149,7 @@ export const journal = {
     if (o.password) params.set('password', o.password)
     if (o.reason) params.set('reason', o.reason)
     const qs = params.toString() ? `?${params.toString()}` : ''
-    return request(`/journal/${id}${qs}`, { method: 'DELETE' })
+    return request(`/api/journal/${id}${qs}`, { method: 'DELETE' })
   },
 }
 
@@ -296,8 +296,8 @@ export { employees, payroll };
 export default api;
 
 export const periods = {
-  get: (period) => request(`/accounting-periods/${encodeURIComponent(period)}`),
-  open: (period) => request(`/accounting-periods/${encodeURIComponent(period)}/open`, { method: 'POST' }),
-  close: (period, admin_password) => request(`/accounting-periods/${encodeURIComponent(period)}/close`, { method: 'POST', body: JSON.stringify({ admin_password }) }),
-  summary: (period) => request(`/accounting-periods/${encodeURIComponent(period)}/summary`)
+  get: (period) => request(`/api/accounting-periods/${encodeURIComponent(period)}`),
+  open: (period) => request(`/api/accounting-periods/${encodeURIComponent(period)}/open`, { method: 'POST' }),
+  close: (period, admin_password) => request(`/api/accounting-periods/${encodeURIComponent(period)}/close`, { method: 'POST', body: JSON.stringify({ admin_password }) }),
+  summary: (period) => request(`/api/accounting-periods/${encodeURIComponent(period)}/summary`)
 }
