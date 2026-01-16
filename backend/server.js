@@ -83,7 +83,18 @@ app.use((req, res, next) => {
   
   // Skip static files - these are already handled by express.static
   // But if we reach here, it means the file wasn't found, so treat as SPA route
-  const isStaticFile = reqPath.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json)$/i);
+  // Exception: manifest.json should be served from build folder, but if not found, serve index.html
+  // This prevents 404 errors for manifest.json in nested routes like /pos/china_town/tables/manifest.json
+  if (reqPath === '/manifest.json' || reqPath.endsWith('/manifest.json')) {
+    // Try to serve manifest.json, but if not found, serve index.html (SPA fallback)
+    return res.sendFile(path.join(buildPath, 'manifest.json'), (err) => {
+      if (err) {
+        console.log(`[SPA FALLBACK] manifest.json not found at ${reqPath}, serving index.html`);
+        return res.sendFile(path.join(buildPath, 'index.html'));
+      }
+    });
+  }
+  const isStaticFile = reqPath.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map)$/i);
   if (isStaticFile) {
     // Static file not found - let it 404, don't serve index.html
     return next();
