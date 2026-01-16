@@ -2982,24 +2982,51 @@ async function handleSaveDraft(req, res) {
     const b = req.body || {};
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const table_code = b.table || b.table_code || null;
-    const lines = Array.isArray(b.lines) ? b.lines : [];
+    // Handle both 'lines' and 'items' - frontend may send either
+    const lines = Array.isArray(b.lines) ? b.lines : (Array.isArray(b.items) ? b.items : []);
     const order_id = b.order_id || null;
+    
+    // Ensure lines is a valid array
+    const cleanedLines = Array.isArray(lines) ? lines.filter(line => line && (line.id || line.product_id || line.name)) : [];
     
     if (order_id) {
       // Update existing order
       const { rows } = await pool.query(
-        'UPDATE orders SET lines=$1, updated_at=NOW() WHERE id=$2 RETURNING id, branch, table_code, status',
-        [JSON.stringify(lines), order_id]
+        'UPDATE orders SET lines=$1, updated_at=NOW() WHERE id=$2 RETURNING id, branch, table_code, lines, status',
+        [JSON.stringify(cleanedLines), order_id]
       );
-      return res.json(rows && rows[0]);
+      const order = rows && rows[0];
+      // Parse lines back for response
+      if (order && order.lines) {
+        if (typeof order.lines === 'string') {
+          try { order.lines = JSON.parse(order.lines); } catch {}
+        }
+      }
+      return res.json({
+        ...order,
+        lines: Array.isArray(order?.lines) ? order.lines : cleanedLines,
+        items: Array.isArray(order?.lines) ? order.lines : cleanedLines
+      });
     }
     
     // Create new order
     const { rows } = await pool.query(
-      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status',
-      [branch, table_code, JSON.stringify(lines), 'DRAFT']
+      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, lines, status',
+      [branch, table_code, JSON.stringify(cleanedLines), 'DRAFT']
     );
-    res.json(rows && rows[0]);
+    const order = rows && rows[0];
+    // Parse lines back for response
+    if (order && order.lines) {
+      if (typeof order.lines === 'string') {
+        try { order.lines = JSON.parse(order.lines); } catch {}
+      }
+    }
+    res.json({
+      ...order,
+      lines: Array.isArray(order?.lines) ? order.lines : cleanedLines,
+      items: Array.isArray(order?.lines) ? order.lines : cleanedLines,
+      order_id: order?.id || null
+    });
   } catch (e) { 
     console.error('[POS] saveDraft error:', e);
     res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
