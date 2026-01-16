@@ -1124,6 +1124,75 @@ app.get("/healthz", (req, res) => {
 // CRITICAL: Error logging endpoint - NO authentication required
 // This endpoint is used by ErrorBoundary to log frontend errors
 // It should NEVER cause auth failures or redirects
+// Audit logging endpoint - logs user actions
+app.post("/api/audit", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id || null;
+    const { who, action, at, target, type, ...otherData } = req.body || {};
+    
+    // Log to console for debugging
+    console.log(`[AUDIT] ${action || 'unknown'} | user=${who || userId} | target=${target || 'N/A'}`);
+    
+    // Optionally save to audit_log table if it exists
+    try {
+      await pool.query(`
+        INSERT INTO audit_log (user_id, screen_code, action_code, allowed, ip_address, user_agent, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        userId,
+        type || action || 'unknown',
+        action || 'log',
+        true,
+        req.ip || req.headers['x-forwarded-for'] || 'unknown',
+        req.headers['user-agent'] || 'unknown',
+        at ? new Date(at) : new Date()
+      ]);
+    } catch (dbError) {
+      // If audit_log table doesn't exist or query fails, just log to console
+      console.warn('[AUDIT] Could not save to database:', dbError?.message);
+    }
+    
+    res.json({ ok: true, logged: true });
+  } catch (e) {
+    // Always return success - audit logging should never fail
+    console.error('[AUDIT] Error:', e?.message);
+    res.json({ ok: true, logged: false, error: e?.message });
+  }
+});
+
+// Legacy /audit endpoint (without /api prefix) - redirect to /api/audit
+app.post("/audit", authenticateToken, async (req, res) => {
+  // Reuse the same handler logic
+  try {
+    const userId = req.user?.id || null;
+    const { who, action, at, target, type, ...otherData } = req.body || {};
+    
+    console.log(`[AUDIT] ${action || 'unknown'} | user=${who || userId} | target=${target || 'N/A'}`);
+    
+    try {
+      await pool.query(`
+        INSERT INTO audit_log (user_id, screen_code, action_code, allowed, ip_address, user_agent, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        userId,
+        type || action || 'unknown',
+        action || 'log',
+        true,
+        req.ip || req.headers['x-forwarded-for'] || 'unknown',
+        req.headers['user-agent'] || 'unknown',
+        at ? new Date(at) : new Date()
+      ]);
+    } catch (dbError) {
+      console.warn('[AUDIT] Could not save to database:', dbError?.message);
+    }
+    
+    res.json({ ok: true, logged: true });
+  } catch (e) {
+    console.error('[AUDIT] Error:', e?.message);
+    res.json({ ok: true, logged: false, error: e?.message });
+  }
+});
+
 app.post("/api/error-log", (req, res) => {
   try {
     const { error, stack, componentStack, url, userAgent, timestamp } = req.body || {};
@@ -3401,7 +3470,8 @@ async function handleSaveDraft(req, res) {
         ...order,
         lines: parsedLines,
         items: parsedLines,
-        order_id: order.id
+        order_id: order.id,
+        invoice: null  // No invoice for draft orders
       });
     }
     
@@ -3438,7 +3508,8 @@ async function handleSaveDraft(req, res) {
       ...order,
       lines: parsedLines,
       items: parsedLines,
-      order_id: order.id
+      order_id: order.id,
+      invoice: null  // No invoice for draft orders
     });
   } catch (e) { 
     console.error('[POS] saveDraft error:', e);
