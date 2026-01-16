@@ -174,6 +174,12 @@ export async function request(path, options = {}) {
     
     // CRITICAL: Normalize response to ensure arrays are always arrays
     // This prevents "o.map is not a function" errors
+    // BUT: For saveDraft and similar endpoints that return objects with order_id, don't normalize
+    const isSaveDraftResponse = path.includes('/pos/saveDraft') || path.includes('/saveDraft');
+    if (isSaveDraftResponse) {
+      // saveDraft returns { order_id, invoice, lines, ... } - don't normalize
+      return response.data;
+    }
     const normalized = normalizeResponse(response.data);
     return normalized;
   } catch (error) {

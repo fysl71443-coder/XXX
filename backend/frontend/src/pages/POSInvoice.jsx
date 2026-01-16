@@ -472,7 +472,13 @@ export default function POSInvoice(){
     try {
       let res = await pos.saveDraft(normalized)
       const end = performance.now()
-      let oid = res?.order_id
+      
+      // Debug: Log full response structure
+      console.log('saveDraft full response:', res)
+      console.log('saveDraft response type:', typeof res)
+      console.log('saveDraft response keys:', res ? Object.keys(res) : 'null/undefined')
+      
+      let oid = res?.order_id || res?.id
       if (!oid && process.env.NODE_ENV==='test' && Array.isArray(payload.items) && payload.items.length>0) {
         try {
           const normB = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
@@ -483,9 +489,12 @@ export default function POSInvoice(){
         res = { ...(res||{}), order_id: oid }
       }
       console.log('Returned orderId', oid)
-      console.log('Returned invoice', res?.invoice?.id)
+      console.log('Returned invoice', res?.invoice?.id || res?.invoice)
       console.log('Exec ms', (end - start).toFixed(1))
-      if ((!res || !res.order_id) && Array.isArray(normalized.items) && normalized.items.length>0) { throw new Error('Invariant violated: saveDraft returned no order_id') }
+      if ((!res || (!res.order_id && !res.id)) && Array.isArray(normalized.items) && normalized.items.length>0) { 
+        console.error('saveDraft response missing order_id:', res)
+        throw new Error('Invariant violated: saveDraft returned no order_id') 
+      }
       console.groupEnd()
       lastSavedHashRef.current = hash
       return res
