@@ -56,39 +56,29 @@ app.get('/robots.txt', express.static(buildPath));
 // This MUST come before API routes to prevent conflicts
 // Frontend routes like /employees/cards, /clients/create, etc. should serve index.html
 // Only /api/* routes should be handled by backend
-const frontendRoutes = [
-  '/employees/cards', '/employees/new', '/employees/settings',
-  '/clients/cards', '/clients/create', '/clients/cash', '/clients/credit',
-  '/clients/receivables', '/clients/payments', '/clients/statements',
-  '/clients/invoices', '/clients/paid', '/clients/aging', '/clients/due',
-  '/suppliers/cards', '/suppliers/create',
-  '/products/purchase-orders', '/products/sales-orders',
-  '/pos/', '/invoices/new', '/supplier-invoices/new',
-  '/payroll/', '/reports/', '/debug/',
-  '/expenses/invoices', '/orders/'
-];
-
+// 
+// IMPORTANT: This middleware catches ALL non-API, non-static requests
+// and serves index.html so React Router can handle routing client-side
 app.use((req, res, next) => {
-  const reqPath = req.path || '';
+  const reqPath = req.path || req.url || '';
   
-  // Skip API routes
+  // Skip API routes - these are handled by backend
   if (reqPath.startsWith('/api/')) {
     return next();
   }
   
-  // Check if this is a known frontend route
-  const isFrontendRoute = frontendRoutes.some(route => reqPath.startsWith(route));
-  
-  // Also check for patterns like /employees/:id/edit
-  const isFrontendPattern = /^\/(employees|clients|suppliers|products|orders)\/\d+/.test(reqPath) ||
-                           /^\/(pos|payroll|reports)\//.test(reqPath);
-  
-  if (isFrontendRoute || isFrontendPattern) {
-    console.log(`[SPA FALLBACK] Serving index.html for frontend route: ${reqPath}`);
-    return res.sendFile(path.join(buildPath, 'index.html'));
+  // Skip static files - these are already handled by express.static
+  // But if we reach here, it means the file wasn't found, so treat as SPA route
+  const isStaticFile = reqPath.match(/\.(js|css|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot|map|json)$/i);
+  if (isStaticFile) {
+    // Static file not found - let it 404, don't serve index.html
+    return next();
   }
   
-  next();
+  // All other routes are frontend SPA routes - serve index.html
+  // This includes: /expenses, /clients, /accounting, /products, etc.
+  console.log(`[SPA FALLBACK] Serving index.html for frontend route: ${reqPath}`);
+  return res.sendFile(path.join(buildPath, 'index.html'));
 });
 
 // 3️⃣ Middleware for parsing (safe for static files)
@@ -3525,13 +3515,9 @@ async function handleSaveDraft(req, res) {
   }
 }
 app.post("/api/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
-app.get("/", (req, res) => {
-  res.sendFile(path.join(buildPath, "index.html"));
-});
-
-app.get("*", (req, res) => {
-  res.sendFile(path.join(buildPath, "index.html"));
-});
+// NOTE: SPA fallback is already handled above (line 71-92)
+// These routes are redundant but kept for clarity
+// The SPA fallback middleware will catch all non-API routes before they reach here
 
 app.listen(port, () => {
   console.log(`[SERVER] Started on port ${port} | NODE_ENV=${process.env.NODE_ENV || 'development'}`);
