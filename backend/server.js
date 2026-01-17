@@ -3747,7 +3747,7 @@ app.put("/expenses/:id", authenticateToken, authorize("expenses","edit", { branc
     const b = req.body || {};
     const { rows } = await pool.query(
       'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), date=COALESCE($8,date), payment_method=COALESCE($9,payment_method), updated_at=NOW() WHERE id=$10 RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
-      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, id]
+      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, b.date||null, b.payment_method||null, id]
     );
     res.json(rows && rows[0]);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
@@ -3758,7 +3758,7 @@ app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { b
     const b = req.body || {};
     const { rows } = await pool.query(
       'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), date=COALESCE($8,date), payment_method=COALESCE($9,payment_method), updated_at=NOW() WHERE id=$10 RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
-      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, id]
+      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, b.date||null, b.payment_method||null, id]
     );
     res.json(rows && rows[0]);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
