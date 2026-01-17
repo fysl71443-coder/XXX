@@ -4543,7 +4543,39 @@ async function handleSaveDraft(req, res) {
     // - One meta object with type: 'meta' containing branch, table, customer info, etc.
     const linesArray = [];
     
-    // Add meta object
+    // Calculate totals from items
+    const itemsOnly = Array.isArray(rawLines) ? rawLines.filter(it => it && it.type !== 'meta') : [];
+    let subtotal = 0;
+    let totalDiscount = 0;
+    let totalTax = 0;
+    let totalAmount = 0;
+    
+    for (const item of itemsOnly) {
+      const qty = Number(item.quantity || item.qty || 0);
+      const price = Number(item.price || 0);
+      const discount = Number(item.discount || 0);
+      const itemSubtotal = qty * price;
+      const itemAfterDiscount = itemSubtotal - discount;
+      const itemTax = itemAfterDiscount * (Number(b.taxPct || b.tax_pct || 15) / 100);
+      const itemTotal = itemAfterDiscount + itemTax;
+      
+      subtotal += itemSubtotal;
+      totalDiscount += discount;
+      totalTax += itemTax;
+      totalAmount += itemTotal;
+    }
+    
+    // Apply global discount if provided
+    const globalDiscountPct = Number(b.discountPct || b.discount_pct || 0);
+    if (globalDiscountPct > 0) {
+      const globalDiscount = subtotal * (globalDiscountPct / 100);
+      totalDiscount += globalDiscount;
+      const afterGlobalDiscount = subtotal - globalDiscount;
+      totalTax = afterGlobalDiscount * (Number(b.taxPct || b.tax_pct || 15) / 100);
+      totalAmount = afterGlobalDiscount + totalTax;
+    }
+    
+    // Add meta object with calculated totals
     const meta = {
       type: 'meta',
       branch: branch,
@@ -4554,7 +4586,12 @@ async function handleSaveDraft(req, res) {
       discountPct: Number(b.discountPct || b.discount_pct || 0),
       taxPct: Number(b.taxPct || b.tax_pct || 15),
       paymentMethod: b.paymentMethod || b.payment_method || '',
-      payLines: Array.isArray(b.payLines) ? b.payLines : []
+      payLines: Array.isArray(b.payLines) ? b.payLines : [],
+      // Calculated totals
+      subtotal: subtotal,
+      discount_amount: totalDiscount,
+      tax_amount: totalTax,
+      total_amount: totalAmount
     };
     linesArray.push(meta);
     
@@ -4651,14 +4688,38 @@ async function handleSaveDraft(req, res) {
       }
       
       console.log(`[POS] saveDraft - SUCCESS - Updated order ${order_id}, returning ${parsedLines.length} lines`);
+      
+      // Extract calculated totals from meta and items
+      const metaData = parsedLines.find(l => l && l.type === 'meta') || {};
+      const itemsArray = parsedLines.filter(l => l && l.type === 'item');
+      const calculatedTotals = {
+        subtotal: metaData.subtotal || 0,
+        discount_amount: metaData.discount_amount || 0,
+        tax_amount: metaData.tax_amount || 0,
+        total_amount: metaData.total_amount || 0
+      };
+      
       const response = {
         ...order,
         lines: parsedLines,
-        items: parsedLines,  // Always include items alias
+        items: itemsArray,  // Filtered items (not meta)
         order_id: order.id,
-        invoice: null  // No invoice for draft orders
+        invoice: null,  // No invoice for draft orders
+        // Add calculated totals to top level for easy access
+        subtotal: calculatedTotals.subtotal,
+        discount_amount: calculatedTotals.discount_amount,
+        tax_amount: calculatedTotals.tax_amount,
+        total_amount: calculatedTotals.total_amount,
+        // Meta fields extracted for compatibility
+        customerName: metaData.customer_name || '',
+        customerPhone: metaData.customer_phone || '',
+        customerId: metaData.customerId || null,
+        discountPct: Number(metaData.discountPct || 0),
+        taxPct: Number(metaData.taxPct || 15),
+        paymentMethod: metaData.paymentMethod || '',
+        payLines: Array.isArray(metaData.payLines) ? metaData.payLines : []
       };
-      console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}, lines: ${response.lines.length}, items: ${response.items.length}`);
+      console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}, total_amount: ${response.total_amount}, lines: ${response.lines.length}, items: ${response.items.length}`);
       return res.json(response);
     }
     
@@ -4704,14 +4765,38 @@ async function handleSaveDraft(req, res) {
     }
     
     console.log(`[POS] saveDraft - Returning ${parsedLines.length} lines for new order ${order.id}`);
+    
+    // Extract calculated totals from meta and items
+    const metaData = parsedLines.find(l => l && l.type === 'meta') || {};
+    const itemsArray = parsedLines.filter(l => l && l.type === 'item');
+    const calculatedTotals = {
+      subtotal: metaData.subtotal || 0,
+      discount_amount: metaData.discount_amount || 0,
+      tax_amount: metaData.tax_amount || 0,
+      total_amount: metaData.total_amount || 0
+    };
+    
     const response = {
       ...order,
       lines: parsedLines,
-      items: parsedLines,  // Always include items alias
+      items: itemsArray,  // Filtered items (not meta)
       order_id: order.id,
-      invoice: null  // No invoice for draft orders
+      invoice: null,  // No invoice for draft orders
+      // Add calculated totals to top level for easy access
+      subtotal: calculatedTotals.subtotal,
+      discount_amount: calculatedTotals.discount_amount,
+      tax_amount: calculatedTotals.tax_amount,
+      total_amount: calculatedTotals.total_amount,
+      // Meta fields extracted for compatibility
+      customerName: metaData.customer_name || '',
+      customerPhone: metaData.customer_phone || '',
+      customerId: metaData.customerId || null,
+      discountPct: Number(metaData.discountPct || 0),
+      taxPct: Number(metaData.taxPct || 15),
+      paymentMethod: metaData.paymentMethod || '',
+      payLines: Array.isArray(metaData.payLines) ? metaData.payLines : []
     };
-    console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}, lines: ${response.lines.length}, items: ${response.items.length}`);
+    console.log(`[POS] saveDraft - Response includes order_id: ${response.order_id}, invoice: ${response.invoice}, total_amount: ${response.total_amount}, lines: ${response.lines.length}, items: ${response.items.length}`);
     res.json(response);
   } catch (e) { 
     console.error('[POS] saveDraft error:', e);
