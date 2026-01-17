@@ -477,6 +477,38 @@ ensureSchema().catch((e) => {
   console.error(`[SCHEMA] ERROR: Failed to ensure schema (async)`, e?.message, e?.stack);
 });
 
+// Add missing columns to expenses table if they don't exist (for existing databases)
+(async function() {
+  try {
+    // Wait a bit for ensureSchema to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check if date column exists
+    const { rows: dateCheck } = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='expenses' AND column_name='date'
+    `);
+    if (!dateCheck || dateCheck.length === 0) {
+      await pool.query('ALTER TABLE expenses ADD COLUMN date DATE DEFAULT CURRENT_DATE');
+      console.log('[SCHEMA] Added date column to expenses table');
+    }
+    
+    // Check if payment_method column exists
+    const { rows: paymentMethodCheck } = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name='expenses' AND column_name='payment_method'
+    `);
+    if (!paymentMethodCheck || paymentMethodCheck.length === 0) {
+      await pool.query("ALTER TABLE expenses ADD COLUMN payment_method TEXT DEFAULT 'cash'");
+      console.log('[SCHEMA] Added payment_method column to expenses table');
+    }
+  } catch (e) {
+    console.error('[SCHEMA] Error adding columns to expenses:', e?.message);
+  }
+})();
+
 async function handleLogin(req, res) {
   try {
     const { email, password } = req.body || {};
