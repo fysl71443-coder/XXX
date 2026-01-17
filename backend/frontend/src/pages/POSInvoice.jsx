@@ -1589,15 +1589,36 @@ export default function POSInvoice(){
                       const invKey2 = `pos_invoice_${norm(branch)}_${table}`
                       const invId = localStorage.getItem(invKey1) || localStorage.getItem(invKey2) || ''
                       if (invId) {
+                        // Invoice ID exists in localStorage - remove it
                         try { await apiInvoices.remove(invId) } catch {}
                         try { localStorage.removeItem(invKey1); localStorage.removeItem(invKey2) } catch {}
                       } else {
+                        // No invoice ID in localStorage - check if order has invoice first
                         try {
-                          const list = await apiInvoices.list({ order_id: orderId })
-                          const arr = Array.isArray(list?.items) ? list.items : []
-                          const target = arr.find(x => String(x.type)==='sale') || arr[0]
-                          if (target && target.id) { try { await apiInvoices.remove(target.id) } catch {} }
-                        } catch {}
+                          const orderData = await apiOrders.get(orderId).catch(() => null)
+                          // CRITICAL: Only try to fetch invoice if order has one (not DRAFT)
+                          // DRAFT orders don't have invoices, so don't query for them
+                          if (orderData && orderData.invoice && orderData.invoice !== null) {
+                            // Order has invoice - try to find and remove it
+                            try {
+                              const list = await apiInvoices.list({ order_id: orderId }).catch(() => ({ items: [] }))
+                              const arr = Array.isArray(list?.items) ? list.items : []
+                              const target = arr.find(x => String(x.type)==='sale') || arr[0]
+                              if (target && target.id) { 
+                                try { await apiInvoices.remove(target.id) } catch {} 
+                              }
+                            } catch (e) {
+                              // Invoice query failed (likely 404) - this is expected for DRAFT orders
+                              console.log('[POS] Cancel order - no invoice to remove (order is DRAFT)')
+                            }
+                          } else {
+                            // Order is DRAFT or has no invoice - skip invoice removal
+                            console.log('[POS] Cancel order - skipping invoice removal (order is DRAFT)')
+                          }
+                        } catch (e) {
+                          // Failed to get order data - skip invoice removal
+                          console.warn('[POS] Cancel order - could not check order status, skipping invoice removal')
+                        }
                       }
                     } catch {}
                   } else {
