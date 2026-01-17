@@ -3653,52 +3653,99 @@ async function handleGetOrder(req, res) {
       return res.json(null);
     }
     
-    // Parse lines from JSONB/JSON string to array - handle all cases
+    // CRITICAL: Parse lines from JSONB/JSON string/object to array - handle ALL cases
     let lines = [];
     try {
       if (order.lines === null || order.lines === undefined) {
         lines = [];
       } else if (Array.isArray(order.lines)) {
-        // PostgreSQL JSONB returns as array directly
+        // PostgreSQL JSONB returns as array directly - use as-is
         lines = order.lines;
+        console.log(`[ORDERS] Order ${id}: lines is array, ${lines.length} items`);
       } else if (typeof order.lines === 'string') {
         // If stored as JSON string, parse it
-        const parsed = JSON.parse(order.lines);
-        lines = Array.isArray(parsed) ? parsed : [];
+        try {
+          const parsed = JSON.parse(order.lines);
+          lines = Array.isArray(parsed) ? parsed : [];
+          console.log(`[ORDERS] Order ${id}: parsed JSON string, ${lines.length} items`);
+        } catch (parseError) {
+          console.warn(`[ORDERS] Order ${id}: Failed to parse JSON string:`, parseError);
+          lines = [];
+        }
       } else if (typeof order.lines === 'object') {
         // If it's an object but not array, convert to array
-        if (Array.isArray(order.lines)) {
-          lines = order.lines;
-        } else {
-          // Object (not array) - convert to array using Object.values or wrap in array
-          try {
-            // Try Object.values first (for objects like {0: {...}, 1: {...}})
-            const values = Object.values(order.lines);
-            if (values.length > 0) {
-              lines = values;
-              console.log(`[ORDERS] Converted object to array: ${lines.length} items`);
-            } else {
-              // Single object - wrap in array
-              lines = [order.lines];
-              console.log(`[ORDERS] Wrapped single object in array`);
-            }
-          } catch {
-            // Fallback: wrap in array
-            lines = Array.isArray(order.lines) ? order.lines : [order.lines];
+        // This handles cases where PostgreSQL JSONB returns as object instead of array
+        try {
+          // Try Object.values first (for objects like {0: {...}, 1: {...}})
+          const values = Object.values(order.lines);
+          if (values.length > 0 && Array.isArray(values[0])) {
+            // If values are arrays, flatten
+            lines = values.flat();
+          } else if (values.length > 0) {
+            // If values are objects, use them directly
+            lines = values;
+            console.log(`[ORDERS] Order ${id}: Converted object to array using Object.values, ${lines.length} items`);
+          } else {
+            // Empty object or single object - wrap in array
+            lines = [order.lines];
+            console.log(`[ORDERS] Order ${id}: Wrapped single object in array`);
           }
+        } catch (convertError) {
+          console.warn(`[ORDERS] Order ${id}: Failed to convert object to array:`, convertError);
+          // Fallback: wrap in array if possible
+          lines = Array.isArray(order.lines) ? order.lines : (order.lines ? [order.lines] : []);
         }
+      }
+      
+      // CRITICAL: Final validation - ensure lines is always an array
+      if (!Array.isArray(lines)) {
+        console.warn(`[ORDERS] Order ${id}: lines is not array after parsing, forcing to array`);
+        lines = [];
       }
     } catch (e) {
       console.error('[ORDERS] Error parsing lines for order', id, e);
+      console.error('[ORDERS] Raw lines value:', order.lines);
+      console.error('[ORDERS] Lines type:', typeof order.lines);
       lines = [];
     }
     
-    res.json({
+    // CRITICAL: Extract meta data from lines array and flatten to order level
+    // This ensures the response matches the shape expected by frontend
+    const meta = Array.isArray(lines) ? lines.find(l => l && l.type === 'meta') : null;
+    const items = Array.isArray(lines) ? lines.filter(l => l && l.type === 'item') : [];
+    
+    // Build response with unified contract - same shape as saveDraft response
+    const response = {
       ...order,
+      // Lines array (contains both meta and items)
       lines: lines,
-      // Also add items alias for frontend compatibility
-      items: lines
-    });
+      // Items array (only items, not meta)
+      items: items,
+      // Alias for order_id
+      order_id: order.id,
+      // Invoice (null for drafts)
+      invoice: null,
+      // Extract meta fields to top level for frontend compatibility
+      customerName: meta ? (meta.customer_name || meta.customerName || '') : '',
+      customerPhone: meta ? (meta.customer_phone || meta.customerPhone || '') : '',
+      customerId: meta ? (meta.customerId || meta.customer_id || null) : null,
+      discountPct: meta ? Number(meta.discountPct || meta.discount_pct || 0) : 0,
+      taxPct: meta ? Number(meta.taxPct || meta.tax_pct || 15) : 15,
+      paymentMethod: meta ? (meta.paymentMethod || meta.payment_method || '') : '',
+      payLines: meta ? (Array.isArray(meta.payLines) ? meta.payLines : []) : [],
+      // Additional aliases for compatibility
+      customer_name: meta ? (meta.customer_name || meta.customerName || '') : '',
+      customer_phone: meta ? (meta.customer_phone || meta.customerPhone || '') : '',
+      customer_id: meta ? (meta.customerId || meta.customer_id || null) : null,
+      discount_pct: meta ? Number(meta.discountPct || meta.discount_pct || 0) : 0,
+      tax_pct: meta ? Number(meta.taxPct || meta.tax_pct || 15) : 15,
+      payment_method: meta ? (meta.paymentMethod || meta.payment_method || '') : '',
+      pay_lines: meta ? (Array.isArray(meta.payLines) ? meta.payLines : []) : []
+    };
+    
+    console.log(`[ORDERS] Order ${id} response: ${items.length} items, meta=${meta ? 'yes' : 'no'}, lines=${lines.length}`);
+    
+    res.json(response);
   } catch (e) { 
     console.error('[ORDERS] Error getting order:', e);
     res.json(null); 
