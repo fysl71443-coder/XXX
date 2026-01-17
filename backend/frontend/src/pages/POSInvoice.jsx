@@ -607,24 +607,86 @@ export default function POSInvoice(){
       return byCode || byName || null
     })()
     const cleanedItems = itemsRef.current
-      .map(it => ({ id: it.product_id||it.id, name: it.name, quantity: Number(it.qty||it.quantity||0), price: Number(it.price||0) }))
+      .map(it => ({ 
+        id: it.product_id||it.id, 
+        name: it.name, 
+        quantity: Number(it.qty||it.quantity||0), 
+        price: Number(it.price||0),
+        discount: Number(it.discount||0)
+      }))
       .filter(it => ((it.id || it.name) && isFinite(it.quantity) && it.quantity > 0 && typeof it.price !== 'undefined'))
     if (cleanedItems.length === 0) return 0
+    
+    // Calculate totals from items
+    const calculateSubtotal = (items) => {
+      return items.reduce((sum, it) => sum + (Number(it.quantity||0) * Number(it.price||0)), 0)
+    }
+    const calculateDiscount = (items) => {
+      const globalDiscPct = Number(discountPct||0)
+      const subtotal = calculateSubtotal(items)
+      const globalDiscount = subtotal * (globalDiscPct / 100)
+      const itemDiscounts = items.reduce((sum, it) => sum + Number(it.discount||0), 0)
+      return globalDiscount + itemDiscounts
+    }
+    const calculateTax = (items, taxRate) => {
+      const subtotal = calculateSubtotal(items)
+      const discount = calculateDiscount(items)
+      const taxable = Math.max(0, subtotal - discount)
+      return taxable * (Number(taxRate||15) / 100)
+    }
+    const calculateTotal = (items, taxRate) => {
+      const subtotal = calculateSubtotal(items)
+      const discount = calculateDiscount(items)
+      const tax = calculateTax(items, taxRate)
+      return Math.max(0, subtotal - discount + tax)
+    }
+    
+    // Calculate all totals
+    const calculatedSubtotal = calculateSubtotal(cleanedItems)
+    const calculatedDiscount = calculateDiscount(cleanedItems)
+    const calculatedTax = calculateTax(cleanedItems, taxPct)
+    const calculatedTotal = calculateTotal(cleanedItems, taxPct)
+    
+    // Build complete meta object with all required fields
+    const meta = {
+      type: 'meta',
+      table: String(table),
+      branch: bNorm,
+      subtotal: calculatedSubtotal,
+      discountPct: Number(discountPct||0),
+      discount_amount: calculatedDiscount,
+      taxPct: Number(taxPct||15),
+      tax_amount: calculatedTax,
+      total_amount: calculatedTotal,
+      customerId: partnerId ? Number(partnerId) : 0,
+      customer_name: String(customerName||''),
+      customer_phone: String(customerPhone||''),
+      paymentMethod: String(paymentMethod||''),
+      payLines: Array.isArray(payLines) ? payLines.map(l => ({ method: String(l.method||''), amount: Number(l.amount||0) })) : []
+    }
+    
+    // Build payload with meta and items as lines format
     const payload = {
       tableId: (/^\d+$/.test(String(table))) ? Number(table) : undefined,
       table: String(table),
       branchId: (sel && sel.id) ? sel.id : null,
       branch: bNorm,
+      // Send items separately for backward compatibility
       items: cleanedItems,
-      customerId: partnerId||null,
-      orderId: orderId?Number(orderId):undefined,
-      invoiceNumber: String(invoiceNumber||''),
+      // Also include calculated totals in payload root for backend processing
+      subtotal: calculatedSubtotal,
+      discount_amount: calculatedDiscount,
+      tax_amount: calculatedTax,
+      total_amount: calculatedTotal,
+      customerId: partnerId ? Number(partnerId) : 0,
       customerName: String(customerName||''),
       customerPhone: String(customerPhone||''),
       discountPct: Number(discountPct||0),
-      taxPct: Number(taxPct||0),
+      taxPct: Number(taxPct||15),
       paymentMethod: String(paymentMethod||''),
-      payLines: Array.isArray(payLines) ? payLines.map(l => ({ method: String(l.method||''), amount: Number(l.amount||0) })) : []
+      payLines: Array.isArray(payLines) ? payLines.map(l => ({ method: String(l.method||''), amount: Number(l.amount||0) })) : [],
+      orderId: orderId ? Number(orderId) : undefined,
+      invoiceNumber: String(invoiceNumber||'')
     }
     let id = String(orderId||'')
     let resp = null
