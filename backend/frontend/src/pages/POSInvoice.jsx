@@ -260,7 +260,36 @@ export default function POSInvoice(){
   useEffect(()=>{ (async()=>{ if (partnerId) return; if (!customerPhone && !customerName) return; setLoadingPartner(true); try { await resolvePartner() } catch {} finally { setLoadingPartner(false) } })() },[orderId, customerPhone, customerName])
   useEffect(()=>{ (async()=>{ try { const r = await pos.tableState(branch).catch(()=>({ busy: [] })); const arr = Array.isArray(r?.busy)?r.busy:[]; setTableBusy(arr.map(x=> String(x)).includes(String(table))) } catch { setTableBusy(false) } })() },[branch, table])
   const tableStateLoadedRef = useRef(false)
-  useEffect(()=>{ (async()=>{ if (tableStateLoadedRef.current) return; tableStateLoadedRef.current = true; try { const r = await pos.tableState(branch).catch(()=>({ busy: [] })); const arr = Array.isArray(r?.busy)?r.busy:[]; const busyNow = arr.map(x=> String(x)).includes(String(table)); if (process.env.NODE_ENV==='test') { try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} } if (!busyNow) return; try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} ; isHydratingRef.current = true; setHydrating(true); const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[]); function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s } const found = (Array.isArray(list)?list:[]).find(o=>{ try { const a=JSON.parse(o.lines||'[]')||[]; const m=a.find(x=>x&&x.type==='meta'); const its=a.filter(x=>x&&x.type==='item'); return m && normalizeBranchName(m.branch)===normalizeBranchName(branch) && String(m.table||'')===String(table) && its.length>0 } catch { return false } }); if (!found || !found.id) { isHydratingRef.current=false; setHydrating(false); return } const o = await apiOrders.get(found.id); const arr2 = (function(){ try { return Array.isArray(o?.lines) ? o.lines : JSON.parse(o?.lines||'[]')||[] } catch { return [] } })(); const orderItems2 = arr2.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) })); setItems(Array.isArray(orderItems2)?orderItems2:[]); try { navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true }) } catch {} } catch { } finally { isHydratingRef.current=false; setHydrating(false) } })() },[branch, table])
+  useEffect(()=>{ (async()=>{ if (tableStateLoadedRef.current) return; tableStateLoadedRef.current = true; try { const r = await pos.tableState(branch).catch(()=>({ busy: [] })); const arr = Array.isArray(r?.busy)?r.busy:[]; const busyNow = arr.map(x=> String(x)).includes(String(table)); if (process.env.NODE_ENV==='test') { try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} } if (!busyNow) return; try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} ; isHydratingRef.current = true; setHydrating(true); const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[]); function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s } 
+          // CRITICAL: Normalize lines - backend may return array or string
+          const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
+            let a = [];
+            if (Array.isArray(o.lines)) {
+              a = o.lines;
+            } else if (typeof o.lines === 'string') {
+              try { a = JSON.parse(o.lines || '[]'); } catch { a = []; }
+            }
+            if (!Array.isArray(a)) a = [];
+            const m=a.find(x=>x&&x.type==='meta'); 
+            const its=a.filter(x=>x&&x.type==='item'); 
+            return m && normalizeBranchName(m.branch)===normalizeBranchName(branch) && String(m.table||'')===String(table) && its.length>0 
+          } catch { return false } }); 
+          if (!found || !found.id) { isHydratingRef.current=false; setHydrating(false); return } 
+          const o = await apiOrders.get(found.id); 
+          // CRITICAL: Normalize lines - backend may return array or string
+          const arr2 = (function(){ try { 
+            if (Array.isArray(o?.lines)) return o.lines;
+            if (typeof o?.lines === 'string') {
+              try { return JSON.parse(o?.lines||'[]')||[]; } catch { return []; }
+            }
+            return [];
+          } catch { return [] } })(); 
+          const orderItems2 = arr2.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) })); 
+          setItems(Array.isArray(orderItems2)?orderItems2:[]); 
+          try { navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true }) } catch {} 
+        } catch { } finally { isHydratingRef.current=false; setHydrating(false) } 
+      })() 
+    },[branch, table])
   useEffect(()=>{ if (process.env.NODE_ENV==='test') { try { if (orderId && Array.isArray(items) && items.length===0) { const p = products[0]; if (p) { const arr = [{ product_id: p.id, name: p.name, qty: 1, price: Number(p.price||0), discount: 0 }]; itemsRef.current = arr; setItems(arr) } } } catch {} } },[orderId, items.length, products])
   useEffect(()=>{ if (!orderId) return; if (!paymentMethod && Array.isArray(payLines) && payLines.length>0) { setPaymentMethod(String(payLines[0]?.method||'')) } },[orderId, payLines, paymentMethod])
   useEffect(()=>{ if (process.env.NODE_ENV==='test') { if (Array.isArray(payLines) && payLines.length>0) { try { setModalPay(payLines) } catch {} } } },[payLines])
