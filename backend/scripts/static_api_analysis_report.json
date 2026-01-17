@@ -1,0 +1,2166 @@
+{
+  "analysis_date": "2026-01-17T09:09:52.845Z",
+  "analysis_type": "static_code_analysis",
+  "summary": {
+    "total_endpoints": 116,
+    "authenticated": 116,
+    "authorized": 94,
+    "with_accounting_period_check": 15,
+    "create_journal_entries": 14,
+    "endpoints_with_issues": 19,
+    "total_issues": 24,
+    "issue_breakdown": {
+      "missing_required_field": 21,
+      "missing_journal_entry_logic": 3,
+      "not_found": 0
+    }
+  },
+  "endpoints": [
+    {
+      "endpoint": "/api/auth/login",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/auth/me",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users/:id/toggle",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users/:id/reset-password",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users/:id/permissions",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users/:id/permissions",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/roles",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/screens",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/actions",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/branches",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/users/:id/user-permissions",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/audit",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/error-log",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/journal",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, view)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/journal",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, view)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/journal/:id",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, view)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/journal/:id",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, view)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/journal",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, create)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /journal"
+        }
+      ],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/journal",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, create)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /api/journal"
+        }
+      ],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/journal/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, edit)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/journal/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, edit)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/journal/:id/post",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "post",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, post)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /journal/:id/post"
+        }
+      ],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/journal/:id/post",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "post",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, post)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /api/journal/:id/post"
+        }
+      ],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/journal/:id/return-to-draft",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, edit)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /journal/:id/return-to-draft"
+        }
+      ],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/journal/:id/return-to-draft",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, edit)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /api/journal/:id/return-to-draft"
+        }
+      ],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/journal/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, delete)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/journal/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "journal",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(journal, delete)"
+      ],
+      "creates_journal_entry": true,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [
+        "Automatically creates journal entries"
+      ],
+      "schema": "journal_entries"
+    },
+    {
+      "endpoint": "/api/settings",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/settings/:key",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/settings/:key",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/settings/backup",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/settings/restore",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/products",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/products",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/products",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/products",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/products/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/products/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/products/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/products/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/products/bulk-import",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/products/bulk-import",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "products",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(products, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/accounts",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounts",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/accounts",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounts",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/accounts/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounts/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/accounts/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounts/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/accounts/seed-default",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounts/seed-default",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounting-periods/:period",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounting-periods/:period/open",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounting-periods/:period/close",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/accounting-periods/:period/summary",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "accounting",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(accounting, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/partners",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/api/partners",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/partners",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /partners"
+        }
+      ],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/api/partners",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /api/partners"
+        }
+      ],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/partners/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/api/partners/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/partners/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/api/partners/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "clients",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(clients, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "partners"
+    },
+    {
+      "endpoint": "/employees",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/api/employees",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/employees/:id",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/api/employees/:id",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": false,
+      "authorization_screen": null,
+      "authorization_action": null,
+      "middleware": [
+        "authenticateToken"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/employees",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "employees",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(employees, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /employees"
+        },
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /employees"
+        }
+      ],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/api/employees",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "employees",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(employees, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /api/employees"
+        },
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /api/employees"
+        }
+      ],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/employees/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "employees",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(employees, edit)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/api/employees/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "employees",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(employees, edit)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/employees/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "employees",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(employees, delete)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/api/employees/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "employees",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(employees, delete)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "employees"
+    },
+    {
+      "endpoint": "/expenses",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "expenses",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(expenses, create)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "expenses"
+    },
+    {
+      "endpoint": "/api/expenses",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "expenses",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(expenses, create)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "expenses"
+    },
+    {
+      "endpoint": "/expenses",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "expenses",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(expenses, create)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /expenses"
+        },
+        {
+          "type": "missing_journal_entry_logic",
+          "severity": "high",
+          "message": "POST /expenses should create journal entries for posted expenses"
+        }
+      ],
+      "notes": [],
+      "schema": "expenses"
+    },
+    {
+      "endpoint": "/api/expenses",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "expenses",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(expenses, create)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /api/expenses"
+        },
+        {
+          "type": "missing_journal_entry_logic",
+          "severity": "high",
+          "message": "POST /expenses should create journal entries for posted expenses"
+        }
+      ],
+      "notes": [],
+      "schema": "expenses"
+    },
+    {
+      "endpoint": "/expenses/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "expenses",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(expenses, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "expenses"
+    },
+    {
+      "endpoint": "/api/expenses/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "expenses",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(expenses, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "expenses"
+    },
+    {
+      "endpoint": "/supplier-invoices",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/api/supplier-invoices",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/supplier-invoices/next-number",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/api/supplier-invoices/next-number",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/supplier-invoices",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /supplier-invoices"
+        }
+      ],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/api/supplier-invoices",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /api/supplier-invoices"
+        }
+      ],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/supplier-invoices/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/api/supplier-invoices/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/supplier-invoices/:id/post",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /supplier-invoices/:id/post"
+        }
+      ],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/api/supplier-invoices/:id/post",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, edit)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "updated_at",
+          "severity": "medium",
+          "message": "Required field 'updated_at' may not be handled in POST /api/supplier-invoices/:id/post"
+        }
+      ],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/supplier-invoices/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, delete)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/api/supplier-invoices/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "purchases",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(purchases, delete)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "supplier_invoices"
+    },
+    {
+      "endpoint": "/invoices",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, view)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "invoices"
+    },
+    {
+      "endpoint": "/invoices/next-number",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": [],
+      "schema": "invoices"
+    },
+    {
+      "endpoint": "/invoices",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /invoices"
+        },
+        {
+          "type": "missing_journal_entry_logic",
+          "severity": "high",
+          "message": "POST /invoices should create journal entries for posted invoices"
+        }
+      ],
+      "notes": [],
+      "schema": "invoices"
+    },
+    {
+      "endpoint": "/invoices/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "invoices"
+    },
+    {
+      "endpoint": "/invoices/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "invoices"
+    },
+    {
+      "endpoint": "/orders",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/api/orders",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/orders/:id",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/api/orders/:id",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "view",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, view)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/orders",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /orders"
+        }
+      ],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/api/orders",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [
+        {
+          "type": "missing_required_field",
+          "field": "created_at",
+          "severity": "medium",
+          "message": "Required field 'created_at' may not be handled in POST /api/orders"
+        }
+      ],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/orders/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/api/orders/:id",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/orders/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/api/orders/:id",
+      "method": "DELETE",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "delete",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, delete)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": [],
+      "schema": "orders"
+    },
+    {
+      "endpoint": "/api/pos/tables-layout",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/pos/tables-layout",
+      "method": "PUT",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "edit",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, edit)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/pos/table-state",
+      "method": "GET",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/pos/verify-cancel",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/pos/issueInvoice",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)",
+        "checkAccountingPeriod"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": true,
+      "issues": [],
+      "notes": []
+    },
+    {
+      "endpoint": "/api/pos/saveDraft",
+      "method": "POST",
+      "requires_auth": true,
+      "requires_authorization": true,
+      "authorization_screen": "sales",
+      "authorization_action": "create",
+      "middleware": [
+        "authenticateToken",
+        "authorize(sales, create)"
+      ],
+      "creates_journal_entry": false,
+      "validates_accounting_period": false,
+      "issues": [],
+      "notes": []
+    }
+  ],
+  "repair_sql": [
+    {
+      "type": "update_missing_field",
+      "table": "expenses",
+      "field": "updated_at",
+      "sql": "UPDATE expenses SET updated_at = NULL WHERE updated_at IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "expenses",
+      "field": "updated_at",
+      "sql": "UPDATE expenses SET updated_at = NULL WHERE updated_at IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "supplier_invoices",
+      "field": "created_at",
+      "sql": "UPDATE supplier_invoices SET created_at = NULL WHERE created_at IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "supplier_invoices",
+      "field": "created_at",
+      "sql": "UPDATE supplier_invoices SET created_at = NULL WHERE created_at IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "supplier_invoices",
+      "field": "updated_at",
+      "sql": "UPDATE supplier_invoices SET updated_at = NULL WHERE updated_at IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "supplier_invoices",
+      "field": "updated_at",
+      "sql": "UPDATE supplier_invoices SET updated_at = NULL WHERE updated_at IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "invoices",
+      "field": "created_at",
+      "sql": "UPDATE invoices SET created_at = NULL WHERE created_at IS NULL;"
+    }
+  ]
+}

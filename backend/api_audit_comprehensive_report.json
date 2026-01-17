@@ -1,0 +1,333 @@
+{
+  "audit_metadata": {
+    "audit_date": "2026-01-17T09:10:00.000Z",
+    "audit_type": "comprehensive_static_analysis",
+    "system": "China Town POS & Accounting System",
+    "backend_version": "1.0.0",
+    "database": "PostgreSQL"
+  },
+  "executive_summary": {
+    "total_api_endpoints": 116,
+    "total_routes": 157,
+    "authentication_coverage": "100%",
+    "authorization_coverage": "81%",
+    "accounting_period_validation": "13%",
+    "journal_entry_automation": "12%",
+    "endpoints_with_issues": 19,
+    "total_issues_found": 24,
+    "critical_issues": 3,
+    "medium_issues": 21,
+    "low_issues": 0
+  },
+  "endpoint_categories": {
+    "authentication": {
+      "count": 2,
+      "endpoints": [
+        "POST /api/auth/login",
+        "GET /api/auth/me"
+      ],
+      "status": "healthy"
+    },
+    "expenses": {
+      "count": 3,
+      "endpoints": [
+        "GET /api/expenses",
+        "POST /api/expenses",
+        "PUT /api/expenses/:id"
+      ],
+      "status": "needs_attention",
+      "issues": [
+        {
+          "type": "missing_journal_entry_logic",
+          "severity": "high",
+          "message": "POST /expenses should create journal entries for posted expenses",
+          "recommendation": "Ensure createInvoiceJournalEntry or similar function is called when status='posted'"
+        }
+      ]
+    },
+    "invoices": {
+      "count": 1,
+      "endpoints": [
+        "GET /api/invoices"
+      ],
+      "status": "healthy",
+      "notes": "Invoice creation handled via POS issueInvoice endpoint"
+    },
+    "supplier_invoices": {
+      "count": 6,
+      "endpoints": [
+        "GET /api/supplier-invoices",
+        "GET /api/supplier-invoices/next-number",
+        "POST /api/supplier-invoices",
+        "PUT /api/supplier-invoices/:id",
+        "POST /api/supplier-invoices/:id/post",
+        "DELETE /api/supplier-invoices/:id"
+      ],
+      "status": "healthy"
+    },
+    "journal_entries": {
+      "count": 6,
+      "endpoints": [
+        "GET /api/journal",
+        "GET /api/journal/:id",
+        "POST /api/journal",
+        "PUT /api/journal/:id",
+        "POST /api/journal/:id/post",
+        "POST /api/journal/:id/return-to-draft",
+        "DELETE /api/journal/:id"
+      ],
+      "status": "healthy",
+      "features": [
+        "Automatic entry_number generation",
+        "Period assignment",
+        "Status management (draft/posted)",
+        "Accounting period validation on post"
+      ]
+    },
+    "orders_pos": {
+      "count": 5,
+      "endpoints": [
+        "GET /api/orders",
+        "GET /api/orders/:id",
+        "POST /api/orders",
+        "PUT /api/orders/:id",
+        "DELETE /api/orders/:id"
+      ],
+      "status": "healthy",
+      "features": [
+        "Draft order management",
+        "Table-based ordering",
+        "Branch filtering"
+      ]
+    },
+    "pos_operations": {
+      "count": 5,
+      "endpoints": [
+        "GET /api/pos/tables-layout",
+        "PUT /api/pos/tables-layout",
+        "GET /api/pos/table-state",
+        "POST /api/pos/verify-cancel",
+        "POST /api/pos/issueInvoice",
+        "POST /api/pos/saveDraft"
+      ],
+      "status": "healthy",
+      "features": [
+        "Automatic total calculation in saveDraft",
+        "Journal entry creation on invoice issue",
+        "Accounting period validation"
+      ]
+    },
+    "partners": {
+      "count": 4,
+      "endpoints": [
+        "GET /api/partners",
+        "POST /api/partners",
+        "PUT /api/partners/:id",
+        "DELETE /api/partners/:id"
+      ],
+      "status": "healthy",
+      "features": [
+        "Automatic account creation for customers/suppliers",
+        "Customer type management"
+      ]
+    },
+    "employees": {
+      "count": 5,
+      "endpoints": [
+        "GET /api/employees",
+        "GET /api/employees/:id",
+        "POST /api/employees",
+        "PUT /api/employees/:id",
+        "DELETE /api/employees/:id"
+      ],
+      "status": "healthy"
+    },
+    "accounts": {
+      "count": 5,
+      "endpoints": [
+        "GET /api/accounts",
+        "POST /api/accounts",
+        "PUT /api/accounts/:id",
+        "DELETE /api/accounts/:id",
+        "POST /api/accounts/seed-default"
+      ],
+      "status": "healthy"
+    },
+    "accounting_periods": {
+      "count": 4,
+      "endpoints": [
+        "GET /api/accounting-periods/:period",
+        "POST /api/accounting-periods/:period/open",
+        "POST /api/accounting-periods/:period/close",
+        "GET /api/accounting-periods/:period/summary"
+      ],
+      "status": "healthy",
+      "features": [
+        "Get or create pattern",
+        "Status management (open/closed)",
+        "Period summary with totals"
+      ]
+    },
+    "products": {
+      "count": 5,
+      "endpoints": [
+        "GET /api/products",
+        "POST /api/products",
+        "PUT /api/products/:id",
+        "DELETE /api/products/:id",
+        "POST /api/products/bulk-import"
+      ],
+      "status": "healthy"
+    }
+  },
+  "security_analysis": {
+    "authentication": {
+      "coverage": "100%",
+      "method": "JWT Bearer Token",
+      "middleware": "authenticateToken",
+      "status": "excellent"
+    },
+    "authorization": {
+      "coverage": "81%",
+      "method": "Role-based permissions",
+      "middleware": "authorize(screen, action)",
+      "screens_covered": [
+        "journal", "products", "accounting", "clients", "employees",
+        "expenses", "purchases", "sales"
+      ],
+      "status": "good"
+    },
+    "accounting_period_validation": {
+      "coverage": "13%",
+      "middleware": "checkAccountingPeriod",
+      "protected_endpoints": [
+        "POST /api/expenses",
+        "POST /api/invoices",
+        "POST /api/supplier-invoices",
+        "POST /api/pos/issueInvoice",
+        "POST /api/journal",
+        "POST /api/journal/:id/post"
+      ],
+      "status": "adequate"
+    }
+  },
+  "data_integrity": {
+    "journal_entry_automation": {
+      "coverage": "12%",
+      "automated_for": [
+        "POST /api/pos/issueInvoice (invoices)",
+        "POST /api/expenses (when status='posted')"
+      ],
+      "manual_required": [
+        "POST /api/supplier-invoices (no auto journal entry)"
+      ],
+      "status": "needs_improvement"
+    },
+    "required_fields_handling": {
+      "issues_found": 21,
+      "common_missing_fields": [
+        "branch",
+        "status",
+        "date",
+        "description"
+      ],
+      "recommendation": "Ensure all POST endpoints validate and set required fields with defaults"
+    },
+    "foreign_key_integrity": {
+      "status": "good",
+      "notes": "Foreign keys properly defined in schema with ON DELETE CASCADE/SET NULL"
+    }
+  },
+  "identified_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/expenses",
+        "issue": "missing_journal_entry_logic",
+        "severity": "high",
+        "description": "Should create journal entries for posted expenses",
+        "current_behavior": "Journal entry creation may be missing for some expense types",
+        "recommendation": "Verify createInvoiceJournalEntry or equivalent is called when status='posted'"
+      }
+    ],
+    "medium": [
+      {
+        "type": "missing_required_field",
+        "count": 21,
+        "description": "Some POST endpoints may not handle all required fields",
+        "recommendation": "Review and add validation for required fields in all POST endpoints"
+      }
+    ]
+  },
+  "repair_sql_queries": [
+    {
+      "type": "update_missing_field",
+      "table": "expenses",
+      "field": "branch",
+      "sql": "UPDATE expenses SET branch = 'china_town' WHERE branch IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "expenses",
+      "field": "status",
+      "sql": "UPDATE expenses SET status = 'draft' WHERE status IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "expenses",
+      "field": "date",
+      "sql": "UPDATE expenses SET date = CURRENT_DATE WHERE date IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "invoices",
+      "field": "branch",
+      "sql": "UPDATE invoices SET branch = 'china_town' WHERE branch IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "invoices",
+      "field": "status",
+      "sql": "UPDATE invoices SET status = 'draft' WHERE status IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "supplier_invoices",
+      "field": "branch",
+      "sql": "UPDATE supplier_invoices SET branch = 'china_town' WHERE branch IS NULL;"
+    },
+    {
+      "type": "update_missing_field",
+      "table": "supplier_invoices",
+      "field": "status",
+      "sql": "UPDATE supplier_invoices SET status = 'draft' WHERE status IS NULL;"
+    }
+  ],
+  "recommendations": {
+    "immediate": [
+      "Verify journal entry creation for all posted expenses",
+      "Add missing field validation in POST endpoints",
+      "Test all endpoints with missing required fields"
+    ],
+    "short_term": [
+      "Add comprehensive integration tests for all endpoints",
+      "Implement request validation middleware",
+      "Add response schema validation"
+    ],
+    "long_term": [
+      "Implement API versioning",
+      "Add rate limiting",
+      "Implement request/response logging",
+      "Add API documentation (OpenAPI/Swagger)"
+    ]
+  },
+  "test_coverage": {
+    "endpoints_tested": 116,
+    "endpoints_with_tests": 0,
+    "coverage_percentage": "0%",
+    "recommendation": "Implement comprehensive test suite"
+  },
+  "performance_metrics": {
+    "average_response_time": "N/A (static analysis)",
+    "recommendation": "Run load tests on critical endpoints"
+  }
+}
