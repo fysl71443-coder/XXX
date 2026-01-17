@@ -316,6 +316,8 @@ async function ensureSchema() {
         description TEXT,
         status TEXT DEFAULT 'draft',
         branch TEXT,
+        date DATE DEFAULT CURRENT_DATE,
+        payment_method TEXT DEFAULT 'cash',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
@@ -3547,13 +3549,13 @@ app.delete("/api/employees/:id", authenticateToken, authorize("employees","delet
 
 app.get("/expenses", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, created_at FROM expenses ORDER BY id DESC');
+    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at FROM expenses ORDER BY id DESC');
     res.json({ items: rows || [] });
   } catch (e) { res.json({ items: [] }); }
 });
 app.get("/api/expenses", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, created_at FROM expenses ORDER BY id DESC');
+    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at FROM expenses ORDER BY id DESC');
     res.json({ items: rows || [] });
   } catch (e) { res.json({ items: [] }); }
 });
@@ -3572,10 +3574,10 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
     const date = b.date || new Date().toISOString().slice(0, 10);
     const paymentMethod = b.payment_method || 'cash';
     
-    // Insert expense - check if date and payment_method columns exist
+    // Insert expense with date and payment_method
     const { rows } = await client.query(
-      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
-      [expenseType, amount, accountCode, partnerId, description, status, branch]
+      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch, date, payment_method) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
+      [expenseType, amount, accountCode, partnerId, description, status, branch, date, paymentMethod]
     );
     const expense = rows && rows[0];
     
@@ -3744,7 +3746,7 @@ app.put("/expenses/:id", authenticateToken, authorize("expenses","edit", { branc
     const id = Number(req.params.id||0);
     const b = req.body || {};
     const { rows } = await pool.query(
-      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), updated_at=NOW() WHERE id=$8 RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
+      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), date=COALESCE($8,date), payment_method=COALESCE($9,payment_method), updated_at=NOW() WHERE id=$10 RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
       [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, id]
     );
     res.json(rows && rows[0]);
@@ -3755,7 +3757,7 @@ app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { b
     const id = Number(req.params.id||0);
     const b = req.body || {};
     const { rows } = await pool.query(
-      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), updated_at=NOW() WHERE id=$8 RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
+      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), date=COALESCE($8,date), payment_method=COALESCE($9,payment_method), updated_at=NOW() WHERE id=$10 RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
       [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, id]
     );
     res.json(rows && rows[0]);
