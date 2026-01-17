@@ -1601,14 +1601,20 @@ app.post("/journal", authenticateToken, authorize("journal", "create"), async (r
     );
     const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
     
-    // Create entry
+    // Extract period from date (YYYY-MM format)
+    const entryDate = b.date || new Date();
+    const dateObj = typeof entryDate === 'string' ? new Date(entryDate) : entryDate;
+    const period = dateObj.toISOString().slice(0, 7); // YYYY-MM
+    
+    // Create entry with period
     const { rows: entryRows } = await client.query(
-      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         entryNumber,
         String(b.description || ''),
-        b.date || new Date(),
+        entryDate,
+        period,
         b.reference_type || null,
         b.reference_id || null,
         'draft'
@@ -1672,14 +1678,20 @@ app.post("/api/journal", authenticateToken, authorize("journal", "create"), asyn
     );
     const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
     
-    // Create entry
+    // Extract period from date (YYYY-MM format)
+    const entryDate = b.date || new Date();
+    const dateObj = typeof entryDate === 'string' ? new Date(entryDate) : entryDate;
+    const period = dateObj.toISOString().slice(0, 7); // YYYY-MM
+    
+    // Create entry with period
     const { rows: entryRows } = await client.query(
-      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      `INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
       [
         entryNumber,
         String(b.description || ''),
-        b.date || new Date(),
+        entryDate,
+        period,
         b.reference_type || null,
         b.reference_id || null,
         'draft'
