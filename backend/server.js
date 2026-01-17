@@ -3186,24 +3186,186 @@ app.get("/api/expenses", authenticateToken, async (req, res) => {
   } catch (e) { res.json({ items: [] }); }
 });
 app.post("/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const b = req.body || {};
-    const { rows } = await pool.query(
+    const expenseType = b.type || 'expense';
+    const amount = Number(b.amount || 0);
+    const accountCode = b.account_code || null;
+    const partnerId = b.partner_id || null;
+    const description = b.description || null;
+    const status = b.status || 'draft';
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const date = b.date || new Date().toISOString().slice(0, 10);
+    const paymentMethod = b.payment_method || 'cash';
+    
+    // Insert expense - check if date and payment_method columns exist
+    const { rows } = await client.query(
       'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
-      [b.type||'expense', Number(b.amount||0), b.account_code||null, b.partner_id||null, b.description||null, b.status||'draft', b.branch||req.user?.default_branch||'china_town']
+      [expenseType, amount, accountCode, partnerId, description, status, branch]
     );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
+    const expense = rows && rows[0];
+    
+    if (!expense || !expense.id) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "create_failed", details: "Failed to create expense" });
+    }
+    
+    console.log(`[EXPENSES] Created expense ${expense.id}, amount=${amount}, account=${accountCode}`);
+    
+    // If expense is posted (not draft), create journal entry
+    if (status === 'posted' && amount > 0 && accountCode) {
+      try {
+        // Get expense account ID
+        const expenseAccountId = await getAccountIdByNumber(accountCode);
+        
+        // Get payment account ID (cash or bank based on payment_method)
+        let paymentAccountId = null;
+        if (paymentMethod && String(paymentMethod).toLowerCase() === 'bank') {
+          paymentAccountId = await getAccountIdByNumber('1121'); // Default bank account
+        } else {
+          paymentAccountId = await getAccountIdByNumber('1111'); // Default cash account
+        }
+        
+        if (expenseAccountId && paymentAccountId) {
+          // Get next entry number
+          const { rows: lastEntry } = await client.query('SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1');
+          const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
+          
+          // Create journal entry
+          const { rows: entryRows } = await client.query(
+            `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [entryNumber, `مصروف #${expense.id}${description ? ' - ' + description : ''}`, date, 'expense', expense.id, 'posted']
+          );
+          
+          const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+          
+          if (entryId) {
+            // Create postings
+            await client.query(
+              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+               VALUES ($1, $2, $3, $4)`,
+              [entryId, expenseAccountId, amount, 0]
+            );
+            await client.query(
+              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+               VALUES ($1, $2, $3, $4)`,
+              [entryId, paymentAccountId, 0, amount]
+            );
+            
+            console.log(`[EXPENSES] Created journal entry ${entryId} for expense ${expense.id}`);
+          }
+        } else {
+          console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
+        }
+      } catch (journalError) {
+        console.error('[EXPENSES] Error creating journal entry:', journalError);
+        // Don't fail expense creation if journal entry fails - just log it
+      }
+    }
+    
+    await client.query('COMMIT');
+    res.json(expense);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error creating expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
 });
 app.post("/api/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const b = req.body || {};
-    const { rows } = await pool.query(
-      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id, type, amount, account_code, partner_id, description, status, branch, created_at',
-      [b.type||'expense', Number(b.amount||0), b.account_code||null, b.partner_id||null, b.description||null, b.status||'draft', b.branch||req.user?.default_branch||'china_town']
+    const expenseType = b.type || 'expense';
+    const amount = Number(b.amount || 0);
+    const accountCode = b.account_code || null;
+    const partnerId = b.partner_id || null;
+    const description = b.description || null;
+    const status = b.status || 'draft';
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const date = b.date || new Date().toISOString().slice(0, 10);
+    const paymentMethod = b.payment_method || 'cash';
+    
+    // Insert expense
+    const { rows } = await client.query(
+      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch, date, payment_method) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
+      [expenseType, amount, accountCode, partnerId, description, status, branch, date, paymentMethod]
     );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
+    const expense = rows && rows[0];
+    
+    if (!expense || !expense.id) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "create_failed", details: "Failed to create expense" });
+    }
+    
+    console.log(`[EXPENSES] Created expense ${expense.id}, amount=${amount}, account=${accountCode}`);
+    
+    // If expense is posted (not draft), create journal entry
+    if (status === 'posted' && amount > 0 && accountCode) {
+      try {
+        // Get expense account ID
+        const expenseAccountId = await getAccountIdByNumber(accountCode);
+        
+        // Get payment account ID (cash or bank based on payment_method)
+        let paymentAccountId = null;
+        if (paymentMethod && String(paymentMethod).toLowerCase() === 'bank') {
+          paymentAccountId = await getAccountIdByNumber('1121'); // Default bank account
+        } else {
+          paymentAccountId = await getAccountIdByNumber('1111'); // Default cash account
+        }
+        
+        if (expenseAccountId && paymentAccountId) {
+          // Get next entry number
+          const { rows: lastEntry } = await client.query('SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1');
+          const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
+          
+          // Create journal entry
+          const { rows: entryRows } = await client.query(
+            `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [entryNumber, `مصروف #${expense.id}${description ? ' - ' + description : ''}`, date, 'expense', expense.id, 'posted']
+          );
+          
+          const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+          
+          if (entryId) {
+            // Create postings
+            await client.query(
+              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+               VALUES ($1, $2, $3, $4)`,
+              [entryId, expenseAccountId, amount, 0]
+            );
+            await client.query(
+              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+               VALUES ($1, $2, $3, $4)`,
+              [entryId, paymentAccountId, 0, amount]
+            );
+            
+            console.log(`[EXPENSES] Created journal entry ${entryId} for expense ${expense.id}`);
+          }
+        } else {
+          console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
+        }
+      } catch (journalError) {
+        console.error('[EXPENSES] Error creating journal entry:', journalError);
+        // Don't fail expense creation if journal entry fails - just log it
+      }
+    }
+    
+    await client.query('COMMIT');
+    res.json(expense);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error creating expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
 });
 app.put("/expenses/:id", authenticateToken, authorize("expenses","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
   try {
@@ -3504,8 +3666,27 @@ async function handleGetOrder(req, res) {
         const parsed = JSON.parse(order.lines);
         lines = Array.isArray(parsed) ? parsed : [];
       } else if (typeof order.lines === 'object') {
-        // If it's an object but not array, ensure it's array
-        lines = Array.isArray(order.lines) ? order.lines : [];
+        // If it's an object but not array, convert to array
+        if (Array.isArray(order.lines)) {
+          lines = order.lines;
+        } else {
+          // Object (not array) - convert to array using Object.values or wrap in array
+          try {
+            // Try Object.values first (for objects like {0: {...}, 1: {...}})
+            const values = Object.values(order.lines);
+            if (values.length > 0) {
+              lines = values;
+              console.log(`[ORDERS] Converted object to array: ${lines.length} items`);
+            } else {
+              // Single object - wrap in array
+              lines = [order.lines];
+              console.log(`[ORDERS] Wrapped single object in array`);
+            }
+          } catch {
+            // Fallback: wrap in array
+            lines = Array.isArray(order.lines) ? order.lines : [order.lines];
+          }
+        }
       }
     } catch (e) {
       console.error('[ORDERS] Error parsing lines for order', id, e);

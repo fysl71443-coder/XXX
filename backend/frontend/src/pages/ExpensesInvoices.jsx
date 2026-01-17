@@ -49,7 +49,17 @@ export default function ExpensesInvoices(){
     if (acc) return String(acc.account_code).padStart(4,'0') + ' • ' + labelName(acc, lang)
     return c
   }
-  useEffect(()=>{ (async()=>{ try { const res = await apiExpenses.list(filters); setList(res||[]) } catch {} })() },[filters])
+  useEffect(()=>{ (async()=>{ 
+    try { 
+      const res = await apiExpenses.list(filters); 
+      // CRITICAL: apiExpenses.list returns { items: [...] }, not array directly
+      const items = Array.isArray(res) ? res : (Array.isArray(res?.items) ? res.items : []);
+      setList(items);
+    } catch (e) { 
+      console.error('[ExpensesInvoices] Error loading expenses:', e);
+      setList([]);
+    } 
+  })() },[filters])
   useEffect(()=>{ setSelectedIds(prev => prev.filter(id => (list||[]).some(r => r.id === id))) },[list])
 
   async function handleAction(action, id) {
