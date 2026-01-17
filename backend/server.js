@@ -3974,7 +3974,7 @@ async function handleGetOrders(req, res) {
     const branch = req.query?.branch || null;
     const table = req.query?.table || null;
     const status = req.query?.status || null;
-    let query = 'SELECT id, branch, table_code, lines, status, created_at FROM orders WHERE 1=1';
+    let query = 'SELECT id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customerId, customer_name, customer_phone, created_at FROM orders WHERE 1=1';
     const params = [];
     let paramIndex = 1;
     
@@ -4060,7 +4060,7 @@ app.get("/api/orders", authenticateToken, authorize("sales","view"), handleGetOr
 async function handleGetOrder(req, res) {
   try {
     const id = Number(req.params.id||0);
-    const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, created_at FROM orders WHERE id=$1', [id]);
+    const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customerId, customer_name, customer_phone, created_at FROM orders WHERE id=$1', [id]);
     const order = rows && rows[0];
     if (!order) {
       return res.json(null);
