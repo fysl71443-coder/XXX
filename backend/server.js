@@ -405,12 +405,28 @@ async function ensureSchema() {
         entry_number INTEGER,
         description TEXT,
         date DATE,
+        period TEXT,
         reference_type TEXT,
         reference_id INTEGER,
         status TEXT DEFAULT 'draft',
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Add period column if it doesn't exist (for existing databases)
+    try {
+      await pool.query(`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                         WHERE table_name='journal_entries' AND column_name='period') THEN
+            ALTER TABLE journal_entries ADD COLUMN period TEXT;
+          END IF;
+        END $$;
+      `);
+    } catch (e) {
+      // Column might already exist, ignore error
+      console.log('[SCHEMA] period column check:', e?.message || 'ok');
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS journal_postings (
         id SERIAL PRIMARY KEY,
@@ -4360,10 +4376,14 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
       return null;
     }
 
-    // Create journal entry
+    // Extract period from date (YYYY-MM format)
+    const entryDate = new Date();
+    const period = entryDate.toISOString().slice(0, 7); // YYYY-MM
+    
+    // Create journal entry with period
     const { rows: entryRows } = await pool.query(
-      'INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-      [entryNumber, `فاتورة مبيعات #${invoiceId}`, new Date(), 'invoice', invoiceId]
+      'INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+      [entryNumber, `فاتورة مبيعات #${invoiceId}`, entryDate, period, 'invoice', invoiceId]
     );
 
     const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
