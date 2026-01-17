@@ -421,6 +421,16 @@ async function ensureSchema() {
       )
     `);
     await pool.query(`
+      CREATE TABLE IF NOT EXISTS accounting_periods (
+        id SERIAL PRIMARY KEY,
+        period TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'open',
+        opened_at TIMESTAMP WITH TIME ZONE,
+        closed_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -2781,6 +2791,287 @@ app.use("/accounting-periods", authenticateToken, async (req, res, next) => {
     if (req.method === "GET") return authorize("accounting", "view")(req, res, next)
     return authorize("accounting", "edit")(req, res, next)
   } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Accounting Periods API - with get or create support
+app.get("/accounting-periods/:period", authenticateToken, authorize("accounting", "view"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    // Try to find existing period
+    let { rows } = await pool.query(
+      'SELECT id, period, status, opened_at, closed_at, created_at FROM accounting_periods WHERE period = $1 LIMIT 1',
+      [period]
+    );
+    
+    let periodData = rows && rows[0];
+    
+    // If period doesn't exist, create it automatically (get or create pattern)
+    if (!periodData) {
+      console.log(`[PERIODS] Period ${period} not found, creating automatically`);
+      
+      // Insert new period with 'open' status by default
+      const insertResult = await pool.query(
+        `INSERT INTO accounting_periods(period, status, opened_at) 
+         VALUES ($1, $2, NOW()) 
+         ON CONFLICT (period) DO UPDATE SET period = EXCLUDED.period
+         RETURNING id, period, status, opened_at, closed_at, created_at`,
+        [period, 'open']
+      );
+      
+      periodData = insertResult.rows && insertResult.rows[0];
+      
+      if (!periodData) {
+        console.error(`[PERIODS] Failed to create period ${period}`);
+        return res.status(500).json({ error: "create_failed", details: `Failed to create period ${period}` });
+      }
+      
+      console.log(`[PERIODS] Created period ${period} with status 'open'`);
+    }
+    
+    res.json(periodData);
+  } catch (e) {
+    console.error('[PERIODS] Error getting period:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.get("/api/accounting-periods/:period", authenticateToken, authorize("accounting", "view"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    // Try to find existing period
+    let { rows } = await pool.query(
+      'SELECT id, period, status, opened_at, closed_at, created_at FROM accounting_periods WHERE period = $1 LIMIT 1',
+      [period]
+    );
+    
+    let periodData = rows && rows[0];
+    
+    // If period doesn't exist, create it automatically (get or create pattern)
+    if (!periodData) {
+      console.log(`[PERIODS] Period ${period} not found, creating automatically`);
+      
+      // Insert new period with 'open' status by default
+      const insertResult = await pool.query(
+        `INSERT INTO accounting_periods(period, status, opened_at) 
+         VALUES ($1, $2, NOW()) 
+         ON CONFLICT (period) DO UPDATE SET period = EXCLUDED.period
+         RETURNING id, period, status, opened_at, closed_at, created_at`,
+        [period, 'open']
+      );
+      
+      periodData = insertResult.rows && insertResult.rows[0];
+      
+      if (!periodData) {
+        console.error(`[PERIODS] Failed to create period ${period}`);
+        return res.status(500).json({ error: "create_failed", details: `Failed to create period ${period}` });
+      }
+      
+      console.log(`[PERIODS] Created period ${period} with status 'open'`);
+    }
+    
+    res.json(periodData);
+  } catch (e) {
+    console.error('[PERIODS] Error getting period:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/accounting-periods/:period/open", authenticateToken, authorize("accounting", "edit"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    const { rows } = await pool.query(
+      `INSERT INTO accounting_periods(period, status, opened_at) 
+       VALUES ($1, $2, NOW()) 
+       ON CONFLICT (period) DO UPDATE SET status = $2, opened_at = NOW(), closed_at = NULL
+       RETURNING id, period, status, opened_at, closed_at, created_at`,
+      [period, 'open']
+    );
+    
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[PERIODS] Error opening period:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/accounting-periods/:period/open", authenticateToken, authorize("accounting", "edit"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    const { rows } = await pool.query(
+      `INSERT INTO accounting_periods(period, status, opened_at) 
+       VALUES ($1, $2, NOW()) 
+       ON CONFLICT (period) DO UPDATE SET status = $2, opened_at = NOW(), closed_at = NULL
+       RETURNING id, period, status, opened_at, closed_at, created_at`,
+      [period, 'open']
+    );
+    
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[PERIODS] Error opening period:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/accounting-periods/:period/close", authenticateToken, authorize("accounting", "edit"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    const { rows } = await pool.query(
+      `UPDATE accounting_periods 
+       SET status = $1, closed_at = NOW() 
+       WHERE period = $2 
+       RETURNING id, period, status, opened_at, closed_at, created_at`,
+      ['closed', period]
+    );
+    
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "not_found", details: `Period ${period} not found` });
+    }
+    
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[PERIODS] Error closing period:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.post("/api/accounting-periods/:period/close", authenticateToken, authorize("accounting", "edit"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    const { rows } = await pool.query(
+      `UPDATE accounting_periods 
+       SET status = $1, closed_at = NOW() 
+       WHERE period = $2 
+       RETURNING id, period, status, opened_at, closed_at, created_at`,
+      ['closed', period]
+    );
+    
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "not_found", details: `Period ${period} not found` });
+    }
+    
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[PERIODS] Error closing period:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.get("/accounting-periods/:period/summary", authenticateToken, authorize("accounting", "view"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    // Get period summary (total debits, credits, etc.)
+    // For now, return basic period info
+    const { rows } = await pool.query(
+      'SELECT id, period, status, opened_at, closed_at, created_at FROM accounting_periods WHERE period = $1 LIMIT 1',
+      [period]
+    );
+    
+    const periodData = rows && rows[0];
+    
+    if (!periodData) {
+      // Create period if doesn't exist (get or create)
+      const insertResult = await pool.query(
+        `INSERT INTO accounting_periods(period, status, opened_at) 
+         VALUES ($1, $2, NOW()) 
+         ON CONFLICT (period) DO UPDATE SET period = EXCLUDED.period
+         RETURNING id, period, status, opened_at, closed_at, created_at`,
+        [period, 'open']
+      );
+      
+      const newPeriod = insertResult.rows && insertResult.rows[0];
+      return res.json({
+        ...newPeriod,
+        total_debits: 0,
+        total_credits: 0,
+        balance: 0
+      });
+    }
+    
+    res.json({
+      ...periodData,
+      total_debits: 0,
+      total_credits: 0,
+      balance: 0
+    });
+  } catch (e) {
+    console.error('[PERIODS] Error getting period summary:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+app.get("/api/accounting-periods/:period/summary", authenticateToken, authorize("accounting", "view"), async (req, res) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+      return res.status(400).json({ error: "invalid_period", details: "Period must be in YYYY-MM format" });
+    }
+    
+    // Get period summary (total debits, credits, etc.)
+    // For now, return basic period info
+    const { rows } = await pool.query(
+      'SELECT id, period, status, opened_at, closed_at, created_at FROM accounting_periods WHERE period = $1 LIMIT 1',
+      [period]
+    );
+    
+    const periodData = rows && rows[0];
+    
+    if (!periodData) {
+      // Create period if doesn't exist (get or create)
+      const insertResult = await pool.query(
+        `INSERT INTO accounting_periods(period, status, opened_at) 
+         VALUES ($1, $2, NOW()) 
+         ON CONFLICT (period) DO UPDATE SET period = EXCLUDED.period
+         RETURNING id, period, status, opened_at, closed_at, created_at`,
+        [period, 'open']
+      );
+      
+      const newPeriod = insertResult.rows && insertResult.rows[0];
+      return res.json({
+        ...newPeriod,
+        total_debits: 0,
+        total_credits: 0,
+        balance: 0
+      });
+    }
+    
+    res.json({
+      ...periodData,
+      total_debits: 0,
+      total_credits: 0,
+      balance: 0
+    });
+  } catch (e) {
+    console.error('[PERIODS] Error getting period summary:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });

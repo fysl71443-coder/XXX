@@ -296,8 +296,8 @@ export { employees, payroll };
 export default api;
 
 export const periods = {
-  get: (period) => request(`/accounting-periods/${encodeURIComponent(period)}`),
-  open: (period) => request(`/accounting-periods/${encodeURIComponent(period)}/open`, { method: 'POST' }),
-  close: (period, admin_password) => request(`/accounting-periods/${encodeURIComponent(period)}/close`, { method: 'POST', body: JSON.stringify({ admin_password }) }),
-  summary: (period) => request(`/accounting-periods/${encodeURIComponent(period)}/summary`)
+  get: (period) => request(`/api/accounting-periods/${encodeURIComponent(period)}`),
+  open: (period) => request(`/api/accounting-periods/${encodeURIComponent(period)}/open`, { method: 'POST' }),
+  close: (period, admin_password) => request(`/api/accounting-periods/${encodeURIComponent(period)}/close`, { method: 'POST', body: JSON.stringify({ admin_password }) }),
+  summary: (period) => request(`/api/accounting-periods/${encodeURIComponent(period)}/summary`)
 }
