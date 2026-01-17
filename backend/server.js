@@ -370,6 +370,13 @@ async function ensureSchema() {
         table_code TEXT,
         lines JSONB,
         status TEXT DEFAULT 'DRAFT',
+        subtotal NUMERIC(18,2) DEFAULT 0,
+        discount_amount NUMERIC(18,2) DEFAULT 0,
+        tax_amount NUMERIC(18,2) DEFAULT 0,
+        total_amount NUMERIC(18,2) DEFAULT 0,
+        customerId INTEGER,
+        customer_name TEXT,
+        customer_phone TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
