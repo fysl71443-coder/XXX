@@ -4167,14 +4167,88 @@ async function handleGetOrder(req, res) {
 app.get("/orders/:id", authenticateToken, authorize("sales","view"), handleGetOrder);
 app.get("/api/orders/:id", authenticateToken, authorize("sales","view"), handleGetOrder);
 
+// Helper function to calculate totals from order lines
+function calculateOrderTotals(lines) {
+  const itemsOnly = Array.isArray(lines) ? lines.filter(it => it && it.type === 'item') : [];
+  const meta = Array.isArray(lines) ? lines.find(it => it && it.type === 'meta') : null;
+  
+  // Calculate subtotal and discount from items
+  let subtotal = 0;
+  let discount_amount = 0;
+  
+  for (const item of itemsOnly) {
+    const qty = Number(item.quantity || item.qty || 0);
+    const price = Number(item.price || 0);
+    const discount = Number(item.discount || 0);
+    subtotal += qty * price;
+    discount_amount += discount;
+  }
+  
+  // Apply global discount if provided in meta
+  const discountPct = meta ? Number(meta.discountPct || meta.discount_pct || 0) : 0;
+  if (discountPct > 0) {
+    const globalDiscount = subtotal * (discountPct / 100);
+    discount_amount += globalDiscount;
+  }
+  
+  // Calculate tax and total
+  const taxPct = meta ? Number(meta.taxPct || meta.tax_pct || 15) : 15;
+  const tax_amount = ((subtotal - discount_amount) * taxPct) / 100;
+  const total_amount = subtotal - discount_amount + tax_amount;
+  
+  // Extract customer info from meta or first item
+  const customer_name = meta ? (meta.customer_name || meta.customerName || '') : (lines[0]?.customer_name || '');
+  const customer_phone = meta ? (meta.customer_phone || meta.customerPhone || '') : (lines[0]?.customer_phone || '');
+  const customerid = meta ? (meta.customerId || meta.customer_id || null) : (lines[0]?.customerId || null);
+  
+  return {
+    subtotal,
+    discount_amount,
+    tax_amount,
+    total_amount,
+    customer_name,
+    customer_phone,
+    customerid
+  };
+}
+
 async function handleCreateOrder(req, res) {
   try {
     const b = req.body || {};
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const table_code = String(b.table || b.table_code || '');
     const lines = Array.isArray(b.lines) ? b.lines : [];
-    const { rows } = await pool.query('INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3,$4) RETURNING id, branch, table_code, status', [branch, table_code, JSON.stringify(lines), 'DRAFT']);
-    res.json(rows && rows[0]);
+    
+    // Calculate totals from lines
+    const totals = calculateOrderTotals(lines);
+    
+    // Insert order with calculated totals
+    const { rows } = await pool.query(
+      `INSERT INTO orders(branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid) 
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11) 
+       RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`,
+      [branch, table_code, JSON.stringify(lines), 'DRAFT', totals.subtotal, totals.discount_amount, totals.tax_amount, totals.total_amount, totals.customer_name, totals.customer_phone, totals.customerid]
+    );
+    
+    const order = rows && rows[0];
+    
+    // Parse lines back for response
+    let parsedLines = [];
+    if (order && order.lines) {
+      if (Array.isArray(order.lines)) {
+        parsedLines = order.lines;
+      } else if (typeof order.lines === 'string') {
+        try { parsedLines = JSON.parse(order.lines); } catch { parsedLines = lines; }
+      }
+    } else {
+      parsedLines = lines;
+    }
+    
+    res.json({
+      ...order,
+      lines: parsedLines,
+      items: parsedLines.filter(l => l && l.type === 'item')
+    });
   } catch (e) { 
     console.error('[ORDERS] Error creating order:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
@@ -4189,23 +4263,62 @@ async function handleUpdateOrder(req, res) {
     const b = req.body || {};
     // Handle lines - convert to JSON string with jsonb cast if provided
     let linesJson = null;
+    let parsedLines = [];
+    
     if (b.lines !== undefined) {
       if (Array.isArray(b.lines)) {
         linesJson = JSON.stringify(b.lines);
+        parsedLines = b.lines;
       } else if (b.lines) {
         linesJson = typeof b.lines === 'string' ? b.lines : JSON.stringify(b.lines);
+        try { parsedLines = JSON.parse(linesJson); } catch { parsedLines = []; }
       }
     }
     
-    const { rows } = await pool.query(
-      'UPDATE orders SET branch=COALESCE($1,branch), table_code=COALESCE($2,table_code), lines=COALESCE($3::jsonb,lines), status=COALESCE($4,status), updated_at=NOW() WHERE id=$5 RETURNING id, branch, table_code, lines, status', 
-      [b.branch||null, (b.table||b.table_code||null), linesJson, b.status||null, id]
-    );
+    // If lines are provided, calculate totals
+    let totals = null;
+    if (parsedLines.length > 0) {
+      totals = calculateOrderTotals(parsedLines);
+    }
+    
+    // Build UPDATE query - if totals are calculated, include them
+    let updateQuery, updateParams;
+    if (totals) {
+      updateQuery = `UPDATE orders 
+                     SET branch=COALESCE($1,branch), 
+                         table_code=COALESCE($2,table_code), 
+                         lines=COALESCE($3::jsonb,lines), 
+                         status=COALESCE($4,status),
+                         subtotal=$5,
+                         discount_amount=$6,
+                         tax_amount=$7,
+                         total_amount=$8,
+                         customer_name=COALESCE($9,customer_name),
+                         customer_phone=COALESCE($10,customer_phone),
+                         customerid=COALESCE($11,customerid),
+                         updated_at=NOW() 
+                     WHERE id=$12 
+                     RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`;
+      updateParams = [b.branch||null, (b.table||b.table_code||null), linesJson, b.status||null, 
+                      totals.subtotal, totals.discount_amount, totals.tax_amount, totals.total_amount,
+                      totals.customer_name, totals.customer_phone, totals.customerid, id];
+    } else {
+      updateQuery = `UPDATE orders 
+                     SET branch=COALESCE($1,branch), 
+                         table_code=COALESCE($2,table_code), 
+                         lines=COALESCE($3::jsonb,lines), 
+                         status=COALESCE($4,status), 
+                         updated_at=NOW() 
+                     WHERE id=$5 
+                     RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`;
+      updateParams = [b.branch||null, (b.table||b.table_code||null), linesJson, b.status||null, id];
+    }
+    
+    const { rows } = await pool.query(updateQuery, updateParams);
     const order = rows && rows[0];
     
     // Parse lines back for response
-    let parsedLines = [];
-    if (order && order.lines) {
+    if (order && order.lines && parsedLines.length === 0) {
       if (Array.isArray(order.lines)) {
         parsedLines = order.lines;
       } else if (typeof order.lines === 'string') {
@@ -4216,7 +4329,7 @@ async function handleUpdateOrder(req, res) {
     res.json({
       ...order,
       lines: parsedLines,
-      items: parsedLines
+      items: parsedLines.filter(l => l && l.type === 'item')
     });
   } catch (e) { 
     console.error('[ORDERS] Error updating order:', e);
@@ -4554,22 +4667,13 @@ async function handleSaveDraft(req, res) {
     const itemsOnly = Array.isArray(rawLines) ? rawLines.filter(it => it && it.type !== 'meta') : [];
     let subtotal = 0;
     let totalDiscount = 0;
-    let totalTax = 0;
-    let totalAmount = 0;
     
     for (const item of itemsOnly) {
       const qty = Number(item.quantity || item.qty || 0);
       const price = Number(item.price || 0);
       const discount = Number(item.discount || 0);
-      const itemSubtotal = qty * price;
-      const itemAfterDiscount = itemSubtotal - discount;
-      const itemTax = itemAfterDiscount * (Number(b.taxPct || b.tax_pct || 15) / 100);
-      const itemTotal = itemAfterDiscount + itemTax;
-      
-      subtotal += itemSubtotal;
+      subtotal += qty * price;
       totalDiscount += discount;
-      totalTax += itemTax;
-      totalAmount += itemTotal;
     }
     
     // Apply global discount if provided
@@ -4577,10 +4681,14 @@ async function handleSaveDraft(req, res) {
     if (globalDiscountPct > 0) {
       const globalDiscount = subtotal * (globalDiscountPct / 100);
       totalDiscount += globalDiscount;
-      const afterGlobalDiscount = subtotal - globalDiscount;
-      totalTax = afterGlobalDiscount * (Number(b.taxPct || b.tax_pct || 15) / 100);
-      totalAmount = afterGlobalDiscount + totalTax;
     }
+    
+    // Calculate tax and total according to specification:
+    // tax_amount = ((subtotal - discount_amount) * taxPct) / 100
+    // total_amount = subtotal - discount_amount + tax_amount
+    const taxPct = Number(b.taxPct || b.tax_pct || 15);
+    const totalTax = ((subtotal - totalDiscount) * taxPct) / 100;
+    const totalAmount = subtotal - totalDiscount + totalTax;
     
     // Add meta object with calculated totals
     const meta = {
@@ -4657,8 +4765,20 @@ async function handleSaveDraft(req, res) {
       // Update existing order
       console.log(`[POS] saveDraft - Updating order ${order_id}`);
       const { rows } = await pool.query(
-        'UPDATE orders SET lines=$1::jsonb, updated_at=NOW() WHERE id=$2 RETURNING id, branch, table_code, lines, status',
-        [linesJson, order_id]
+        `UPDATE orders 
+         SET lines=$1::jsonb, 
+             subtotal=$2, 
+             discount_amount=$3, 
+             tax_amount=$4, 
+             total_amount=$5,
+             customer_name=$6,
+             customer_phone=$7,
+             customerid=$8,
+             updated_at=NOW() 
+         WHERE id=$9 
+         RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`,
+        [linesJson, subtotal, totalDiscount, totalTax, totalAmount, 
+         meta.customer_name || '', meta.customer_phone || '', meta.customerId || null, order_id]
       );
       const order = rows && rows[0];
       
@@ -4734,8 +4854,11 @@ async function handleSaveDraft(req, res) {
     console.log(`[POS] saveDraft - Creating new order for branch=${branch}, table=${table_code}`);
     
     const { rows } = await pool.query(
-      'INSERT INTO orders(branch, table_code, lines, status) VALUES ($1,$2,$3::jsonb,$4) RETURNING id, branch, table_code, lines, status, created_at',
-      [branch, table_code, linesJson, 'DRAFT']
+      `INSERT INTO orders(branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid) 
+       VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11) 
+       RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid, created_at`,
+      [branch, table_code, linesJson, 'DRAFT', subtotal, totalDiscount, totalTax, totalAmount,
+       meta.customer_name || '', meta.customer_phone || '', meta.customerId || null]
     );
     const order = rows && rows[0];
     
