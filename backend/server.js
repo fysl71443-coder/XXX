@@ -9,6 +9,7 @@ import { createAdmin } from "./createAdmin.js";
 import { pool } from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { authorize } from "./middleware/authorize.js";
+import { checkAccountingPeriod } from "./middleware/checkAccountingPeriod.js";
 import { isAdminUser } from "./utils/auth.js";
 
 dotenv.config();
@@ -1836,6 +1837,32 @@ app.put("/api/journal/:id", authenticateToken, authorize("journal", "edit"), asy
 app.post("/journal/:id/post", authenticateToken, authorize("journal", "post"), async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
+    
+    // Get journal entry to check date for period validation
+    const { rows: entryRows } = await pool.query('SELECT date FROM journal_entries WHERE id = $1', [id]);
+    const entry = entryRows && entryRows[0];
+    
+    if (entry && entry.date) {
+      // Check accounting period before posting
+      const dateObj = typeof entry.date === 'string' ? new Date(entry.date) : entry.date;
+      const period = dateObj.toISOString().slice(0, 7); // YYYY-MM
+      
+      const { rows: periodRows } = await pool.query(
+        'SELECT status FROM accounting_periods WHERE period = $1 LIMIT 1',
+        [period]
+      );
+      
+      const periodData = periodRows && periodRows[0];
+      
+      if (periodData && String(periodData.status).toLowerCase() === 'closed') {
+        return res.status(403).json({
+          error: "ACCOUNTING_PERIOD_CLOSED",
+          details: `Accounting period ${period} is closed. Cannot post journal entries.`,
+          period: period
+        });
+      }
+    }
+    
     await pool.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['posted', id]);
     res.json({ ok: true });
   } catch (e) {
@@ -1847,6 +1874,32 @@ app.post("/journal/:id/post", authenticateToken, authorize("journal", "post"), a
 app.post("/api/journal/:id/post", authenticateToken, authorize("journal", "post"), async (req, res) => {
   try {
     const id = Number(req.params.id || 0);
+    
+    // Get journal entry to check date for period validation
+    const { rows: entryRows } = await pool.query('SELECT date FROM journal_entries WHERE id = $1', [id]);
+    const entry = entryRows && entryRows[0];
+    
+    if (entry && entry.date) {
+      // Check accounting period before posting
+      const dateObj = typeof entry.date === 'string' ? new Date(entry.date) : entry.date;
+      const period = dateObj.toISOString().slice(0, 7); // YYYY-MM
+      
+      const { rows: periodRows } = await pool.query(
+        'SELECT status FROM accounting_periods WHERE period = $1 LIMIT 1',
+        [period]
+      );
+      
+      const periodData = periodRows && periodRows[0];
+      
+      if (periodData && String(periodData.status).toLowerCase() === 'closed') {
+        return res.status(403).json({
+          error: "ACCOUNTING_PERIOD_CLOSED",
+          details: `Accounting period ${period} is closed. Cannot post journal entries.`,
+          period: period
+        });
+      }
+    }
+    
     await pool.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['posted', id]);
     res.json({ ok: true });
   } catch (e) {
@@ -3476,7 +3529,7 @@ app.get("/api/expenses", authenticateToken, async (req, res) => {
     res.json({ items: rows || [] });
   } catch (e) { res.json({ items: [] }); }
 });
-app.post("/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+app.post("/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -3567,7 +3620,7 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
     client.release();
   }
 });
-app.post("/api/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+app.post("/api/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -3808,7 +3861,7 @@ app.get("/invoices/next-number", authenticateToken, authorize("sales","create"),
     res.json({ next: seq });
   } catch (e) { res.json({ next: null }); }
 });
-app.post("/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+app.post("/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
   try {
     const b = req.body || {};
     const lines = Array.isArray(b.lines) ? b.lines : [];
@@ -4381,8 +4434,8 @@ async function handleIssueInvoice(req, res) {
     res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
   }
 }
-app.post("/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleIssueInvoice);
-app.post("/api/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleIssueInvoice);
+app.post("/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), handleIssueInvoice);
+app.post("/api/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), handleIssueInvoice);
 
 // POS Save Draft - both paths for compatibility
 async function handleSaveDraft(req, res) {
