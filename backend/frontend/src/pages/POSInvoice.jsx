@@ -138,7 +138,19 @@ export default function POSInvoice(){
       try {
         const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
         function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
-        const found = (Array.isArray(list)?list:[]).find(o=>{ try { const arr = Array.isArray(o.lines) ? o.lines : (typeof o.lines === 'string' ? JSON.parse(o.lines||'[]') : []); const meta=arr.find(x=>x&&x.type==='meta'); const items=arr.filter(x=>x&&x.type==='item'); return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 } catch { return false } })
+        const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
+          // CRITICAL: Normalize lines - backend may return array or string
+          let arr = [];
+          if (Array.isArray(o.lines)) {
+            arr = o.lines;
+          } else if (typeof o.lines === 'string') {
+            try { arr = JSON.parse(o.lines || '[]'); } catch { arr = []; }
+          }
+          if (!Array.isArray(arr)) arr = [];
+          const meta=arr.find(x=>x&&x.type==='meta'); 
+          const items=arr.filter(x=>x&&x.type==='item'); 
+          return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 
+        } catch { return false } })
         if (found && found.id) navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true })
         else if (Array.isArray(list) && list.length>0 && list[0]?.id) navigate(`/pos/${branch}/tables/${table}?order=${list[0].id}`, { replace: true })
       } catch {}
@@ -207,7 +219,19 @@ export default function POSInvoice(){
         await pos.tableState(branch).catch(()=>({ busy: [] }))
         const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
         function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
-        const found = (Array.isArray(list)?list:[]).find(o=>{ try { const arr = Array.isArray(o.lines) ? o.lines : (typeof o.lines === 'string' ? JSON.parse(o.lines||'[]') : []); const meta=arr.find(x=>x&&x.type==='meta'); const items=arr.filter(x=>x&&x.type==='item'); return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 } catch { return false } })
+        const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
+          // CRITICAL: Normalize lines - backend may return array or string
+          let arr = [];
+          if (Array.isArray(o.lines)) {
+            arr = o.lines;
+          } else if (typeof o.lines === 'string') {
+            try { arr = JSON.parse(o.lines || '[]'); } catch { arr = []; }
+          }
+          if (!Array.isArray(arr)) arr = [];
+          const meta=arr.find(x=>x&&x.type==='meta'); 
+          const items=arr.filter(x=>x&&x.type==='item'); 
+          return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 
+        } catch { return false } })
         if (found && found.id) { try { navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true }) } catch {} }
       } catch {}
     } finally {
@@ -680,7 +704,19 @@ export default function POSInvoice(){
           if (!id) {
             const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
             function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
-            const found = (Array.isArray(list)?list:[]).find(o=>{ try { const arr=JSON.parse(o.lines||'[]')||[]; const meta=arr.find(x=>x&&x.type==='meta'); const items=arr.filter(x=>x&&x.type==='item'); return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && String(meta.table||'')===String(table||'') && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 } catch { return false } })
+            const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
+              // CRITICAL: Normalize lines - backend may return array or string
+              let arr = [];
+              if (Array.isArray(o.lines)) {
+                arr = o.lines;
+              } else if (typeof o.lines === 'string') {
+                try { arr = JSON.parse(o.lines || '[]'); } catch { arr = []; }
+              }
+              if (!Array.isArray(arr)) arr = [];
+              const meta=arr.find(x=>x&&x.type==='meta'); 
+              const items=arr.filter(x=>x&&x.type==='item'); 
+              return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && String(meta.table||'')===String(table||'') && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 
+            } catch { return false } })
             id = Number(found?.id||0)
           }
         } catch {}
@@ -1564,7 +1600,14 @@ export default function POSInvoice(){
                     const norm = (v)=>{ const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); if (s==='palace_india' || s==='palce_india') return 'place_india'; return s }
                     for (const o of Array.isArray(list)?list:[]) {
                       try {
-                        const arr = JSON.parse(o.lines||'[]')||[]
+                        // CRITICAL: Normalize lines - backend may return array or string
+                        let arr = [];
+                        if (Array.isArray(o.lines)) {
+                          arr = o.lines;
+                        } else if (typeof o.lines === 'string') {
+                          try { arr = JSON.parse(o.lines || '[]'); } catch { arr = []; }
+                        }
+                        if (!Array.isArray(arr)) arr = [];
                         const meta = arr.find(x=> x && x.type==='meta') || {}
                         const itemsArr = arr.filter(x=> x && x.type==='item')
                         if (String(meta.table||'')===String(table||'') && norm(meta.branch)===norm(branch) && String(o.status).toUpperCase()==='DRAFT' && itemsArr.length>0) {
