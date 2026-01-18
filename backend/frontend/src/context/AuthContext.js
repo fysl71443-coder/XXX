@@ -158,6 +158,9 @@ export function AuthProvider({ children }) {
   }, []); // Empty deps - only run once on mount
 
   const refresh = loadUser;
+  const refreshPermissionsInFlightRef = useRef(false);
+  const lastRefreshedUserIdRef = useRef(null);
+  
   const refreshPermissions = useCallback(async () => {
     try {
       const id = (user && (user.id || user?.user?.id))
@@ -165,6 +168,21 @@ export function AuthProvider({ children }) {
         console.warn('[AuthContext] refreshPermissions: No user ID');
         return;
       }
+      
+      // Prevent concurrent refreshes for same user
+      if (refreshPermissionsInFlightRef.current && lastRefreshedUserIdRef.current === id) {
+        console.log('[AuthContext] Permissions refresh already in progress, skipping...');
+        return;
+      }
+      
+      // Skip if permissions already loaded for this user
+      if (lastRefreshedUserIdRef.current === id && permissionsLoaded) {
+        console.log('[AuthContext] Permissions already loaded for this user, skipping refresh');
+        return;
+      }
+      
+      refreshPermissionsInFlightRef.current = true;
+      lastRefreshedUserIdRef.current = id;
       console.log('[AuthContext] Refreshing permissions...');
       const pm = await apiUsers.permissions(id);
       setPermissionsMap(normalizePerms(pm || {}));
@@ -172,8 +190,10 @@ export function AuthProvider({ children }) {
       console.log('[AuthContext] Permissions refreshed successfully');
     } catch (e) {
       console.error('[AuthContext] Error refreshing permissions:', e);
+    } finally {
+      refreshPermissionsInFlightRef.current = false;
     }
-  }, [user])
+  }, [user, permissionsLoaded])
 
   const login = useCallback(async (email, password) => {
     const r = await apiAuth.login({ email, password });

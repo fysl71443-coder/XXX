@@ -170,20 +170,8 @@ export default function POSInvoice(){
         console.warn('[POSInvoice] Order not found:', effectiveId);
         throw new Error('Order not found');
       }
-      // CRITICAL: Parse lines safely - backend returns lines as JSON string or array
-      const arr = (function(){ 
-        try { 
-          if (Array.isArray(o.lines)) return o.lines;
-          if (typeof o.lines === 'string') {
-            const parsed = JSON.parse(o.lines);
-            return Array.isArray(parsed) ? parsed : [];
-          }
-          return []; 
-        } catch (e) { 
-          console.error('[POSInvoice] Error parsing lines:', e, 'lines=', o.lines);
-          return []; 
-        } 
-      })()
+      // CRITICAL: Backend always returns lines as array - use directly, no parsing
+      const arr = Array.isArray(o.lines) ? o.lines : [];
       if (process.env.NODE_ENV === 'development') {
         console.log('[POSInvoice] Order loaded:', { id: o.id, linesType: typeof o.lines, arrLength: arr.length });
       }
@@ -201,14 +189,14 @@ export default function POSInvoice(){
       if (process.env.NODE_ENV==='test' && restoredPayLines.length>0 && String(meta.paymentMethod||'')==='multiple') {
         try { setMultiOpen(true) } catch {}
       }
-        const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
-        const safeOrderItems2 = Array.isArray(orderItems) ? orderItems : []
-        // CRITICAL: Always ensure items is an array, never null/undefined
-        itemsRef.current = safeOrderItems2
-        setItems(safeOrderItems2)
-        if (process.env.NODE_ENV === 'development') {
-          console.log('[POSInvoice] Hydrated items:', { count: safeOrderItems2.length, items: safeOrderItems2 });
-        }
+      const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
+      const safeOrderItems2 = Array.isArray(orderItems) ? orderItems : []
+      // CRITICAL: Always ensure items is an array, never null/undefined
+      itemsRef.current = safeOrderItems2
+      setItems(safeOrderItems2)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[POSInvoice] Hydrated items:', { count: safeOrderItems2.length, items: safeOrderItems2 });
+      }
       const bnorm = String(branch||'').toLowerCase()==='palace_india' ? 'place_india' : String(branch||'').toLowerCase()
       try { localStorage.setItem(`pos_order_${branch}_${table}`, String(effectiveId)); localStorage.setItem(`pos_order_${bnorm}_${table}`, String(effectiveId)) } catch {}
       try { localStorage.setItem('current_branch', bnorm) } catch {}
@@ -248,11 +236,18 @@ export default function POSInvoice(){
         const k1 = `pos_order_${branch}_${table}`
         const k2 = `pos_order_${norm(branch)}_${table}`
         const effectiveId = orderId || localStorage.getItem(k1) || localStorage.getItem(k2) || ''
-        if (!effectiveId || hasLoadedOrderRef.current) return
+        if (!effectiveId) return
+        // Reset hasLoadedOrderRef if orderId changed to allow reloading when returning to the order
+        if (hasLoadedOrderRef.current && hydratedOrderIdRef.current !== String(effectiveId)) {
+          hasLoadedOrderRef.current = false
+        }
+        if (hasLoadedOrderRef.current && hydratedOrderIdRef.current === String(effectiveId)) return
         hasLoadedOrderRef.current = true
         await hydrateOrder(effectiveId)
       } catch (e) {
         if (process.env.NODE_ENV==='test') { try { console.warn('POSInvoice order/items load error', e) } catch {} }
+        // Reset on error to allow retry
+        hasLoadedOrderRef.current = false
       }
     })()
     return ()=>{ cancelled=true }
@@ -514,7 +509,18 @@ export default function POSInvoice(){
       : []
     const normalized = { ...payload, items: currentItems, payLines: normalizedPay }
     const hash = buildDraftHashFromPayload(normalized)
-    if (lastSavedHashRef.current === hash) { try { console.log('[Draft] Skipped (no changes)') } catch {} ; return }
+    if (lastSavedHashRef.current === hash) { 
+      try { console.log('[Draft] Skipped (no changes)') } catch {}
+      // Return existing order_id even if no changes to prevent invariant violation
+      const normB = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
+      const k1 = `pos_order_${branch}_${table}`
+      const k2 = `pos_order_${normB(branch)}_${table}`
+      const existingOrderId = orderId || localStorage.getItem(k1) || localStorage.getItem(k2) || null
+      if (existingOrderId) {
+        return { order_id: existingOrderId, id: existingOrderId }
+      }
+      return // Only return undefined if no order exists yet
+    }
     if (saveDraftInFlightRef.current) { pendingHashRef.current = hash; savePendingRef.current = true; return }
     saveDraftInFlightRef.current = true
     const start = performance.now()
@@ -547,6 +553,28 @@ export default function POSInvoice(){
       if ((!res || (!res.order_id && !res.id)) && Array.isArray(normalized.items) && normalized.items.length>0) { 
         console.error('saveDraft response missing order_id:', res)
         throw new Error('Invariant violated: saveDraft returned no order_id') 
+      }
+      // CRITICAL: Update URL with order_id if not already present AND reload order data
+      if (oid && oid !== orderId) {
+        try {
+          const normB = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
+          const k1 = `pos_order_${branch}_${table}`
+          const k2 = `pos_order_${normB(branch)}_${table}`
+          localStorage.setItem(k1, String(oid))
+          localStorage.setItem(k2, String(oid))
+          // If orderId changed, navigate and then reload order data
+          if (String(oid) !== String(orderId)) {
+            navigate(`/pos/${branch}/tables/${table}?order=${oid}`, { replace: true })
+            // CRITICAL: Reload order data immediately after save
+            if (!isHydratingRef.current) {
+              hasLoadedOrderRef.current = false
+              hydratedOrderIdRef.current = null
+              setTimeout(() => hydrateOrder(oid), 100) // Small delay to let URL update
+            }
+          }
+        } catch (e) {
+          console.warn('[POSInvoice] Failed to update URL after saveDraft:', e)
+        }
       }
       console.groupEnd()
       lastSavedHashRef.current = hash
@@ -724,7 +752,10 @@ export default function POSInvoice(){
     return id
   },[branch, table, items, orderId, paymentMethod, partnerId, navigate])
 
-  const issueInvoice = useCallback(async (paymentType)=>{
+  const issueInvoice = useCallback(async (paymentType, orderIdForIssue = null)=>{
+    // CRITICAL: Log orderIdForIssue immediately to track it
+    console.log('[ISSUE INVOICE CALLBACK] Called with orderIdForIssue:', orderIdForIssue, 'paymentType:', paymentType);
+    
     function norm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,'_') }
     const bNorm = norm(branch)
     if (!bNorm || bNorm==='unspecified') { showAlert('الفرع مطلوب','لا يمكن إصدار فاتورة بدون تحديد الفرع'); return { success:false } }
@@ -747,20 +778,140 @@ export default function POSInvoice(){
       if (pmNorm==='card') return 'CARD'
       return pmNorm.toUpperCase()
     })()
+    const currentItems = Array.isArray(itemsRef.current) && itemsRef.current.length > 0 ? itemsRef.current : items
+    const safeItems = Array.isArray(currentItems) ? currentItems : []
+    
+    // Calculate totals
+    const calculateSubtotal = (items) => {
+      return items.reduce((sum, it) => sum + (Number(it.qty||it.quantity||0) * Number(it.price||0)), 0)
+    }
+    const calculateDiscount = (items) => {
+      const globalDiscPct = Number(discountPct||0)
+      const subtotal = calculateSubtotal(items)
+      const globalDiscount = subtotal * (globalDiscPct / 100)
+      const itemDiscounts = items.reduce((sum, it) => sum + Number(it.discount||0), 0)
+      return globalDiscount + itemDiscounts
+    }
+    const taxPctVal = Number(taxPct||15)
+    const subtotalVal = calculateSubtotal(safeItems)
+    const discountVal = calculateDiscount(safeItems)
+    const taxVal = ((subtotalVal - discountVal) * taxPctVal) / 100
+    const totalVal = subtotalVal - discountVal + taxVal
+    
+    // Build lines array in the format expected by backend
+    const lines = safeItems.map(it => ({
+      type: 'item',
+      product_id: it.product_id || it.id,
+      name: it.name || '',
+      qty: Number(it.qty||it.quantity||0),
+      price: Number(it.price||0),
+      discount: Number(it.discount||0)
+    }))
+    
+    // CRITICAL: Ensure order_id is always provided - get from multiple sources
+    // Must be a valid number > 0, not 0, null, undefined, or empty string
+    const effectiveOrderId = (function(){
+      // CRITICAL: Log all sources for debugging
+      console.log('[ISSUE INVOICE] Finding order_id from sources:', { 
+        orderIdForIssue, 
+        orderIdFromURL: orderId, 
+        branch, 
+        table 
+      });
+      
+      // Try orderIdForIssue first (explicitly passed)
+      if (orderIdForIssue && Number(orderIdForIssue) > 0) {
+        console.log('[ISSUE INVOICE] Using orderIdForIssue:', orderIdForIssue);
+        return Number(orderIdForIssue)
+      }
+      // Try orderId from URL query param
+      if (orderId && Number(orderId) > 0) {
+        console.log('[ISSUE INVOICE] Using orderId from URL:', orderId);
+        return Number(orderId)
+      }
+      // Try localStorage
+      try {
+        const normB = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
+        const k1 = `pos_order_${branch}_${table}`
+        const k2 = `pos_order_${normB(branch)}_${table}`
+        const storedId = Number(localStorage.getItem(k1) || localStorage.getItem(k2) || 0)
+        if (storedId > 0) {
+          console.log('[ISSUE INVOICE] Using storedId from localStorage:', storedId);
+          return storedId
+        }
+      } catch {}
+      console.warn('[ISSUE INVOICE] No valid order_id found in any source');
+      return null
+    })()
+    
+    if (!effectiveOrderId || effectiveOrderId <= 0) {
+      console.error('[ISSUE INVOICE] No valid order_id found:', { orderIdForIssue, orderId, branch, table, effectiveOrderId })
+      showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang) || 'يجب حفظ الطلب أولاً')
+      return { success: false, error: 'missing_order_id' }
+    }
+    
+    // CRITICAL: Ensure order_id is a valid number > 0 before building payload
+    // Force conversion to number explicitly
+    const validOrderId = typeof effectiveOrderId === 'number' ? effectiveOrderId : Number(effectiveOrderId);
+    if (!validOrderId || validOrderId <= 0 || !isFinite(validOrderId) || isNaN(validOrderId)) {
+      console.error('[ISSUE INVOICE] Invalid order_id:', { effectiveOrderId, validOrderId, orderIdForIssue, orderId, type: typeof effectiveOrderId })
+      showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang) || 'يجب حفظ الطلب أولاً')
+      return { success: false, error: 'missing_order_id' }
+    }
+    
+    // CRITICAL: Ensure order_id is a number (not string) before building payload
+    const finalOrderId = Number(validOrderId); // Force to number explicitly
+    
+    // CRITICAL: Log final order_id before building payload
+    console.log('[ISSUE INVOICE] Final order_id determined:', finalOrderId, 'type:', typeof finalOrderId);
+    
     const payload = {
+      order_id: finalOrderId,  // CRITICAL: Send order_id as NUMBER - must match backend exactly
       tableId: (/^\d+$/.test(String(table))) ? Number(table) : undefined,
       table: String(table),
       branchId: sel2.id,
       branch: bNorm,
-      items: (Array.isArray(itemsRef.current)?itemsRef.current:items).map(it => ({ id: it.product_id||it.id, name: it.name, quantity: Number(it.qty||it.quantity||0), price: Number(it.price||0), discount: Number(it.discount||0), tax: Number(it.tax||0) })),
-      customerId: partnerId||null,
-      paymentType: pmSend,
-      invoiceNumber: String(invoiceNumber||''),
-      discountPct: Number(discountPct||0),
-      taxPct: Number(taxPct||0)
+      lines: lines,  // Send lines instead of items
+      customer_id: partnerId||null,  // Use customer_id instead of customerId
+      payment_method: pmSend,  // Use payment_method instead of paymentType
+      number: String(invoiceNumber||''),  // Use number instead of invoiceNumber
+      discount_pct: Number(discountPct||0),  // Use discount_pct instead of discountPct
+      tax_pct: taxPctVal,  // Use tax_pct instead of taxPct
+      subtotal: subtotalVal,
+      discount_amount: discountVal,
+      tax_amount: taxVal,
+      total: totalVal,
+      status: 'posted'
     }
-    const res = await pos.issueInvoice(payload)
-    return res
+    
+    // CRITICAL: Verify order_id is present in payload before sending
+    if (!payload.order_id || payload.order_id <= 0) {
+      console.error('[ISSUE INVOICE] ERROR: Payload missing order_id!', payload)
+      showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang) || 'يجب حفظ الطلب أولاً')
+      return { success: false, error: 'missing_order_id' }
+    }
+    
+    // CRITICAL: Verify order_id is a number (not string) - force conversion if needed
+    if (typeof payload.order_id !== 'number' || isNaN(payload.order_id)) {
+      console.warn('[ISSUE INVOICE] order_id is not a number, converting...', { 
+        order_id: payload.order_id, 
+        type: typeof payload.order_id 
+      });
+      payload.order_id = Number(payload.order_id);
+    }
+    
+    // CRITICAL: Log payload before sending - verify order_id is a number
+    console.log('[ISSUE INVOICE] Sending payload with order_id:', payload.order_id, 'type:', typeof payload.order_id);
+    console.log('[ISSUE INVOICE] Full payload:', JSON.stringify(payload, null, 2));
+    
+    try {
+      const res = await pos.issueInvoice(payload)
+      console.log('[ISSUE INVOICE] Response:', res);
+      return res
+    } catch (err) {
+      console.error('[ISSUE INVOICE] ERROR:', err.response?.data || err);
+      throw err;
+    }
   },[branch, table, items, partnerId, branchesList])
 
   const autoSaveTimer = useRef(null)
@@ -786,13 +937,17 @@ export default function POSInvoice(){
       if (String(selectedPartnerType||'')==='credit' && !discountApplied) { setPlatformDiscountOpen(true); showAlert(t('errors.discount_required', lang), t('errors.discount_note', lang)); return }
       const pid = await resolvePartner();
       let id = await saveDraft();
-      if (!id) {
+      // CRITICAL: Normalize id to number - saveDraft returns string, must be > 0
+      // saveDraft returns order_id from resp.order_id (lockedSaveDraft response)
+      id = id ? Number(String(id).trim()) : 0;
+      console.log('[ISSUE] saveDraft returned order_id:', id);
+      if (!id || id <= 0) {
         try {
           const normB = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
           const k1 = `pos_order_${branch}_${table}`
           const k2 = `pos_order_${normB(branch)}_${table}`
           id = Number(localStorage.getItem(k1)||localStorage.getItem(k2)||0)
-          if (!id) {
+          if (!id || id <= 0) {
             const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
             function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
             const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
@@ -812,7 +967,7 @@ export default function POSInvoice(){
           }
         } catch {}
       }
-      if (!id) { showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang)); return }
+      if (!id || id <= 0) { showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang)); return }
       // safeItems already defined above, reuse it
       const untaxed = safeItems.reduce((s,it)=> s + Number(it.qty||0)*Number(it.price||0),0)
       const tax = (untaxed - totals.discount) * (Number(taxPct||0)/100)
@@ -830,9 +985,17 @@ export default function POSInvoice(){
         try { await apiOrders.update(Number(id), { status: 'ISSUED' }) } catch {}
           return
         }
-        const res = await issueInvoice(paymentMethod)
-        if (!res || !res.success) { showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); return }
-        const inv = res.invoice || { id: null, invoice_number: null }
+        // CRITICAL: Verify order_id before calling issueInvoice
+        if (!id || id <= 0) {
+          console.error('[ISSUE] Invalid order_id before issueInvoice:', { id, orderId })
+          showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang) || 'يجب حفظ الطلب أولاً')
+          return
+        }
+        console.log('[ISSUE] Calling issueInvoice with order_id:', id);
+        const res = await issueInvoice(paymentMethod, id)
+        // Backend returns invoice object directly, not { success: true, invoice }
+        if (!res || !res.id) { showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); return }
+        const inv = res || { id: null, number: null }
         try {
           const dval = Number(inv?.discount_total||0)
           if (isFinite(dval) && dval>0 && Number(totals.discount||0)<=0) {
@@ -905,7 +1068,7 @@ export default function POSInvoice(){
             phone,
             address,
             branchName: branchDisplay,
-            invoiceNo: String(inv.invoice_number||''),
+            invoiceNo: String(inv.number||inv.invoice_number||''),
             date: String(date||''),
             time: new Date().toTimeString().slice(0,8),
             customerName: customerPrintName,
@@ -949,9 +1112,10 @@ export default function POSInvoice(){
         } catch {}
         return
       }
-      const res2 = await issueInvoice('')
-      if (!res2 || !res2.success) { showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); return }
-      const inv = res2.invoice || { id: null, invoice_number: null }
+      const res2 = await issueInvoice('', id)
+      // Backend returns invoice object directly, not { success: true, invoice }
+      if (!res2 || !res2.id) { showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); return }
+      const inv = res2 || { id: null, number: null }
       let companyName = ''
       let vatNumber = ''
       let phone = ''
@@ -1439,6 +1603,7 @@ export default function POSInvoice(){
                     <tr className="border-b bg-emerald-700 text-white">
                       <th className="p-2">{t('labels.item', lang)}</th>
                       <th className="p-2">{t('labels.qty', lang)}</th>
+                      <th className="p-2">{lang === 'ar' ? 'المبلغ' : 'Amount'}</th>
                     </tr>
                   </thead>
                   <tbody data-testid="receipt-items" data-ready={safeItems.length > 0 ? 'true' : 'false'}>
@@ -1452,8 +1617,51 @@ export default function POSInvoice(){
                           <button className="h-6 w-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center" onClick={()=> updateItem(i, o=> ({ qty: Number(o.qty||0)+1 }))} aria-label="increase">+</button>
                         </div>
                       </td>
+                      <td className="p-2 text-right">
+                        <Money value={Number(it.qty||0) * Number(it.price||0)} />
+                      </td>
                     </tr>
                   ))}
+                  {safeItems.length > 0 && (
+                    <>
+                      <tr className="border-t-2 border-gray-400 bg-gray-50">
+                        <td colSpan="2" className="p-2 text-right font-semibold text-gray-700">
+                          {lang === 'ar' ? 'الإجمالي الفرعي' : 'Subtotal'}
+                        </td>
+                        <td className="p-2 text-right font-semibold">
+                          <Money value={totals.subtotal} />
+                        </td>
+                      </tr>
+                      {totals.discount > 0 && (
+                        <tr className="bg-gray-50">
+                          <td colSpan="2" className="p-2 text-right text-gray-700">
+                            {lang === 'ar' ? 'الخصم' : 'Discount'}
+                          </td>
+                          <td className="p-2 text-right text-red-600">
+                            <Money value={totals.discount} />
+                          </td>
+                        </tr>
+                      )}
+                      {totals.tax > 0 && (
+                        <tr className="bg-gray-50">
+                          <td colSpan="2" className="p-2 text-right text-gray-700">
+                            {lang === 'ar' ? `الضريبة (${taxPct}%)` : `Tax (${taxPct}%)`}
+                          </td>
+                          <td className="p-2 text-right text-gray-700">
+                            <Money value={totals.tax} />
+                          </td>
+                        </tr>
+                      )}
+                      <tr className="border-t-2 border-emerald-600 bg-emerald-50">
+                        <td colSpan="2" className="p-2 text-right font-bold text-lg text-emerald-800">
+                          {lang === 'ar' ? 'الإجمالي النهائي' : 'Total'}
+                        </td>
+                        <td className="p-2 text-right font-bold text-lg text-emerald-800">
+                          <Money value={totals.total} />
+                        </td>
+                      </tr>
+                    </>
+                  )}
                 </tbody>
                 </table>
                 );

@@ -649,8 +649,8 @@ export default function Journal() {
                           <td className="px-3 py-2">#{e.entry_number ?? '—'}</td>
                           <td className="px-3 py-2">{e.date}</td>
                           <td className="px-3 py-2">{e.description}</td>
-                          <td className="px-3 py-2 text-blue-700">{parseFloat(e.debit||0).toFixed(2)}</td>
-                          <td className="px-3 py-2 text-red-700">{parseFloat(e.credit||0).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-blue-700">{parseFloat(e.total_debit||e.debit||0).toFixed(2)}</td>
+                          <td className="px-3 py-2 text-red-700">{parseFloat(e.total_credit||e.credit||0).toFixed(2)}</td>
                           <td className="px-3 py-2"><StatusBadge status={e.status} /></td>
                           <td className="px-3 py-2">
                             <div className="flex justify-end">
@@ -791,23 +791,29 @@ export default function Journal() {
             ) : (
               <div className="bg-white/90 backdrop-blur border border-gray-200 rounded-xl p-6 shadow-sm">
                 <div className="text-gray-700 font-semibold mb-2">{lang==='ar'?'تحليل سريع':'Quick Analysis'}</div>
-                <div className="grid grid-cols-1 gap-3" style={{height:300}}>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={aggregateByAccount(visibleItems)}>
-                      <XAxis dataKey="name" /><YAxis /><Tooltip /><Legend />
-                      <Bar dataKey="debit" fill="#2563eb" name={lang==='ar'?'مدين':'Debit'} />
-                      <Bar dataKey="credit" fill="#dc2626" name={lang==='ar'?'دائن':'Credit'} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <PieChart>
-                    <Pie data={[{name:lang==='ar'?'مدين':'Debit',value:sumDebit(visibleItems)},{name:lang==='ar'?'دائن':'Credit',value:sumCredit(visibleItems)}]} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                        <Cell fill="#2563eb" /><Cell fill="#dc2626" />
-                      </Pie>
-                      <Tooltip /><Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
+                {Array.isArray(visibleItems) && visibleItems.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3" style={{height:300}}>
+                    <ResponsiveContainer width="100%" height={300} minHeight={200}>
+                      <BarChart data={aggregateByAccount(visibleItems)}>
+                        <XAxis dataKey="name" /><YAxis /><Tooltip /><Legend />
+                        <Bar dataKey="debit" fill="#2563eb" name={lang==='ar'?'مدين':'Debit'} />
+                        <Bar dataKey="credit" fill="#dc2626" name={lang==='ar'?'دائن':'Credit'} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                    <ResponsiveContainer width="100%" height={300} minHeight={200}>
+                      <PieChart>
+                      <Pie data={[{name:lang==='ar'?'مدين':'Debit',value:sumDebit(visibleItems)},{name:lang==='ar'?'دائن':'Credit',value:sumCredit(visibleItems)}]} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                          <Cell fill="#2563eb" /><Cell fill="#dc2626" />
+                        </Pie>
+                        <Tooltip /><Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="h-64 flex items-center justify-center text-gray-500">
+                    {lang==='ar'?'لا توجد بيانات لعرضها':'No data to display'}
+                  </div>
+                )}
               </div>
             )}
           </section>
@@ -869,8 +875,8 @@ export default function Journal() {
   )
 }
 
-function sumDebit(items){ return items.reduce((s,x)=> s + parseFloat(x.debit||0), 0) }
-function sumCredit(items){ return items.reduce((s,x)=> s + parseFloat(x.credit||0), 0) }
+function sumDebit(items){ return items.reduce((s,x)=> s + parseFloat(x.total_debit||x.debit||0), 0) }
+function sumCredit(items){ return items.reduce((s,x)=> s + parseFloat(x.total_credit||x.credit||0), 0) }
 function countStatus(items, status){ return items.filter(i=> i.status===status).length }
 
 function formatDiscount(entry){
@@ -1022,5 +1028,5 @@ function aggregateByAccount(entries){
   })
   return Array.from(map.values())
 }
-  function isUnbalanced(e){ try { return Math.abs(parseFloat(e.debit||0) - parseFloat(e.credit||0)) > 0.0001 } catch { return false } }
+  function isUnbalanced(e){ try { return Math.abs(parseFloat(e.total_debit||e.debit||0) - parseFloat(e.total_credit||e.credit||0)) > 0.0001 } catch { return false } }
  

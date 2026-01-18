@@ -5,6 +5,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import cors from "cors";
 import dotenv from "dotenv";
+import pg from "pg";
 import { createAdmin } from "./createAdmin.js";
 import { pool } from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
@@ -12,13 +13,19 @@ import { authorize } from "./middleware/authorize.js";
 import { checkAccountingPeriod } from "./middleware/checkAccountingPeriod.js";
 import { isAdminUser } from "./utils/auth.js";
 
+// CRITICAL: Register JSONB type parser for pg library
+// This ensures pg library correctly handles JSONB conversion
+pg.types.setTypeParser(pg.types.builtins.JSONB, (val) => {
+  return val ? JSON.parse(val) : null;
+});
+
 dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = Number(process.env.PORT || 10000);
+const port = Number(process.env.PORT || 4000); // Default 4000, but can be overridden (e.g., 5000 for dev)
 
 const buildPath = path.join(__dirname, "frontend", "build");
 
@@ -49,7 +56,32 @@ app.use((req, res, next) => {
 app.use(express.static(buildPath));
 
 // 2️⃣ Public paths that never need auth
-app.get('/favicon.ico', (req, res) => res.status(204).end());
+// Serve favicon.ico from public folder
+app.get('/favicon.ico', (req, res) => {
+  res.sendFile(path.join(buildPath, 'favicon.ico'), (err) => {
+    if (err) res.status(204).end();
+  });
+});
+
+// Serve zatca.svg from public folder
+app.get('/zatca.svg', (req, res) => {
+  res.sendFile(path.join(buildPath, 'zatca.svg'), (err) => {
+    if (err) res.status(404).json({ error: 'not_found' });
+  });
+});
+
+// Handle nested paths for static files (e.g., /expenses/favicon.ico -> /favicon.ico)
+app.get('*/favicon.ico', (req, res) => {
+  res.sendFile(path.join(buildPath, 'favicon.ico'), (err) => {
+    if (err) res.status(204).end();
+  });
+});
+
+app.get('*/zatca.svg', (req, res) => {
+  res.sendFile(path.join(buildPath, 'zatca.svg'), (err) => {
+    if (err) res.status(404).json({ error: 'not_found' });
+  });
+});
 app.get('/manifest.json', (req, res) => {
   res.sendFile(path.join(buildPath, 'manifest.json'), (err) => {
     if (err) {
@@ -64,6 +96,16 @@ app.get('/robots.txt', (req, res) => {
       console.warn('[STATIC] robots.txt not found, returning 404');
       res.status(404).end();
     }
+  });
+});
+
+// Health check endpoint for development
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    env: process.env.NODE_ENV || 'development',
+    port: port,
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -109,7 +151,13 @@ app.use((req, res, next) => {
 
 // 3️⃣ Middleware for parsing (safe for static files)
 // CRITICAL: Increase body size limit for Base64 images in settings
-app.use(cors());
+// CRITICAL: CORS configuration for development (allows localhost:3000 and localhost:4000)
+app.use(cors({
+  origin: ['http://localhost:3000', 'http://localhost:4000', 'http://127.0.0.1:3000', 'http://127.0.0.1:4000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -309,8 +357,10 @@ async function ensureSchema() {
     await pool.query(`
       CREATE TABLE IF NOT EXISTS expenses (
         id SERIAL PRIMARY KEY,
+        invoice_number TEXT,
         type TEXT, -- 'expense' | 'payment' | etc.
         amount NUMERIC(18,2) DEFAULT 0,
+        total NUMERIC(18,2) DEFAULT 0,
         account_code TEXT,
         partner_id INTEGER,
         description TEXT,
@@ -318,10 +368,15 @@ async function ensureSchema() {
         branch TEXT,
         date DATE DEFAULT CURRENT_DATE,
         payment_method TEXT DEFAULT 'cash',
+        items JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // Add columns if they don't exist
+    await pool.query('ALTER TABLE expenses ADD COLUMN IF NOT EXISTS invoice_number TEXT');
+    await pool.query('ALTER TABLE expenses ADD COLUMN IF NOT EXISTS total NUMERIC(18,2) DEFAULT 0');
+    await pool.query('ALTER TABLE expenses ADD COLUMN IF NOT EXISTS items JSONB');
     await pool.query(`
       CREATE TABLE IF NOT EXISTS supplier_invoices (
         id SERIAL PRIMARY KEY,
@@ -377,9 +432,14 @@ async function ensureSchema() {
         customerId INTEGER,
         customer_name TEXT,
         customer_phone TEXT,
+        invoice_id INTEGER,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
+    `);
+    // Add invoice_id column if it doesn't exist (for linking orders to invoices)
+    await pool.query(`
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_id INTEGER
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS payments (
@@ -436,6 +496,21 @@ async function ensureSchema() {
       // Column might already exist, ignore error
       console.log('[SCHEMA] period column check:', e?.message || 'ok');
     }
+    // Add branch column if it doesn't exist
+    try {
+      await pool.query(`
+        DO $$ 
+        BEGIN 
+          IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                         WHERE table_name='journal_entries' AND column_name='branch') THEN
+            ALTER TABLE journal_entries ADD COLUMN branch TEXT;
+          END IF;
+        END $$;
+      `);
+    } catch (e) {
+      // Column might already exist, ignore error
+      console.log('[SCHEMA] branch column check:', e?.message || 'ok');
+    }
     await pool.query(`
       CREATE TABLE IF NOT EXISTS journal_postings (
         id SERIAL PRIMARY KEY,
@@ -487,6 +562,11 @@ ensureSchema().catch((e) => {
 // Add missing columns to expenses table if they don't exist (for existing databases)
 (async function() {
   try {
+    if (!pool) {
+      console.warn('[SCHEMA] Database pool not configured, skipping expenses columns setup');
+      return;
+    }
+    
     // Wait a bit for ensureSchema to complete
     await new Promise(resolve => setTimeout(resolve, 1000));
     
@@ -1402,6 +1482,16 @@ app.use("/customers", authenticateToken, async (req, res, next) => {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
+// GET /api/customers - Alias for /api/partners with type=customer
+app.get("/api/customers", authenticateToken, authorize("clients", "view"), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM partners WHERE type = $1 OR type = $2 ORDER BY id DESC', ['customer', 'عميل']);
+    res.json({ items: rows || [] });
+  } catch (e) {
+    console.error('[CUSTOMERS] Error listing:', e);
+    res.json({ items: [] });
+  }
+});
 
 // REMOVED: /employees middleware - conflicts with frontend routes
 // All /employees API calls should use /api/employees instead
@@ -1452,7 +1542,7 @@ app.get("/journal", authenticateToken, authorize("journal", "view"), async (req,
     
     let query = `
       SELECT je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, 
-             je.status, je.created_at,
+             je.status, je.created_at, je.branch,
              COALESCE(SUM(jp.debit), 0) as total_debit,
              COALESCE(SUM(jp.credit), 0) as total_credit
       FROM journal_entries je
@@ -1479,19 +1569,55 @@ app.get("/journal", authenticateToken, authorize("journal", "view"), async (req,
       params.push(`%${search}%`, `%${search}%`);
     }
     
-    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at`;
+    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at, je.branch`;
     
     // Order and paginate
     query += ` ORDER BY je.date DESC, je.entry_number DESC`;
     
     const { rows } = await pool.query(query, params);
     
-    // Calculate totals
+    // Load postings for each entry with account details
+    const entryIds = (rows || []).map(r => r.id);
+    let postingsMap = new Map();
+    
+    if (entryIds.length > 0) {
+      const postingsQuery = `
+        SELECT jp.*, 
+               a.account_number, a.account_code, a.name as account_name, a.name_en as account_name_en, a.type as account_type
+        FROM journal_postings jp
+        LEFT JOIN accounts a ON a.id = jp.account_id
+        WHERE jp.journal_entry_id = ANY($1)
+        ORDER BY jp.id
+      `;
+      const { rows: postingsRows } = await pool.query(postingsQuery, [entryIds]);
+      
+      // Group postings by journal_entry_id
+      for (const p of postingsRows || []) {
+        if (!postingsMap.has(p.journal_entry_id)) {
+          postingsMap.set(p.journal_entry_id, []);
+        }
+        postingsMap.get(p.journal_entry_id).push({
+          ...p,
+          debit: Number(p.debit || 0),
+          credit: Number(p.credit || 0),
+          account: p.account_number || p.account_code ? {
+            id: p.account_id,
+            account_number: p.account_number,
+            account_code: p.account_code,
+            name: p.account_name,
+            name_en: p.account_name_en,
+            type: p.account_type
+          } : null
+        });
+      }
+    }
+    
+    // Calculate totals and add postings
     const items = (rows || []).map(row => ({
       ...row,
       total_debit: Number(row.total_debit || 0),
       total_credit: Number(row.total_credit || 0),
-      postings: [] // Will be loaded separately if needed
+      postings: postingsMap.get(row.id) || []
     }));
     
     res.json({ items, total: items.length });
@@ -1512,7 +1638,7 @@ app.get("/api/journal", authenticateToken, authorize("journal", "view"), async (
     
     let query = `
       SELECT je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, 
-             je.status, je.created_at,
+             je.status, je.created_at, je.branch,
              COALESCE(SUM(jp.debit), 0) as total_debit,
              COALESCE(SUM(jp.credit), 0) as total_credit
       FROM journal_entries je
@@ -1539,19 +1665,55 @@ app.get("/api/journal", authenticateToken, authorize("journal", "view"), async (
       params.push(`%${search}%`, `%${search}%`);
     }
     
-    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at`;
+    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at, je.branch`;
     
     // Order and paginate
     query += ` ORDER BY je.date DESC, je.entry_number DESC`;
     
     const { rows } = await pool.query(query, params);
     
-    // Calculate totals
+    // Load postings for each entry with account details
+    const entryIds = (rows || []).map(r => r.id);
+    let postingsMap = new Map();
+    
+    if (entryIds.length > 0) {
+      const postingsQuery = `
+        SELECT jp.*, 
+               a.account_number, a.account_code, a.name as account_name, a.name_en as account_name_en, a.type as account_type
+        FROM journal_postings jp
+        LEFT JOIN accounts a ON a.id = jp.account_id
+        WHERE jp.journal_entry_id = ANY($1)
+        ORDER BY jp.id
+      `;
+      const { rows: postingsRows } = await pool.query(postingsQuery, [entryIds]);
+      
+      // Group postings by journal_entry_id
+      for (const p of postingsRows || []) {
+        if (!postingsMap.has(p.journal_entry_id)) {
+          postingsMap.set(p.journal_entry_id, []);
+        }
+        postingsMap.get(p.journal_entry_id).push({
+          ...p,
+          debit: Number(p.debit || 0),
+          credit: Number(p.credit || 0),
+          account: p.account_number || p.account_code ? {
+            id: p.account_id,
+            account_number: p.account_number,
+            account_code: p.account_code,
+            name: p.account_name,
+            name_en: p.account_name_en,
+            type: p.account_type
+          } : null
+        });
+      }
+    }
+    
+    // Calculate totals and add postings
     const items = (rows || []).map(row => ({
       ...row,
       total_debit: Number(row.total_debit || 0),
       total_credit: Number(row.total_credit || 0),
-      postings: [] // Will be loaded separately if needed
+      postings: postingsMap.get(row.id) || []
     }));
     
     res.json({ items, total: items.length });
@@ -1574,10 +1736,12 @@ app.get("/journal/:id", authenticateToken, authorize("journal", "view"), async (
     }
     
     const { rows: postingsRows } = await pool.query(
-      `SELECT jp.*, a.account_number, a.name as account_name 
+      `SELECT jp.*, 
+              a.account_number, a.account_code, a.name as account_name, a.name_en as account_name_en, a.type as account_type
        FROM journal_postings jp
        LEFT JOIN accounts a ON a.id = jp.account_id
-       WHERE jp.journal_entry_id = $1`,
+       WHERE jp.journal_entry_id = $1
+       ORDER BY jp.id`,
       [id]
     );
     
@@ -1586,7 +1750,15 @@ app.get("/journal/:id", authenticateToken, authorize("journal", "view"), async (
       postings: (postingsRows || []).map(p => ({
         ...p,
         debit: Number(p.debit || 0),
-        credit: Number(p.credit || 0)
+        credit: Number(p.credit || 0),
+        account: p.account_number || p.account_code ? {
+          id: p.account_id,
+          account_number: p.account_number,
+          account_code: p.account_code,
+          name: p.account_name,
+          name_en: p.account_name_en,
+          type: p.account_type
+        } : null
       }))
     });
   } catch (e) {
@@ -1607,10 +1779,12 @@ app.get("/api/journal/:id", authenticateToken, authorize("journal", "view"), asy
     }
     
     const { rows: postingsRows } = await pool.query(
-      `SELECT jp.*, a.account_number, a.name as account_name 
+      `SELECT jp.*, 
+              a.account_number, a.account_code, a.name as account_name, a.name_en as account_name_en, a.type as account_type
        FROM journal_postings jp
        LEFT JOIN accounts a ON a.id = jp.account_id
-       WHERE jp.journal_entry_id = $1`,
+       WHERE jp.journal_entry_id = $1
+       ORDER BY jp.id`,
       [id]
     );
     
@@ -1619,7 +1793,15 @@ app.get("/api/journal/:id", authenticateToken, authorize("journal", "view"), asy
       postings: (postingsRows || []).map(p => ({
         ...p,
         debit: Number(p.debit || 0),
-        credit: Number(p.credit || 0)
+        credit: Number(p.credit || 0),
+        account: p.account_number || p.account_code ? {
+          id: p.account_id,
+          account_number: p.account_number,
+          account_code: p.account_code,
+          name: p.account_name,
+          name_en: p.account_name_en,
+          type: p.account_type
+        } : null
       }))
     });
   } catch (e) {
@@ -2557,6 +2739,19 @@ app.get("/api/accounts", authenticateToken, authorize("accounting", "view"), asy
     res.json(roots);
   } catch (e) {
     console.error('[ACCOUNTS] Error fetching accounts tree:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/api/accounts/:id", authenticateToken, authorize("accounting", "view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const { rows } = await pool.query('SELECT id, account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry, created_at, updated_at FROM accounts WHERE id = $1', [id]);
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "not_found", details: "Account not found" });
+    }
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[ACCOUNTS] Error getting account:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
@@ -3588,35 +3783,99 @@ app.delete("/api/employees/:id", authenticateToken, authorize("employees","delet
 
 app.get("/expenses", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at FROM expenses ORDER BY id DESC');
-    res.json({ items: rows || [] });
+    const { rows } = await pool.query('SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at FROM expenses ORDER BY id DESC');
+    // Map items to format expected by frontend
+    const items = (rows || []).map(row => {
+      const status = String(row.status || 'draft');
+      const hasPostedJournal = !!row.journal_entry_id;
+      const isDraft = status === 'draft';
+      const isPosted = status === 'posted';
+      
+      return {
+        ...row,
+        invoice_number: row.invoice_number || `EXP-${row.id}`,
+        total: Number(row.total || row.amount || 0),
+        derived_status: isPosted ? 'posted' : (isDraft ? 'draft' : status),
+        has_posted_journal: hasPostedJournal,
+        allowed_actions: {
+          post: isDraft && !hasPostedJournal,
+          edit: isDraft && !hasPostedJournal,
+          delete: isDraft && !hasPostedJournal,
+          reverse: isPosted && hasPostedJournal
+        }
+      };
+    });
+    res.json({ items });
   } catch (e) { res.json({ items: [] }); }
 });
 app.get("/api/expenses", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at FROM expenses ORDER BY id DESC');
-    res.json({ items: rows || [] });
+    const { rows } = await pool.query('SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, journal_entry_id, created_at FROM expenses ORDER BY id DESC');
+    // Map items to format expected by frontend
+    const items = (rows || []).map(row => {
+      const status = String(row.status || 'draft');
+      const hasPostedJournal = !!row.journal_entry_id;
+      const isDraft = status === 'draft';
+      const isPosted = status === 'posted';
+      
+      return {
+        ...row,
+        invoice_number: row.invoice_number || `EXP-${row.id}`,
+        total: Number(row.total || row.amount || 0),
+        derived_status: isPosted ? 'posted' : (isDraft ? 'draft' : status),
+        has_posted_journal: hasPostedJournal,
+        allowed_actions: {
+          post: isDraft && !hasPostedJournal,
+          edit: isDraft && !hasPostedJournal,
+          delete: isDraft && !hasPostedJournal,
+          reverse: isPosted && hasPostedJournal
+        }
+      };
+    });
+    res.json({ items });
   } catch (e) { res.json({ items: [] }); }
+});
+app.get("/api/expenses/:id", authenticateToken, async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const { rows } = await pool.query('SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, journal_entry_id, created_at, updated_at FROM expenses WHERE id = $1', [id]);
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "not_found", details: "Expense not found" });
+    }
+    const expense = rows[0];
+    expense.invoice_number = expense.invoice_number || `EXP-${expense.id}`;
+    expense.total = Number(expense.total || expense.amount || 0);
+    res.json(expense);
+  } catch (e) {
+    console.error('[EXPENSES] Error getting expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
 });
 app.post("/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const b = req.body || {};
-    const expenseType = b.type || 'expense';
+    const expenseType = b.type || b.expense_type || 'expense';
     const amount = Number(b.amount || 0);
+    const items = Array.isArray(b.items) ? b.items : [];
+    const total = b.total != null ? Number(b.total) : (items.length > 0 ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : amount);
+    const invoiceNumber = b.invoice_number || null;
     const accountCode = b.account_code || null;
     const partnerId = b.partner_id || null;
     const description = b.description || null;
-    const status = b.status || 'draft';
+    // ✅ ترحيل تلقائي عند الإنشاء إذا كان status = 'posted' أو auto_post = true
+    const autoPost = b.auto_post === true || b.status === 'posted';
+    const status = autoPost ? 'posted' : (b.status || 'draft');
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const date = b.date || new Date().toISOString().slice(0, 10);
     const paymentMethod = b.payment_method || 'cash';
     
     // Insert expense with date and payment_method
+    const itemsJson = items.length > 0 ? JSON.stringify(items) : null;
     const { rows } = await client.query(
-      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch, date, payment_method) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
-      [expenseType, amount, accountCode, partnerId, description, status, branch, date, paymentMethod]
+      'INSERT INTO expenses(invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) RETURNING id, invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at',
+      [invoiceNumber, expenseType, amount, total, accountCode, partnerId, description, status, branch, date, paymentMethod, itemsJson]
     );
     const expense = rows && rows[0];
     
@@ -3627,8 +3886,8 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
     
     console.log(`[EXPENSES] Created expense ${expense.id}, amount=${amount}, account=${accountCode}`);
     
-    // If expense is posted (not draft), create journal entry
-    if (status === 'posted' && amount > 0 && accountCode) {
+    // ✅ If expense is posted (not draft), create journal entry automatically
+    if (status === 'posted' && total > 0 && accountCode) {
       try {
         // Get expense account ID
         const expenseAccountId = await getAccountIdByNumber(accountCode);
@@ -3642,33 +3901,59 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
         }
         
         if (expenseAccountId && paymentAccountId) {
-          // Get next entry number
-          const { rows: lastEntry } = await client.query('SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1');
-          const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
-          
-          // Create journal entry
+          // ✅ استخدام SEQUENCE للترقيم التلقائي
+          // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
+          const entryDescription = expenseType ? `مصروف #${expense.id} - ${expenseType}` : `مصروف #${expense.id}${description ? ' - ' + description : ''}`;
           const { rows: entryRows } = await client.query(
-            `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [entryNumber, `مصروف #${expense.id}${description ? ' - ' + description : ''}`, date, 'expense', expense.id, 'posted']
+            `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
+            [entryDescription, date, 'expense', expense.id, 'posted', branch]
           );
           
           const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
           
           if (entryId) {
-            // Create postings
+            // Create postings for each item or single posting
+            if (items.length > 0) {
+              // Multiple items - create posting for each
+              for (const item of items) {
+                const itemAmount = Number(item.amount || 0);
+                const itemAccountId = await getAccountIdByNumber(item.account_code);
+                if (itemAccountId && itemAmount > 0) {
+                  await client.query(
+                    `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                     VALUES ($1, $2, $3, $4)`,
+                    [entryId, itemAccountId, itemAmount, 0]
+                  );
+                }
+              }
+              // Payment posting (credit)
+              await client.query(
+                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                 VALUES ($1, $2, $3, $4)`,
+                [entryId, paymentAccountId, 0, total]
+              );
+            } else {
+              // Single expense - create two postings
+              await client.query(
+                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                 VALUES ($1, $2, $3, $4)`,
+                [entryId, expenseAccountId, total, 0]
+              );
+              await client.query(
+                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                 VALUES ($1, $2, $3, $4)`,
+                [entryId, paymentAccountId, 0, total]
+              );
+            }
+            
+            // ✅ ربط المصروف بالقيد
             await client.query(
-              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-               VALUES ($1, $2, $3, $4)`,
-              [entryId, expenseAccountId, amount, 0]
-            );
-            await client.query(
-              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-               VALUES ($1, $2, $3, $4)`,
-              [entryId, paymentAccountId, 0, amount]
+              'UPDATE expenses SET journal_entry_id = $1 WHERE id = $2',
+              [entryId, expense.id]
             );
             
-            console.log(`[EXPENSES] Created journal entry ${entryId} for expense ${expense.id}`);
+            console.log(`[EXPENSES] Auto-posted expense ${expense.id}, created journal entry ${entryId}`);
           }
         } else {
           console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
@@ -3694,20 +3979,26 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
   try {
     await client.query('BEGIN');
     const b = req.body || {};
-    const expenseType = b.type || 'expense';
+    const expenseType = b.type || b.expense_type || 'expense';
     const amount = Number(b.amount || 0);
+    const items = Array.isArray(b.items) ? b.items : [];
+    const total = b.total != null ? Number(b.total) : (items.length > 0 ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : amount);
+    const invoiceNumber = b.invoice_number || null;
     const accountCode = b.account_code || null;
     const partnerId = b.partner_id || null;
     const description = b.description || null;
-    const status = b.status || 'draft';
+    // ✅ ترحيل تلقائي عند الإنشاء إذا كان status = 'posted' أو auto_post = true
+    const autoPost = b.auto_post === true || b.status === 'posted';
+    const status = autoPost ? 'posted' : (b.status || 'draft');
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const date = b.date || new Date().toISOString().slice(0, 10);
     const paymentMethod = b.payment_method || 'cash';
     
     // Insert expense
+    const itemsJson = items.length > 0 ? JSON.stringify(items) : null;
     const { rows } = await client.query(
-      'INSERT INTO expenses(type, amount, account_code, partner_id, description, status, branch, date, payment_method) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
-      [expenseType, amount, accountCode, partnerId, description, status, branch, date, paymentMethod]
+      'INSERT INTO expenses(invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb) RETURNING id, invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at',
+      [invoiceNumber, expenseType, amount, total, accountCode, partnerId, description, status, branch, date, paymentMethod, itemsJson]
     );
     const expense = rows && rows[0];
     
@@ -3718,8 +4009,8 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
     
     console.log(`[EXPENSES] Created expense ${expense.id}, amount=${amount}, account=${accountCode}`);
     
-    // If expense is posted (not draft), create journal entry
-    if (status === 'posted' && amount > 0 && accountCode) {
+    // ✅ If expense is posted (not draft), create journal entry automatically
+    if (status === 'posted' && total > 0 && accountCode) {
       try {
         // Get expense account ID
         const expenseAccountId = await getAccountIdByNumber(accountCode);
@@ -3733,33 +4024,59 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
         }
         
         if (expenseAccountId && paymentAccountId) {
-          // Get next entry number
-          const { rows: lastEntry } = await client.query('SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1');
-          const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
-          
-          // Create journal entry
+          // ✅ استخدام SEQUENCE للترقيم التلقائي
+          // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
+          const entryDescription = expenseType ? `مصروف #${expense.id} - ${expenseType}` : `مصروف #${expense.id}${description ? ' - ' + description : ''}`;
           const { rows: entryRows } = await client.query(
-            `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-            [entryNumber, `مصروف #${expense.id}${description ? ' - ' + description : ''}`, date, 'expense', expense.id, 'posted']
+            `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
+             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
+            [entryDescription, date, 'expense', expense.id, 'posted', branch]
           );
           
           const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
           
           if (entryId) {
-            // Create postings
+            // Create postings for each item or single posting
+            if (items.length > 0) {
+              // Multiple items - create posting for each
+              for (const item of items) {
+                const itemAmount = Number(item.amount || 0);
+                const itemAccountId = await getAccountIdByNumber(item.account_code);
+                if (itemAccountId && itemAmount > 0) {
+                  await client.query(
+                    `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                     VALUES ($1, $2, $3, $4)`,
+                    [entryId, itemAccountId, itemAmount, 0]
+                  );
+                }
+              }
+              // Payment posting (credit)
+              await client.query(
+                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                 VALUES ($1, $2, $3, $4)`,
+                [entryId, paymentAccountId, 0, total]
+              );
+            } else {
+              // Single expense - create two postings
+              await client.query(
+                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                 VALUES ($1, $2, $3, $4)`,
+                [entryId, expenseAccountId, total, 0]
+              );
+              await client.query(
+                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                 VALUES ($1, $2, $3, $4)`,
+                [entryId, paymentAccountId, 0, total]
+              );
+            }
+            
+            // ✅ المرحلة 4: ربط المصروف بالقيد
             await client.query(
-              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-               VALUES ($1, $2, $3, $4)`,
-              [entryId, expenseAccountId, amount, 0]
-            );
-            await client.query(
-              `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-               VALUES ($1, $2, $3, $4)`,
-              [entryId, paymentAccountId, 0, amount]
+              'UPDATE expenses SET journal_entry_id = $1 WHERE id = $2',
+              [entryId, expense.id]
             );
             
-            console.log(`[EXPENSES] Created journal entry ${entryId} for expense ${expense.id}`);
+            console.log(`[EXPENSES] Auto-posted expense ${expense.id}, created journal entry ${entryId}`);
           }
         } else {
           console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
@@ -3771,7 +4088,13 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
     }
     
     await client.query('COMMIT');
-    res.json(expense);
+    // Format expense response
+    const formattedExpense = {
+      ...expense,
+      invoice_number: expense.invoice_number || `EXP-${expense.id}`,
+      total: Number(expense.total || expense.amount || 0)
+    };
+    res.json(formattedExpense);
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[EXPENSES] Error creating expense:', e);
@@ -3784,23 +4107,241 @@ app.put("/expenses/:id", authenticateToken, authorize("expenses","edit", { branc
   try {
     const id = Number(req.params.id||0);
     const b = req.body || {};
+    const items = Array.isArray(b.items) ? b.items : [];
+    const total = b.total != null ? Number(b.total) : (items.length > 0 ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : (b.amount != null ? Number(b.amount) : null));
+    const itemsJson = items.length > 0 ? JSON.stringify(items) : null;
     const { rows } = await pool.query(
-      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), date=COALESCE($8,date), payment_method=COALESCE($9,payment_method), updated_at=NOW() WHERE id=$10 RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
-      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, b.date||null, b.payment_method||null, id]
+      'UPDATE expenses SET invoice_number=COALESCE($1,invoice_number), type=COALESCE($2,type), amount=COALESCE($3,amount), total=COALESCE($4,total), account_code=COALESCE($5,account_code), partner_id=COALESCE($6,partner_id), description=COALESCE($7,description), status=COALESCE($8,status), branch=COALESCE($9,branch), date=COALESCE($10,date), payment_method=COALESCE($11,payment_method), items=COALESCE($12::jsonb,items), updated_at=NOW() WHERE id=$13 RETURNING id, invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at',
+      [b.invoice_number||null, b.type||b.expense_type||null, (b.amount!=null?Number(b.amount):null), total, b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, b.date||null, b.payment_method||null, itemsJson, id]
     );
-    res.json(rows && rows[0]);
+    const expense = rows && rows[0];
+    if (expense) {
+      expense.invoice_number = expense.invoice_number || `EXP-${expense.id}`;
+      expense.total = Number(expense.total || expense.amount || 0);
+    }
+    res.json(expense);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
 app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
   try {
     const id = Number(req.params.id||0);
     const b = req.body || {};
+    const items = Array.isArray(b.items) ? b.items : [];
+    const total = b.total != null ? Number(b.total) : (items.length > 0 ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : (b.amount != null ? Number(b.amount) : null));
+    const itemsJson = items.length > 0 ? JSON.stringify(items) : null;
     const { rows } = await pool.query(
-      'UPDATE expenses SET type=COALESCE($1,type), amount=COALESCE($2,amount), account_code=COALESCE($3,account_code), partner_id=COALESCE($4,partner_id), description=COALESCE($5,description), status=COALESCE($6,status), branch=COALESCE($7,branch), date=COALESCE($8,date), payment_method=COALESCE($9,payment_method), updated_at=NOW() WHERE id=$10 RETURNING id, type, amount, account_code, partner_id, description, status, branch, date, payment_method, created_at',
-      [b.type||null, (b.amount!=null?Number(b.amount):null), b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, b.date||null, b.payment_method||null, id]
+      'UPDATE expenses SET invoice_number=COALESCE($1,invoice_number), type=COALESCE($2,type), amount=COALESCE($3,amount), total=COALESCE($4,total), account_code=COALESCE($5,account_code), partner_id=COALESCE($6,partner_id), description=COALESCE($7,description), status=COALESCE($8,status), branch=COALESCE($9,branch), date=COALESCE($10,date), payment_method=COALESCE($11,payment_method), items=COALESCE($12::jsonb,items), updated_at=NOW() WHERE id=$13 RETURNING id, invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at',
+      [b.invoice_number||null, b.type||b.expense_type||null, (b.amount!=null?Number(b.amount):null), total, b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, b.date||null, b.payment_method||null, itemsJson, id]
     );
-    res.json(rows && rows[0]);
+    const expense = rows && rows[0];
+    if (expense) {
+      expense.invoice_number = expense.invoice_number || `EXP-${expense.id}`;
+      expense.total = Number(expense.total || expense.amount || 0);
+    }
+    res.json(expense);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
+});
+
+// POST /expenses/:id/post - Post expense and create journal entry
+app.post("/expenses/:id/post", authenticateToken, authorize("expenses","edit"), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    
+    // Get expense
+    const { rows: expenseRows } = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+    if (!expenseRows || !expenseRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Expense not found" });
+    }
+    
+    const expense = expenseRows[0];
+    
+    // Check if already posted
+    if (expense.status === 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "already_posted", details: "Expense is already posted" });
+    }
+    
+    const amount = Number(expense.total || expense.amount || 0);
+    const accountCode = expense.account_code;
+    
+    if (amount <= 0 || !accountCode) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_expense", details: "Expense amount or account code is missing" });
+    }
+    
+    // Update status to posted
+    await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['posted', id]);
+    
+    // Get expense account ID
+    const expenseAccountId = await getAccountIdByNumber(accountCode);
+    
+    // Get payment account ID (cash or bank based on payment_method)
+    let paymentAccountId = null;
+    const paymentMethod = String(expense.payment_method || 'cash').toLowerCase();
+    if (paymentMethod === 'bank') {
+      paymentAccountId = await getAccountIdByNumber('1121'); // Default bank account
+    } else {
+      paymentAccountId = await getAccountIdByNumber('1111'); // Default cash account
+    }
+    
+    if (expenseAccountId && paymentAccountId) {
+      // ✅ المرحلة 2: استخدام SEQUENCE للترقيم التلقائي
+      // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
+      // ✅ نسخ جميع الحقول الضرورية من expense إلى journal_entry
+      const description = expense.type ? `مصروف #${expense.id} - ${expense.type}` : `مصروف #${expense.id}${expense.description ? ' - ' + expense.description : ''}`;
+      const { rows: entryRows } = await client.query(
+        `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
+        [description, expense.date, 'expense', expense.id, 'posted', expense.branch || null]
+      );
+      
+      const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+      
+      if (entryId) {
+        // Create postings
+        await client.query(
+          `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+           VALUES ($1, $2, $3, $4)`,
+          [entryId, expenseAccountId, amount, 0]
+        );
+        await client.query(
+          `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+           VALUES ($1, $2, $3, $4)`,
+          [entryId, paymentAccountId, 0, amount]
+        );
+        
+        // ✅ المرحلة 4: ربط المصروف بالقيد
+        await client.query(
+          'UPDATE expenses SET journal_entry_id = $1 WHERE id = $2',
+          [entryId, id]
+        );
+        
+        console.log(`[EXPENSES] Posted expense ${id}, created journal entry ${entryId}`);
+      }
+    } else {
+      console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch updated expense
+    const { rows: updatedRows } = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+    const updatedExpense = updatedRows && updatedRows[0];
+    if (updatedExpense) {
+      updatedExpense.invoice_number = updatedExpense.invoice_number || `EXP-${updatedExpense.id}`;
+      updatedExpense.total = Number(updatedExpense.total || updatedExpense.amount || 0);
+    }
+    res.json(updatedExpense);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error posting expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+app.post("/api/expenses/:id/post", authenticateToken, authorize("expenses","edit"), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    
+    // Get expense
+    const { rows: expenseRows } = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+    if (!expenseRows || !expenseRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Expense not found" });
+    }
+    
+    const expense = expenseRows[0];
+    
+    // Check if already posted
+    if (expense.status === 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "already_posted", details: "Expense is already posted" });
+    }
+    
+    const amount = Number(expense.total || expense.amount || 0);
+    const accountCode = expense.account_code;
+    
+    if (amount <= 0 || !accountCode) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_expense", details: "Expense amount or account code is missing" });
+    }
+    
+    // Update status to posted
+    await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['posted', id]);
+    
+    // Get expense account ID
+    const expenseAccountId = await getAccountIdByNumber(accountCode);
+    
+    // Get payment account ID (cash or bank based on payment_method)
+    let paymentAccountId = null;
+    const paymentMethod = String(expense.payment_method || 'cash').toLowerCase();
+    if (paymentMethod === 'bank') {
+      paymentAccountId = await getAccountIdByNumber('1121'); // Default bank account
+    } else {
+      paymentAccountId = await getAccountIdByNumber('1111'); // Default cash account
+    }
+    
+    if (expenseAccountId && paymentAccountId) {
+      // ✅ المرحلة 2: استخدام SEQUENCE للترقيم التلقائي
+      // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
+      // ✅ نسخ جميع الحقول الضرورية من expense إلى journal_entry
+      const description = expense.type ? `مصروف #${expense.id} - ${expense.type}` : `مصروف #${expense.id}${expense.description ? ' - ' + expense.description : ''}`;
+      const { rows: entryRows } = await client.query(
+        `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
+        [description, expense.date, 'expense', expense.id, 'posted', expense.branch || null]
+      );
+      
+      const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+      
+      if (entryId) {
+        // Create postings
+        await client.query(
+          `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+           VALUES ($1, $2, $3, $4)`,
+          [entryId, expenseAccountId, amount, 0]
+        );
+        await client.query(
+          `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+           VALUES ($1, $2, $3, $4)`,
+          [entryId, paymentAccountId, 0, amount]
+        );
+        
+        // ✅ المرحلة 4: ربط المصروف بالقيد
+        await client.query(
+          'UPDATE expenses SET journal_entry_id = $1 WHERE id = $2',
+          [entryId, id]
+        );
+        
+        console.log(`[EXPENSES] Posted expense ${id}, created journal entry ${entryId}`);
+      }
+    } else {
+      console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch updated expense
+    const { rows: updatedRows } = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+    const updatedExpense = updatedRows && updatedRows[0];
+    if (updatedExpense) {
+      updatedExpense.invoice_number = updatedExpense.invoice_number || `EXP-${updatedExpense.id}`;
+      updatedExpense.total = Number(updatedExpense.total || updatedExpense.amount || 0);
+    }
+    res.json(updatedExpense);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error posting expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
 });
 
 // Supplier Invoices
@@ -3915,9 +4456,28 @@ app.delete("/supplier-invoices/:id", authenticateToken, authorize("purchases","d
 app.delete("/api/supplier-invoices/:id", authenticateToken, authorize("purchases","delete"), handleDeleteSupplierInvoice);
 app.get("/invoices", authenticateToken, authorize("sales","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, created_at FROM invoices ORDER BY id DESC');
+    const { rows } = await pool.query('SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at FROM invoices ORDER BY id DESC');
     res.json({ items: rows || [] });
   } catch (e) { res.json({ items: [] }); }
+});
+app.get("/api/invoices", authenticateToken, authorize("sales","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at FROM invoices ORDER BY id DESC');
+    res.json({ items: rows || [] });
+  } catch (e) { res.json({ items: [] }); }
+});
+app.get("/api/invoices/:id", authenticateToken, authorize("sales","view"), async (req, res) => {
+  try {
+    const id = Number(req.params.id || 0);
+    const { rows } = await pool.query('SELECT id, number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at, updated_at FROM invoices WHERE id = $1', [id]);
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "not_found", details: "Invoice not found" });
+    }
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[INVOICES] Error getting invoice:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
 });
 app.get("/invoices/next-number", authenticateToken, authorize("sales","create"), async (req, res) => {
   try {
@@ -3942,7 +4502,23 @@ app.post("/invoices", authenticateToken, authorize("sales","create", { branchFro
     res.json(rows && rows[0]);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
-app.put("/invoices/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+app.post("/api/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
+  try {
+    const b = req.body || {};
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const linesJson = lines.length > 0 ? JSON.stringify(lines) : null;
+    const { rows } = await pool.query(
+      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, number, status, total, branch',
+      [b.number||null, b.date||null, b.customer_id||null, linesJson, Number(b.subtotal||0), Number(b.discount_pct||0), Number(b.discount_amount||0), Number(b.tax_pct||0), Number(b.tax_amount||0), Number(b.total||0), b.payment_method||null, String(b.status||'draft'), branch]
+    );
+    res.json(rows && rows[0]);
+  } catch (e) {
+    console.error('[INVOICES] Error creating invoice:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.put("/api/invoices/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
   try {
     const id = Number(req.params.id||0);
     const b = req.body || {};
@@ -4122,41 +4698,14 @@ async function handleGetOrder(req, res) {
       lines = [];
     }
     
-    // CRITICAL: Extract meta data from lines array and flatten to order level
-    // This ensures the response matches the shape expected by frontend
-    const meta = Array.isArray(lines) ? lines.find(l => l && l.type === 'meta') : null;
-    const items = Array.isArray(lines) ? lines.filter(l => l && l.type === 'item') : [];
-    
-    // Build response with unified contract - same shape as saveDraft response
+    // CRITICAL: Return unified response - lines is always an array, nothing else
+    // Frontend expects: { ...order, lines: [...] }
     const response = {
       ...order,
-      // Lines array (contains both meta and items)
-      lines: lines,
-      // Items array (only items, not meta)
-      items: items,
-      // Alias for order_id
-      order_id: order.id,
-      // Invoice (null for drafts)
-      invoice: null,
-      // Extract meta fields to top level for frontend compatibility
-      customerName: meta ? (meta.customer_name || meta.customerName || '') : '',
-      customerPhone: meta ? (meta.customer_phone || meta.customerPhone || '') : '',
-      customerId: meta ? (meta.customerId || meta.customer_id || null) : null,
-      discountPct: meta ? Number(meta.discountPct || meta.discount_pct || 0) : 0,
-      taxPct: meta ? Number(meta.taxPct || meta.tax_pct || 15) : 15,
-      paymentMethod: meta ? (meta.paymentMethod || meta.payment_method || '') : '',
-      payLines: meta ? (Array.isArray(meta.payLines) ? meta.payLines : []) : [],
-      // Additional aliases for compatibility
-      customer_name: meta ? (meta.customer_name || meta.customerName || '') : '',
-      customer_phone: meta ? (meta.customer_phone || meta.customerPhone || '') : '',
-      customer_id: meta ? (meta.customerId || meta.customer_id || null) : null,
-      discount_pct: meta ? Number(meta.discountPct || meta.discount_pct || 0) : 0,
-      tax_pct: meta ? Number(meta.taxPct || meta.tax_pct || 15) : 15,
-      payment_method: meta ? (meta.paymentMethod || meta.payment_method || '') : '',
-      pay_lines: meta ? (Array.isArray(meta.payLines) ? meta.payLines : []) : []
+      lines: Array.isArray(lines) ? lines : []  // CRITICAL: Always return lines as array, never null/undefined/object
     };
     
-    console.log(`[ORDERS] Order ${id} response: ${items.length} items, meta=${meta ? 'yes' : 'no'}, lines=${lines.length}`);
+    console.log(`[ORDERS] Order ${id} response: lines=${response.lines.length} items`);
     
     res.json(response);
   } catch (e) { 
@@ -4398,11 +4947,25 @@ app.put("/api/pos/tables-layout", authenticateToken, authorize("sales","edit"), 
 
 async function handleGetTableState(req, res) {
   try {
+    // CRITICAL: Guards - return empty array if branch is missing
     const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
+    if (!branch || String(branch).trim() === '') {
+      return res.json({ busy: [] });
+    }
+    
     const { rows } = await pool.query('SELECT table_code FROM orders WHERE branch = $1 AND status = $2', [branch, 'DRAFT']);
-    const busy = (rows || []).map(r => r.table_code).filter(Boolean);
-    res.json({ busy });
-  } catch (e) { res.json({ busy: [] }); }
+    
+    // CRITICAL: Guards - ensure rows is array
+    if (!Array.isArray(rows)) {
+      return res.json({ busy: [] });
+    }
+    
+    const busy = (rows || []).map(r => r?.table_code).filter(Boolean);
+    res.json({ busy: Array.isArray(busy) ? busy : [] });
+  } catch (e) {
+    console.error('[POS] table-state error:', e);
+    res.json({ busy: [] });
+  }
 }
 app.get("/pos/table-state", authenticateToken, handleGetTableState);
 app.get("/api/pos/table-state", authenticateToken, handleGetTableState);
@@ -4573,12 +5136,35 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
 
 // POS Issue Invoice - both paths for compatibility
 async function handleIssueInvoice(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const b = req.body || {};
+    
+    // CRITICAL: Log received body for debugging
+    console.log('[BACKEND] /pos/issueInvoice received body:', JSON.stringify(b, null, 2));
+    console.log('[BACKEND] /pos/issueInvoice order_id type:', typeof b.order_id, 'value:', b.order_id);
+    
+    // CRITICAL: order_id is REQUIRED for POS invoice issuing
+    // Extract order_id explicitly - it MUST be provided
+    // Force conversion to number (handle both string and number)
+    const order_id = b.order_id ? (typeof b.order_id === 'number' ? b.order_id : Number(b.order_id)) : null;
+    
+    if (!order_id) {
+      console.error('[ISSUE FAILED] Missing order_id in request body');
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: "missing_order_id", 
+        details: "order_id is required to issue invoice from order" 
+      });
+    }
+    
+    console.log('[ISSUE DEBUG] order_id:', order_id);
+    console.log('[ISSUE DEBUG] b.lines type:', typeof b.lines, 'isArray:', Array.isArray(b.lines));
+    
     const number = b.number || null;
     const date = b.date || new Date();
     const customer_id = b.customer_id || null;
-    const lines = Array.isArray(b.lines) ? b.lines : [];
     const subtotal = Number(b.subtotal||0);
     const discount_pct = Number(b.discount_pct||0);
     const discount_amount = Number(b.discount_amount||0);
@@ -4589,15 +5175,355 @@ async function handleIssueInvoice(req, res) {
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const status = String(b.status||'posted');
     
+    // Variable to store items from order (if order_id provided)
+    let orderItems = [];
+    // CRITICAL: Initialize lines variable - use b.lines as fallback if order_id not provided
+    let lines = Array.isArray(b.lines) ? b.lines : [];
+    
+    // If order_id provided, validate and lock order (DRAFT → ISSUED flow)
+    if (order_id) {
+      // Lock order and check status - CRITICAL: Must be DRAFT
+      const { rows: orderRows } = await client.query(
+        'SELECT id, status, invoice_id FROM orders WHERE id=$1 FOR UPDATE',
+        [order_id]
+      );
+      const order = orderRows && orderRows[0];
+      
+      // CRITICAL: Log validation state for debugging
+      const validationState = {
+        orderId: order_id,
+        orderExists: !!order,
+        status: order?.status || null,
+        hasInvoiceId: !!order?.invoice_id,
+        invoiceId: order?.invoice_id || null
+      };
+      
+      if (!order) {
+        console.error('[ISSUE FAILED] Order not found:', validationState);
+        await client.query('ROLLBACK');
+        return res.status(404).json({ error: "not_found", details: `Order ${order_id} not found` });
+      }
+      
+      // CRITICAL: Only allow issuing from DRAFT status
+      if (String(order.status||'').toUpperCase() !== 'DRAFT') {
+        console.error('[ISSUE FAILED] Invalid order status:', validationState);
+        await client.query('ROLLBACK');
+        return res.status(400).json({ 
+          error: "invalid_state", 
+          details: `Order status must be DRAFT, got: ${order.status}` 
+        });
+      }
+      
+      // CRITICAL: Prevent double-issuing
+      if (order.invoice_id) {
+        console.error('[ISSUE FAILED] Order already issued:', validationState);
+        await client.query('ROLLBACK');
+        return res.status(400).json({ 
+          error: "already_issued", 
+          details: `Order ${order_id} already has invoice ${order.invoice_id}` 
+        });
+      }
+      
+      // CRITICAL: Load order and extract items - THE ONLY SOURCE OF TRUTH
+      const { rows: orderFullRows } = await client.query(
+        'SELECT lines FROM orders WHERE id=$1',
+        [order_id]
+      );
+      const orderFull = orderFullRows && orderFullRows[0];
+      let orderLines = [];
+      try {
+        if (Array.isArray(orderFull?.lines)) {
+          orderLines = orderFull.lines;
+        } else if (typeof orderFull?.lines === 'string') {
+          orderLines = JSON.parse(orderFull.lines || '[]');
+        }
+      } catch (e) {
+        console.error('[ISSUE] Failed to parse order.lines:', e);
+      }
+      
+      // CRITICAL: Extract items from order.lines - THE ONLY SOURCE OF TRUTH
+      // Filter by product_id/item_id and qty > 0 (more flexible than type='item')
+      orderItems = Array.isArray(orderLines)
+        ? orderLines.filter(l =>
+            l &&
+            (l.product_id || l.item_id || l.id) &&
+            Number(l.qty ?? l.quantity ?? 1) > 0
+          )
+        : [];
+      
+      // CRITICAL: Log order.items for debugging
+      console.log('[ISSUE INVOICE] order.lines =', orderLines?.length || 0);
+      console.log('[ISSUE INVOICE] order.items (extracted) =', orderItems?.length || 0);
+      console.log('[ISSUE INVOICE] orderItems sample:', orderItems.slice(0, 2));
+      
+      // CRITICAL: Validate orderItems - THE ONLY SOURCE, no reliance on req.body.lines
+      if (orderItems.length === 0) {
+        console.error('[ISSUE FAILED] Empty order:', { 
+          ...validationState, 
+          itemsCount: orderItems.length, 
+          orderLinesCount: orderLines.length,
+          orderLinesPreview: orderLines.slice(0, 3)
+        });
+        await client.query('ROLLBACK');
+        return res.status(400).json({ 
+          error: "empty_lines", 
+          details: "Order has no items",
+          debug: {
+            orderId: order_id,
+            orderLines: orderLines?.length || 0,
+            extractedItems: orderItems.length
+          }
+        });
+      }
+      
+      // Log successful validation
+      console.log('[ISSUE VALIDATION] Order validated successfully:', { ...validationState, itemsCount: orderItems.length });
+      console.log('[ISSUE INVOICE FINAL]', {
+        orderId: order_id,
+        orderLines: orderLines?.length || 0,
+        extracted: orderItems.length
+      });
+      
+      // CRITICAL: Map orderItems to invoice lines - NO CONDITIONAL, ALWAYS USE orderItems
+      // Don't rely on req.body.lines - orderItems is THE ONLY SOURCE
+      lines = orderItems.map(item => ({
+        type: 'item',
+        product_id: item.product_id ?? item.item_id ?? item.id ?? null,
+        name: String(item.name || ''),
+        qty: Number(item.qty ?? item.quantity ?? 0),
+        price: Number(item.price ?? item.unit_price ?? 0),
+        discount: Number(item.discount ?? 0)
+      }));
+      console.log('[ISSUE] Using order items for invoice:', lines.length, 'items');
+    }
+    
     // Insert invoice
-    const { rows } = await pool.query(
-      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, number, status, total, branch',
-      [number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch]
+    // CRITICAL: Normalize and clean lines array - handle double stringification
+    let linesArray = Array.isArray(lines) ? lines : [];
+    
+    // تطهير كل عناصر الـ array قبل الإدراج - CRITICAL: Normalize all values to correct types
+    linesArray = linesArray
+      .map(item => {
+        // تحويل أي string JSON إلى object
+        if (typeof item === 'string') {
+          try {
+            const parsed = JSON.parse(item);
+            // Re-parse if still string (double stringification)
+            if (typeof parsed === 'string') {
+              try {
+                return JSON.parse(parsed);
+              } catch {
+                return null;
+              }
+            }
+            return parsed;
+          } catch (err) {
+            console.error('[ISSUE DEBUG] Invalid JSON string:', item.substring(0, 200));
+            return null;
+          }
+        }
+        // تنظيف object - CRITICAL: Ensure all numeric fields are numbers, not strings
+        if (typeof item === 'object' && item !== null) {
+          const clean = {};
+          for (const [key, value] of Object.entries(item)) {
+            // Skip undefined and functions
+            if (value === undefined || typeof value === 'function') {
+              continue;
+            }
+            // Normalize numeric fields to actual numbers
+            if (key === 'qty' || key === 'quantity' || key === 'price' || key === 'discount' || key === 'amount') {
+              const numValue = Number(value);
+              clean[key] = isNaN(numValue) ? 0 : numValue;
+            } else if (key === 'product_id') {
+              const numValue = Number(value);
+              clean[key] = isNaN(numValue) ? null : numValue;
+            } else if (key === 'type' || key === 'name') {
+              // String fields - ensure they're strings
+              clean[key] = String(value || '');
+            } else {
+              // Other fields - copy as-is if they're primitive types
+              if (value !== null && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) {
+                clean[key] = value;
+              }
+            }
+          }
+          return clean;
+        }
+        return null;
+      })
+      .filter(Boolean)
+        .filter(item => {
+        // CRITICAL: Filter only sale items - must have type='item' AND (product_id OR name)
+        // Reject meta, tax, discount, or any non-sale items
+        if (!item || typeof item !== 'object') return false;
+        if (item.type && String(item.type).trim() !== 'item') return false; // Reject meta/tax/discount
+        const hasProductId = item.product_id || item.item_id || item.id;
+        const hasQty = (item.qty !== undefined && item.qty !== null) || (item.quantity !== undefined && item.quantity !== null);
+        const hasName = item.name && String(item.name).trim().length > 0;
+        // Must have qty AND (product_id OR name)
+        return hasQty && (hasProductId || hasName);
+      }); // فلترة - فقط عناصر البيع الفعلية (type='item' مع product_id)
+    
+    // Fallback: use items from order if lines is empty
+    if (!linesArray.length && order_id && orderItems && orderItems.length > 0) {
+      linesArray = orderItems
+        .map(it => {
+          // CRITICAL: Normalize all numeric values - ensure they're actual numbers, not strings
+          const qty = Number(it.qty || it.quantity || 0);
+          const price = Number(it.price || 0);
+          const discount = Number(it.discount || 0);
+          const productId = it.product_id ? Number(it.product_id) : null;
+          
+          return {
+            type: 'item',
+            product_id: isNaN(productId) ? null : productId,
+            name: String(it.name || ''),
+            qty: isNaN(qty) ? 0 : qty,
+            price: isNaN(price) ? 0 : price,
+            discount: isNaN(discount) ? 0 : discount
+          };
+        })
+        .filter(item => item.qty > 0); // فلترة العناصر التي لها كمية صفر
+    }
+    
+    // CRITICAL: If still empty and order_id exists, try to load from order directly
+    if (!linesArray.length && order_id) {
+      try {
+        const { rows: orderCheckRows } = await client.query('SELECT lines FROM orders WHERE id = $1', [order_id]);
+        const orderCheck = orderCheckRows && orderCheckRows[0];
+        if (orderCheck) {
+          let orderCheckLines = [];
+          if (Array.isArray(orderCheck.lines)) {
+            orderCheckLines = orderCheck.lines;
+          } else if (typeof orderCheck.lines === 'string') {
+            try { orderCheckLines = JSON.parse(orderCheck.lines || '[]'); } catch {}
+          }
+          // CRITICAL: Filter only sale items (type='item' with product_id), not meta/tax/discount
+          const orderCheckItems = Array.isArray(orderCheckLines) 
+            ? orderCheckLines.filter(x => x && x.type === 'item' && (x.product_id || x.item_id || x.id))
+            : [];
+          if (orderCheckItems.length > 0) {
+            linesArray = orderCheckItems.map(it => ({
+              type: 'item',
+              product_id: it.product_id || it.item_id || it.id ? Number(it.product_id || it.item_id || it.id) : null,
+              name: String(it.name || ''),
+              qty: Number(it.qty || it.quantity || 0),
+              price: Number(it.price || 0),
+              discount: Number(it.discount || 0)
+            })).filter(item => item.qty > 0 && (item.product_id || item.name));
+          }
+        }
+      } catch (e) {
+        console.warn('[ISSUE] Failed to load lines from order:', e);
+      }
+    }
+    
+    // تحقق نهائي - CRITICAL: Do not allow empty lines for issued invoices
+    if (!linesArray.length) {
+      console.error('[ISSUE FAILED] Empty lines array after normalization', { 
+        originalLines: lines, 
+        linesType: typeof lines, 
+        linesIsArray: Array.isArray(lines),
+        orderItemsLength: orderItems?.length || 0,
+        order_id: order_id,
+        status: status
+      });
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "empty_lines", details: "Invoice must have at least one line item. Make sure order has items." });
+    }
+    
+    // التحقق النهائي قبل أي INSERT
+    if (!linesArray.every(item => typeof item === 'object' && item !== null)) {
+      console.error('[ISSUE FAILED] linesArray contains invalid elements:', linesArray);
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_lines", details: "Lines array contains invalid elements" });
+    }
+    
+    // CRITICAL: Final validation - ensure all values are properly typed
+    linesArray = linesArray.map(item => {
+      const clean = {
+        type: String(item.type || 'item'),
+        name: String(item.name || ''),
+        qty: Number(item.qty || item.quantity || 0),
+        price: Number(item.price || 0),
+        discount: Number(item.discount || 0)
+      };
+      if (item.product_id != null) {
+        clean.product_id = Number(item.product_id);
+      }
+      return clean;
+    });
+    
+    // طباعة القيمة الفعلية قبل INSERT
+    console.log('[ISSUE DEBUG] linesArray normalized:', JSON.stringify(linesArray, null, 2).substring(0, 1000));
+    console.log('[ISSUE DEBUG] linesArray types:', linesArray.map(l => ({ type: typeof l, qtyType: typeof l.qty, priceType: typeof l.price })));
+    
+    // CRITICAL: Validate all numeric values are actual numbers (not NaN)
+    const invalidItems = linesArray.filter(item => 
+      isNaN(item.qty) || isNaN(item.price) || isNaN(item.discount)
     );
+    if (invalidItems.length > 0) {
+      console.error('[ISSUE FAILED] Invalid numeric values in linesArray:', invalidItems);
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_values", details: "Lines contain invalid numeric values" });
+    }
+    
+    // CRITICAL: Pass linesArray directly as object/array (same as supplier_invoices)
+    // The pg library will automatically convert JavaScript objects/arrays to JSONB
+    // This is safer than manual stringification and avoids escape issues
+    
+    // Validate JSON structure one more time
+    try {
+      JSON.stringify(linesArray);
+    } catch (err) {
+      console.error('[ISSUE FAILED] linesArray is not JSON-serializable:', err);
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_json", details: "Lines array cannot be serialized to JSON" });
+    }
+    
+    // Log final structure
+    console.log('[ISSUE DEBUG] linesArray final:', JSON.stringify(linesArray, null, 2).substring(0, 500));
+    console.log('[ISSUE DEBUG] linesArray count:', linesArray.length);
+    console.log('[ISSUE DEBUG] linesArray sample:', linesArray[0] || 'N/A');
+    
+    // CRITICAL: EXACT same pattern as POST /invoices (line 4231-4232)
+    // POST /invoices passes lines (object/array) directly WITHOUT stringify and WITHOUT cast
+    // The pg library will automatically convert JavaScript objects/arrays to JSONB
+    // CRITICAL: Inside transaction with client.query, must use stringified JSON (not array directly)
+    // Test results proved: direct array FAILS, stringified JSON PASSES (with or without ::jsonb cast)
+    console.log('[ISSUE DEBUG] linesArray final:', JSON.stringify(linesArray, null, 2).substring(0, 500));
+    console.log('[ISSUE DEBUG] linesArray count:', linesArray.length);
+    
+    // CRITICAL: Stringify for client.query inside transaction
+    const linesJson = JSON.stringify(linesArray);
+    console.log('[ISSUE DEBUG] linesJson length:', linesJson.length);
+    console.log('[ISSUE DEBUG] linesJson preview:', linesJson.substring(0, 300));
+    
+    // CRITICAL: Use stringified JSON WITHOUT ::jsonb cast (Test 2 pattern that PASSED)
+    // Test 2: stringified JSON WITHOUT cast PASSED
+    // Test 3: stringified JSON WITH cast PASSED
+    // But Test 2 is simpler, so use it
+    // PostgreSQL will automatically convert string to JSONB based on column type
+    const { rows } = await client.query(
+      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, number, status, total, branch',
+      [number, date, customer_id, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch]
+    );
+    
+    console.log('[ISSUE DEBUG] Invoice inserted successfully', { invoiceId: rows[0]?.id, linesCount: linesArray.length });
     
     const invoice = rows && rows[0];
     if (!invoice) {
+      await client.query('ROLLBACK');
       return res.status(500).json({ error: "server_error", details: "Failed to create invoice" });
+    }
+
+    // Update order status to ISSUED and link invoice (if order_id provided)
+    if (order_id) {
+      await client.query(
+        'UPDATE orders SET status=$1, invoice_id=$2 WHERE id=$3',
+        ['ISSUED', invoice.id, order_id]
+      );
+      console.log(`[POS] Issue invoice: Order ${order_id} → ISSUED, Invoice ${invoice.id}`);
     }
 
     // Create journal entry automatically
@@ -4614,14 +5540,648 @@ async function handleIssueInvoice(req, res) {
       );
     }
 
+    await client.query('COMMIT');
     res.json(invoice);
-  } catch (e) { 
-    console.error('[POS] issueInvoice error:', e);
-    res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  } catch (e) {
+    await client.query('ROLLBACK');
+    const errorMsg = e?.message || String(e || 'unknown');
+    console.error('[POS] issueInvoice error:', errorMsg);
+    console.error('[POS] issueInvoice error stack:', e?.stack);
+    console.error('[POS] issueInvoice error code:', e?.code);
+    console.error('[POS] issueInvoice error detail:', e?.detail);
+    // Log lines state if error is about json
+    if (errorMsg.includes('json') || errorMsg.includes('JSON')) {
+      console.error('[POS] issueInvoice lines debug:', {
+        bLinesType: typeof (req.body?.lines || 'N/A'),
+        bLinesIsArray: Array.isArray(req.body?.lines),
+        linesType: typeof lines,
+        linesIsArray: Array.isArray(lines),
+        linesLength: Array.isArray(lines) ? lines.length : 'N/A',
+        linesArrayExists: typeof linesArray !== 'undefined',
+        linesArrayLength: Array.isArray(linesArray) ? linesArray.length : 'N/A',
+        linesJsonExists: typeof linesJson !== 'undefined',
+        linesJsonType: typeof linesJson,
+        linesJsonLength: typeof linesJson === 'string' ? linesJson.length : 'N/A',
+        linesJsonPreview: typeof linesJson === 'string' ? linesJson.substring(0, 500) : 'N/A',
+        orderItemsLength: orderItems?.length || 0
+      });
+      // Try to log what was actually sent to the query
+      if (typeof linesJson !== 'undefined') {
+        try {
+          const parsed = JSON.parse(linesJson);
+          console.error('[POS] issueInvoice linesJson is valid JSON:', typeof parsed, Array.isArray(parsed));
+        } catch (parseErr) {
+          console.error('[POS] issueInvoice linesJson is NOT valid JSON:', parseErr.message);
+        }
+      }
+    }
+    res.status(500).json({ error: "server_error", details: errorMsg });
+  } finally {
+    client.release();
   }
 }
 app.post("/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), handleIssueInvoice);
 app.post("/api/pos/issueInvoice", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), handleIssueInvoice);
+
+// GET /api/journal/account/:id - Get journal postings for a specific account
+app.get("/journal/account/:id", authenticateToken, authorize("journal","view"), async (req, res) => {
+  try {
+    const accountId = Number(req.params.id || 0);
+    const { page = 1, pageSize = 20, from, to } = req.query || {};
+    const limit = Math.min(Number(pageSize) || 20, 500);
+    const offset = (Number(page) || 1 - 1) * limit;
+    
+    let query = `
+      SELECT jp.id, jp.journal_entry_id, jp.account_id, jp.debit, jp.credit,
+             je.entry_number, je.description, je.date, je.status,
+             a.account_number, a.name as account_name
+      FROM journal_postings jp
+      JOIN journal_entries je ON je.id = jp.journal_entry_id
+      LEFT JOIN accounts a ON a.id = jp.account_id
+      WHERE jp.account_id = $1
+    `;
+    const params = [accountId];
+    let paramIndex = 2;
+    
+    if (from) {
+      query += ` AND je.date >= $${paramIndex++}`;
+      params.push(from);
+    }
+    if (to) {
+      query += ` AND je.date <= $${paramIndex++}`;
+      params.push(to);
+    }
+    
+    query += ` ORDER BY je.date DESC, je.entry_number DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    params.push(limit, offset);
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      id: row.id,
+      journal_entry_id: row.journal_entry_id,
+      account_id: row.account_id,
+      debit: Number(row.debit || 0),
+      credit: Number(row.credit || 0),
+      entry_number: row.entry_number,
+      description: row.description,
+      date: row.date,
+      status: row.status,
+      account_number: row.account_number,
+      account_name: row.account_name
+    }));
+    
+    res.json({ items, total: items.length });
+  } catch (e) {
+    console.error('[JOURNAL] Error getting account journal:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/api/journal/account/:id", authenticateToken, authorize("journal","view"), async (req, res) => {
+  try {
+    const accountId = Number(req.params.id || 0);
+    const { page = 1, pageSize = 20, from, to } = req.query || {};
+    const limit = Math.min(Number(pageSize) || 20, 500);
+    const offset = (Number(page) || 1 - 1) * limit;
+    
+    let query = `
+      SELECT jp.id, jp.journal_entry_id, jp.account_id, jp.debit, jp.credit,
+             je.entry_number, je.description, je.date, je.status,
+             a.account_number, a.name as account_name
+      FROM journal_postings jp
+      JOIN journal_entries je ON je.id = jp.journal_entry_id
+      LEFT JOIN accounts a ON a.id = jp.account_id
+      WHERE jp.account_id = $1
+    `;
+    const params = [accountId];
+    let paramIndex = 2;
+    
+    if (from) {
+      query += ` AND je.date >= $${paramIndex++}`;
+      params.push(from);
+    }
+    if (to) {
+      query += ` AND je.date <= $${paramIndex++}`;
+      params.push(to);
+    }
+    
+    query += ` ORDER BY je.date DESC, je.entry_number DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
+    params.push(limit, offset);
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      id: row.id,
+      journal_entry_id: row.journal_entry_id,
+      account_id: row.account_id,
+      debit: Number(row.debit || 0),
+      credit: Number(row.credit || 0),
+      entry_number: row.entry_number,
+      description: row.description,
+      date: row.date,
+      status: row.status,
+      account_number: row.account_number,
+      account_name: row.account_name
+    }));
+    
+    res.json({ items, total: items.length });
+  } catch (e) {
+    console.error('[JOURNAL] Error getting account journal:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// GET /api/reports/trial-balance - Get trial balance report
+app.get("/reports/trial-balance", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period } = req.query || {};
+    
+    let query = `
+      SELECT 
+        a.id as account_id,
+        a.account_number,
+        a.name as account_name,
+        COALESCE(SUM(CASE WHEN je.date < $1 THEN jp.debit - jp.credit ELSE 0 END), 0) as beginning,
+        COALESCE(SUM(CASE WHEN je.date >= $1 AND ($2 IS NULL OR je.date <= $2) THEN jp.debit ELSE 0 END), 0) as debit,
+        COALESCE(SUM(CASE WHEN je.date >= $1 AND ($2 IS NULL OR je.date <= $2) THEN jp.credit ELSE 0 END), 0) as credit,
+        COALESCE(SUM(CASE WHEN $2 IS NULL OR je.date <= $2 THEN jp.debit - jp.credit ELSE 0 END), 0) as ending
+      FROM accounts a
+      LEFT JOIN journal_postings jp ON jp.account_id = a.id
+      LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id AND je.status = 'posted'
+      WHERE 1=1
+    `;
+    const params = [from || '1970-01-01', to || null];
+    
+    query += ` GROUP BY a.id, a.account_number, a.name
+               HAVING COALESCE(SUM(jp.debit), 0) + COALESCE(SUM(jp.credit), 0) > 0
+               ORDER BY a.account_number`;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      account_id: row.account_id,
+      account_number: row.account_number,
+      account_name: row.account_name,
+      beginning: Number(row.beginning || 0),
+      debit: Number(row.debit || 0),
+      credit: Number(row.credit || 0),
+      ending: Number(row.ending || 0)
+    }));
+    
+    const totals = items.reduce((acc, item) => ({
+      debit: acc.debit + item.debit,
+      credit: acc.credit + item.credit,
+      beginning: acc.beginning + item.beginning,
+      ending: acc.ending + item.ending
+    }), { debit: 0, credit: 0, beginning: 0, ending: 0 });
+    
+    res.json({ items, totals, balanced: Math.abs(totals.debit - totals.credit) < 0.01 });
+  } catch (e) {
+    console.error('[REPORTS] Error getting trial balance:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/api/reports/trial-balance", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period } = req.query || {};
+    
+    let query = `
+      SELECT 
+        a.id as account_id,
+        a.account_number,
+        a.name as account_name,
+        COALESCE(SUM(CASE WHEN je.date < $1 THEN jp.debit - jp.credit ELSE 0 END), 0) as beginning,
+        COALESCE(SUM(CASE WHEN je.date >= $1 AND ($2 IS NULL OR je.date <= $2) THEN jp.debit ELSE 0 END), 0) as debit,
+        COALESCE(SUM(CASE WHEN je.date >= $1 AND ($2 IS NULL OR je.date <= $2) THEN jp.credit ELSE 0 END), 0) as credit,
+        COALESCE(SUM(CASE WHEN $2 IS NULL OR je.date <= $2 THEN jp.debit - jp.credit ELSE 0 END), 0) as ending
+      FROM accounts a
+      LEFT JOIN journal_postings jp ON jp.account_id = a.id
+      LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id AND je.status = 'posted'
+      WHERE 1=1
+    `;
+    const params = [from || '1970-01-01', to || null];
+    
+    query += ` GROUP BY a.id, a.account_number, a.name
+               HAVING COALESCE(SUM(jp.debit), 0) + COALESCE(SUM(jp.credit), 0) > 0
+               ORDER BY a.account_number`;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      account_id: row.account_id,
+      account_number: row.account_number,
+      account_name: row.account_name,
+      beginning: Number(row.beginning || 0),
+      debit: Number(row.debit || 0),
+      credit: Number(row.credit || 0),
+      ending: Number(row.ending || 0)
+    }));
+    
+    const totals = items.reduce((acc, item) => ({
+      debit: acc.debit + item.debit,
+      credit: acc.credit + item.credit,
+      beginning: acc.beginning + item.beginning,
+      ending: acc.ending + item.ending
+    }), { debit: 0, credit: 0, beginning: 0, ending: 0 });
+    
+    res.json({ items, totals, balanced: Math.abs(totals.debit - totals.credit) < 0.01 });
+  } catch (e) {
+    console.error('[REPORTS] Error getting trial balance:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// GET /api/reports/sales-vs-expenses - Get sales vs expenses report
+app.get("/reports/sales-vs-expenses", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period, branch } = req.query || {};
+    
+    let salesWhere = ['status = \'paid\''];
+    let expensesWhere = ['status = \'posted\''];
+    const params = [];
+    let paramIndex = 1;
+    
+    if (from) {
+      salesWhere.push(`date >= $${paramIndex}`);
+      expensesWhere.push(`date >= $${paramIndex}`);
+      params.push(from);
+      paramIndex++;
+    }
+    if (to) {
+      salesWhere.push(`date <= $${paramIndex}`);
+      expensesWhere.push(`date <= $${paramIndex}`);
+      params.push(to);
+      paramIndex++;
+    }
+    if (branch && branch !== 'كل الفروع') {
+      salesWhere.push(`branch = $${paramIndex}`);
+      expensesWhere.push(`branch = $${paramIndex}`);
+      params.push(branch);
+      paramIndex++;
+    }
+    
+    // Get sales by date
+    const salesQuery = `
+      SELECT DATE(date) as date, COALESCE(SUM(total), 0) as total
+      FROM invoices
+      WHERE ${salesWhere.join(' AND ')}
+      GROUP BY DATE(date)
+      ORDER BY DATE(date)
+    `;
+    
+    // Get expenses by date
+    const expensesQuery = `
+      SELECT DATE(date) as date, COALESCE(SUM(amount), 0) as total
+      FROM expenses
+      WHERE ${expensesWhere.join(' AND ')}
+      GROUP BY DATE(date)
+      ORDER BY DATE(date)
+    `;
+    
+    const [salesResult, expensesResult] = await Promise.all([
+      pool.query(salesQuery, params),
+      pool.query(expensesQuery, params)
+    ]);
+    
+    // Combine sales and expenses by date
+    const dateMap = new Map();
+    
+    (salesResult.rows || []).forEach(row => {
+      const date = row.date;
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { date, sales: 0, expenses: 0 });
+      }
+      dateMap.get(date).sales = Number(row.total || 0);
+    });
+    
+    (expensesResult.rows || []).forEach(row => {
+      const date = row.date;
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { date, sales: 0, expenses: 0 });
+      }
+      dateMap.get(date).expenses = Number(row.total || 0);
+    });
+    
+    const items = Array.from(dateMap.values()).map(item => ({
+      date: item.date,
+      sales: item.sales,
+      expenses: item.expenses,
+      net: item.sales - item.expenses
+    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    const totals = items.reduce((acc, item) => ({
+      sales: acc.sales + item.sales,
+      expenses: acc.expenses + item.expenses,
+      net: acc.net + item.net
+    }), { sales: 0, expenses: 0, net: 0 });
+    
+    res.json({ items, totals });
+  } catch (e) {
+    console.error('[REPORTS] Error getting sales vs expenses:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/api/reports/sales-vs-expenses", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period, branch } = req.query || {};
+    
+    let salesWhere = ['status = \'paid\''];
+    let expensesWhere = ['status = \'posted\''];
+    const params = [];
+    let paramIndex = 1;
+    
+    if (from) {
+      salesWhere.push(`date >= $${paramIndex}`);
+      expensesWhere.push(`date >= $${paramIndex}`);
+      params.push(from);
+      paramIndex++;
+    }
+    if (to) {
+      salesWhere.push(`date <= $${paramIndex}`);
+      expensesWhere.push(`date <= $${paramIndex}`);
+      params.push(to);
+      paramIndex++;
+    }
+    if (branch && branch !== 'كل الفروع') {
+      salesWhere.push(`branch = $${paramIndex}`);
+      expensesWhere.push(`branch = $${paramIndex}`);
+      params.push(branch);
+      paramIndex++;
+    }
+    
+    // Get sales by date
+    const salesQuery = `
+      SELECT DATE(date) as date, COALESCE(SUM(total), 0) as total
+      FROM invoices
+      WHERE ${salesWhere.join(' AND ')}
+      GROUP BY DATE(date)
+      ORDER BY DATE(date)
+    `;
+    
+    // Get expenses by date
+    const expensesQuery = `
+      SELECT DATE(date) as date, COALESCE(SUM(amount), 0) as total
+      FROM expenses
+      WHERE ${expensesWhere.join(' AND ')}
+      GROUP BY DATE(date)
+      ORDER BY DATE(date)
+    `;
+    
+    const [salesResult, expensesResult] = await Promise.all([
+      pool.query(salesQuery, params),
+      pool.query(expensesQuery, params)
+    ]);
+    
+    // Combine sales and expenses by date
+    const dateMap = new Map();
+    
+    (salesResult.rows || []).forEach(row => {
+      const date = row.date;
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { date, sales: 0, expenses: 0 });
+      }
+      dateMap.get(date).sales = Number(row.total || 0);
+    });
+    
+    (expensesResult.rows || []).forEach(row => {
+      const date = row.date;
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { date, sales: 0, expenses: 0 });
+      }
+      dateMap.get(date).expenses = Number(row.total || 0);
+    });
+    
+    const items = Array.from(dateMap.values()).map(item => ({
+      date: item.date,
+      sales: item.sales,
+      expenses: item.expenses,
+      net: item.sales - item.expenses
+    })).sort((a, b) => new Date(a.date) - new Date(b.date));
+    
+    const totals = items.reduce((acc, item) => ({
+      sales: acc.sales + item.sales,
+      expenses: acc.expenses + item.expenses,
+      net: acc.net + item.net
+    }), { sales: 0, expenses: 0, net: 0 });
+    
+    res.json({ items, totals });
+  } catch (e) {
+    console.error('[REPORTS] Error getting sales vs expenses:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// GET /api/reports/sales-by-branch - Get sales by branch report
+app.get("/reports/sales-by-branch", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period, branch } = req.query || {};
+    
+    let whereConditions = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    whereConditions.push(`status = 'paid'`);
+    if (from) {
+      whereConditions.push(`date >= $${paramIndex++}`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`date <= $${paramIndex++}`);
+      params.push(to);
+    }
+    if (branch && branch !== 'كل الفروع') {
+      whereConditions.push(`branch = $${paramIndex++}`);
+      params.push(branch);
+    }
+    
+    const query = `
+      SELECT 
+        branch,
+        COUNT(*) as invoice_count,
+        COALESCE(SUM(total), 0) as total_sales
+      FROM invoices
+      WHERE ${whereConditions.join(' AND ')}
+      GROUP BY branch
+      ORDER BY branch
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      branch: row.branch,
+      invoice_count: Number(row.invoice_count || 0),
+      total_sales: Number(row.total_sales || 0)
+    }));
+    
+    const totals = items.reduce((acc, item) => ({
+      invoice_count: acc.invoice_count + item.invoice_count,
+      total_sales: acc.total_sales + item.total_sales
+    }), { invoice_count: 0, total_sales: 0 });
+    
+    res.json({ items, totals });
+  } catch (e) {
+    console.error('[REPORTS] Error getting sales by branch:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/api/reports/sales-by-branch", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period, branch } = req.query || {};
+    
+    let whereConditions = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    whereConditions.push(`status = 'paid'`);
+    if (from) {
+      whereConditions.push(`date >= $${paramIndex++}`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`date <= $${paramIndex++}`);
+      params.push(to);
+    }
+    if (branch && branch !== 'كل الفروع') {
+      whereConditions.push(`branch = $${paramIndex++}`);
+      params.push(branch);
+    }
+    
+    const query = `
+      SELECT 
+        branch,
+        COUNT(*) as invoice_count,
+        COALESCE(SUM(total), 0) as total_sales
+      FROM invoices
+      WHERE ${whereConditions.join(' AND ')}
+      GROUP BY branch
+      ORDER BY branch
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      branch: row.branch,
+      invoice_count: Number(row.invoice_count || 0),
+      total_sales: Number(row.total_sales || 0)
+    }));
+    
+    const totals = items.reduce((acc, item) => ({
+      invoice_count: acc.invoice_count + item.invoice_count,
+      total_sales: acc.total_sales + item.total_sales
+    }), { invoice_count: 0, total_sales: 0 });
+    
+    res.json({ items, totals });
+  } catch (e) {
+    console.error('[REPORTS] Error getting sales by branch:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// GET /api/reports/expenses-by-branch - Get expenses by branch report
+app.get("/reports/expenses-by-branch", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period, branch } = req.query || {};
+    
+    let whereConditions = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    whereConditions.push(`status = 'posted'`);
+    if (from) {
+      whereConditions.push(`date >= $${paramIndex++}`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`date <= $${paramIndex++}`);
+      params.push(to);
+    }
+    if (branch && branch !== 'كل الفروع') {
+      whereConditions.push(`branch = $${paramIndex++}`);
+      params.push(branch);
+    }
+    
+    const query = `
+      SELECT 
+        branch,
+        COUNT(*) as expense_count,
+        COALESCE(SUM(amount), 0) as total_expenses
+      FROM expenses
+      WHERE ${whereConditions.join(' AND ')}
+      GROUP BY branch
+      ORDER BY branch
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      branch: row.branch,
+      expense_count: Number(row.expense_count || 0),
+      total_expenses: Number(row.total_expenses || 0)
+    }));
+    
+    const totals = items.reduce((acc, item) => ({
+      expense_count: acc.expense_count + item.expense_count,
+      total_expenses: acc.total_expenses + item.total_expenses
+    }), { expense_count: 0, total_expenses: 0 });
+    
+    res.json({ items, totals });
+  } catch (e) {
+    console.error('[REPORTS] Error getting expenses by branch:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+app.get("/api/reports/expenses-by-branch", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period, branch } = req.query || {};
+    
+    let whereConditions = [];
+    const params = [];
+    let paramIndex = 1;
+    
+    whereConditions.push(`status = 'posted'`);
+    if (from) {
+      whereConditions.push(`date >= $${paramIndex++}`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`date <= $${paramIndex++}`);
+      params.push(to);
+    }
+    if (branch && branch !== 'كل الفروع') {
+      whereConditions.push(`branch = $${paramIndex++}`);
+      params.push(branch);
+    }
+    
+    const query = `
+      SELECT 
+        branch,
+        COUNT(*) as expense_count,
+        COALESCE(SUM(amount), 0) as total_expenses
+      FROM expenses
+      WHERE ${whereConditions.join(' AND ')}
+      GROUP BY branch
+      ORDER BY branch
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      branch: row.branch,
+      expense_count: Number(row.expense_count || 0),
+      total_expenses: Number(row.total_expenses || 0)
+    }));
+    
+    const totals = items.reduce((acc, item) => ({
+      expense_count: acc.expense_count + item.expense_count,
+      total_expenses: acc.total_expenses + item.total_expenses
+    }), { expense_count: 0, total_expenses: 0 });
+    
+    res.json({ items, totals });
+  } catch (e) {
+    console.error('[REPORTS] Error getting expenses by branch:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
 
 // POS Save Draft - both paths for compatibility
 async function handleSaveDraft(req, res) {

@@ -1,7 +1,17 @@
 import axios from 'axios';
 import { normalizeArray } from '../../utils/normalize';
 
-const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== 'undefined' ? (window.__API__ || (window.location.origin + '/api')) : 'http://localhost:4000/api')
+// In development mode (npm start), use backend server on port 5000
+// Frontend Dev Server runs on port 4000, Backend API on port 5000
+// In production, use window.location.origin
+const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== 'undefined' ? (window.__API__ || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000/api' : (window.location.origin + '/api'))) : 'http://localhost:5000/api')
+
+// CRITICAL: Log API_BASE in development for debugging
+if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+  console.log('[API] API_BASE configured:', API_BASE);
+  console.log('[API] NODE_ENV:', process.env.NODE_ENV);
+  console.log('[API] REACT_APP_API_URL:', process.env.REACT_APP_API_URL || '(not set)');
+}
 
 /**
  * CRITICAL: Auto-normalize API responses
@@ -28,7 +38,10 @@ const api = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  // NOTE: withCredentials is for cookies, not needed for Authorization headers
+  // CORS is handled by Backend server
+  withCredentials: false
 });
 
 // 2. Request Interceptor: Inject Token
@@ -117,7 +130,7 @@ api.interceptors.response.use(
 // Existing calls: request('/path', { method: 'POST', body: JSON.stringify(data) })
 export async function request(path, options = {}) {
   const method = options.method || 'GET';
-  let data = options.body;
+  let data = options.body || options.data; // Support both 'body' and 'data'
 
   function normalizeArabicDigits(str){
     const s = String(str||'');
@@ -136,12 +149,15 @@ export async function request(path, options = {}) {
     return val;
   }
 
-  // If body is stringified JSON, parse it back because Axios expects an object
+  // CRITICAL: If body is stringified JSON, parse it back because Axios expects an object
   if (typeof data === 'string') {
     try {
       data = JSON.parse(data);
     } catch (e) {
-      // If parsing fails, leave it as string
+      // If parsing fails, leave it as string (but log warning in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[API] Failed to parse body as JSON:', e.message);
+      }
     }
   }
   data = deepNormalize(data);
@@ -161,23 +177,33 @@ export async function request(path, options = {}) {
       if (!out.quarter && qSel) out.quarter = qSel
       return out
     })()
+    
+    // CRITICAL: Remove 'body' from options to avoid conflicts - axios uses 'data'
+    const { body, ...axiosOptions } = options;
+    
     const response = await api.request({
       url: path,
       method,
-      data,
+      data, // Axios uses 'data', not 'body'
       params: mergedParams,
-      ...options,
+      ...axiosOptions,
       headers: {
-        ...options.headers
+        ...axiosOptions.headers
       }
     });
     
     // CRITICAL: Normalize response to ensure arrays are always arrays
     // This prevents "o.map is not a function" errors
-    // BUT: For saveDraft and similar endpoints that return objects with order_id, don't normalize
-    const isSaveDraftResponse = path.includes('/pos/saveDraft') || path.includes('/saveDraft');
-    if (isSaveDraftResponse) {
-      // saveDraft returns { order_id, invoice, lines, ... } - don't normalize
+    // BUT: For endpoints that return objects (not arrays), don't normalize
+    const isObjectResponse = path.includes('/auth/login') || 
+                            path.includes('/auth/register') || 
+                            path.includes('/auth/me') ||
+                            path.includes('/pos/saveDraft') || 
+                            path.includes('/saveDraft') ||
+                            path.includes('/pos/issueInvoice') ||
+                            path.includes('/issueInvoice');
+    if (isObjectResponse) {
+      // These endpoints return objects (e.g., { token, user, ... }) - return as-is
       return response.data;
     }
     const normalized = normalizeResponse(response.data);

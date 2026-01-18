@@ -18,12 +18,12 @@ const safeList = async (requestFn) => {
 };
 
 export const auth = {
-  register: (data) => request('/auth/register', { method: 'POST', body: JSON.stringify(data) }),
-  login: (data) => request('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
-  loginStart: (data) => request('/auth/login/start', { method: 'POST', body: JSON.stringify(data) }),
-  verifyCode: (data) => request('/auth/login/verify', { method: 'POST', body: JSON.stringify(data) }),
+  register: (data) => request('/auth/register', { method: 'POST', body: data }), // Axios handles JSON serialization
+  login: (data) => request('/auth/login', { method: 'POST', body: data }), // Axios handles JSON serialization
+  loginStart: (data) => request('/auth/login/start', { method: 'POST', body: data }),
+  verifyCode: (data) => request('/auth/login/verify', { method: 'POST', body: data }),
   me: () => request('/auth/me'),
-  debugBootstrapAdmin: (data) => request('/debug/bootstrap-admin', { method: 'POST', body: JSON.stringify(data) }),
+  debugBootstrapAdmin: (data) => request('/debug/bootstrap-admin', { method: 'POST', body: data }),
 }
 
 export const partners = {

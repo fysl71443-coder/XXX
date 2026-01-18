@@ -505,17 +505,23 @@ export default function AccountsScreen() {
                           <div className={`text-xl font-bold ${totals.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>{totals.net.toFixed(2)}</div>
                         </div>
                       </div>
-                      <div className="h-64">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <LineChart data={(Array.isArray(entries) ? entries : []).map(e => ({ date: e.journal?.date || '', net: parseFloat(e.debit||0) - parseFloat(e.credit||0) }))}>
-                            <CartesianGrid strokeDasharray="3 3" />
-                            <XAxis dataKey="date" />
-                            <YAxis />
-                            <Tooltip />
-                            <Line type="monotone" dataKey="net" stroke="#2563eb" />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      </div>
+                      {Array.isArray(entries) && entries.length > 0 ? (
+                        <div className="h-64">
+                          <ResponsiveContainer width="100%" height="100%" minHeight={200}>
+                            <LineChart data={entries.map(e => ({ date: e.journal?.date || '', net: parseFloat(e.debit||0) - parseFloat(e.credit||0) }))}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="date" />
+                              <YAxis />
+                              <Tooltip />
+                              <Line type="monotone" dataKey="net" stroke="#2563eb" />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      ) : (
+                        <div className="h-64 flex items-center justify-center text-gray-500">
+                          {lang==='ar'?'لا توجد بيانات لعرضها':'No data to display'}
+                        </div>
+                      )}
                       <AccountStatement account={selectedAccount} />
                     </>
                   )}

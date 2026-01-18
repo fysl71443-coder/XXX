@@ -572,7 +572,10 @@ export default function Expenses(){
           expense_type: form.expense_type, 
           attachments, 
           items: form.expense_type==='expense' ? itemsPayload : undefined,
-          payment_details: form.expense_type==='payment' ? form.payment_details : undefined
+          payment_details: form.expense_type==='payment' ? form.payment_details : undefined,
+          // ✅ ترحيل تلقائي عند الإنشاء
+          auto_post: true,
+          status: 'posted'
       }
       
       if (editingId) {

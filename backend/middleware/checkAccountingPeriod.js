@@ -27,6 +27,10 @@ export function checkAccountingPeriod(options = {}) {
       }
 
       if (!period || !/^\d{4}-\d{2}$/.test(period)) {
+        console.error(`[ISSUE FAILED] Invalid period format:`, {
+          period: period || null,
+          endpoint: req.path || req.url
+        });
         console.warn(`[PERIODS] Invalid period format: ${period}`);
         return res.status(400).json({
           error: "INVALID_PERIOD_FORMAT",
@@ -47,6 +51,10 @@ export function checkAccountingPeriod(options = {}) {
       if (!periodData) {
         if (requirePeriod) {
           // Strict mode: Period must exist
+          console.error(`[ISSUE FAILED] Accounting period not found (requirePeriod=true):`, {
+            period: period,
+            endpoint: req.path || req.url
+          });
           console.warn(`[PERIODS] Period ${period} not found (requirePeriod=true)`);
           return res.status(400).json({
             error: "ACCOUNTING_PERIOD_NOT_DEFINED",
@@ -84,6 +92,12 @@ export function checkAccountingPeriod(options = {}) {
 
       // Check if period is closed
       if (periodData.status && String(periodData.status).toLowerCase() === 'closed') {
+        console.error(`[ISSUE FAILED] Accounting period closed:`, {
+          period: period,
+          status: periodData.status,
+          closed_at: periodData.closed_at,
+          endpoint: req.path || req.url
+        });
         console.warn(`[PERIODS] Attempt to modify closed period ${period}`);
         return res.status(403).json({
           error: "ACCOUNTING_PERIOD_CLOSED",
@@ -94,6 +108,11 @@ export function checkAccountingPeriod(options = {}) {
       }
 
       // Period exists and is open - allow request
+      console.log(`[PERIODS] Period check passed:`, {
+        period: period,
+        status: periodData.status || 'open',
+        endpoint: req.path || req.url
+      });
       next();
     } catch (e) {
       console.error('[PERIODS] Error checking accounting period:', e);
