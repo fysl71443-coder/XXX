@@ -5153,6 +5153,217 @@ app.post("/api/expenses/:id/post", authenticateToken, authorize("expenses","edit
   }
 });
 
+// Reverse expense - Create reverse journal entry to cancel the effect
+app.post("/expenses/:id/reverse", authenticateToken, authorize("expenses","edit"), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    
+    // Get expense with journal entry
+    const { rows: expenseRows } = await client.query(
+      'SELECT id, journal_entry_id, status, total, amount, account_code, payment_method, date, branch FROM expenses WHERE id = $1',
+      [id]
+    );
+    
+    if (!expenseRows || !expenseRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Expense not found" });
+    }
+    
+    const expense = expenseRows[0];
+    
+    // Only allow reversing posted expenses
+    if (expense.status !== 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_status", details: "Only posted expenses can be reversed" });
+    }
+    
+    if (!expense.journal_entry_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "no_journal_entry", details: "Expense has no journal entry to reverse" });
+    }
+    
+    // Get original journal entry and postings
+    const { rows: entryRows } = await client.query(
+      'SELECT id, entry_number, description, date, status FROM journal_entries WHERE id = $1',
+      [expense.journal_entry_id]
+    );
+    
+    if (!entryRows || !entryRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "journal_not_found", details: "Journal entry not found" });
+    }
+    
+    const originalEntry = entryRows[0];
+    
+    // Get original postings
+    const { rows: postingRows } = await client.query(
+      'SELECT account_id, debit, credit FROM journal_postings WHERE journal_entry_id = $1',
+      [expense.journal_entry_id]
+    );
+    
+    if (!postingRows || postingRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "no_postings", details: "Journal entry has no postings" });
+    }
+    
+    // Create reverse entry - swap debit and credit
+    const entryNumber = await getNextEntryNumber();
+    const reverseDescription = `عكس ${originalEntry.description || `مصروف #${expense.id}`}`;
+    
+    const { rows: reverseEntryRows } = await client.query(
+      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+      [entryNumber, reverseDescription, expense.date || new Date(), 'expense', expense.id, 'posted', expense.branch || null]
+    );
+    
+    const reverseEntryId = reverseEntryRows && reverseEntryRows[0] ? reverseEntryRows[0].id : null;
+    
+    if (!reverseEntryId) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "create_failed", details: "Failed to create reverse journal entry" });
+    }
+    
+    // Create reverse postings (swap debit and credit)
+    for (const posting of postingRows) {
+      await client.query(
+        `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+         VALUES ($1, $2, $3, $4)`,
+        [reverseEntryId, posting.account_id, posting.credit, posting.debit] // Swapped
+      );
+    }
+    
+    // Update expense status to reversed
+    await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['reversed', id]);
+    
+    await client.query('COMMIT');
+    
+    console.log(`[EXPENSES] Reversed expense ${id}, created reverse journal entry ${reverseEntryId}`);
+    
+    // Fetch updated expense
+    const { rows: updatedRows } = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+    const updatedExpense = updatedRows && updatedRows[0];
+    if (updatedExpense) {
+      updatedExpense.invoice_number = updatedExpense.invoice_number || `EXP-${updatedExpense.id}`;
+      updatedExpense.total = Number(updatedExpense.total || updatedExpense.amount || 0);
+    }
+    
+    res.json(updatedExpense);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error reversing expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/expenses/:id/reverse", authenticateToken, authorize("expenses","edit"), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    
+    // Get expense with journal entry
+    const { rows: expenseRows } = await client.query(
+      'SELECT id, journal_entry_id, status, total, amount, account_code, payment_method, date, branch FROM expenses WHERE id = $1',
+      [id]
+    );
+    
+    if (!expenseRows || !expenseRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Expense not found" });
+    }
+    
+    const expense = expenseRows[0];
+    
+    // Only allow reversing posted expenses
+    if (expense.status !== 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_status", details: "Only posted expenses can be reversed" });
+    }
+    
+    if (!expense.journal_entry_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "no_journal_entry", details: "Expense has no journal entry to reverse" });
+    }
+    
+    // Get original journal entry and postings
+    const { rows: entryRows } = await client.query(
+      'SELECT id, entry_number, description, date, status FROM journal_entries WHERE id = $1',
+      [expense.journal_entry_id]
+    );
+    
+    if (!entryRows || !entryRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "journal_not_found", details: "Journal entry not found" });
+    }
+    
+    const originalEntry = entryRows[0];
+    
+    // Get original postings
+    const { rows: postingRows } = await client.query(
+      'SELECT account_id, debit, credit FROM journal_postings WHERE journal_entry_id = $1',
+      [expense.journal_entry_id]
+    );
+    
+    if (!postingRows || postingRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "no_postings", details: "Journal entry has no postings" });
+    }
+    
+    // Create reverse entry - swap debit and credit
+    const entryNumber = await getNextEntryNumber();
+    const reverseDescription = `عكس ${originalEntry.description || `مصروف #${expense.id}`}`;
+    
+    const { rows: reverseEntryRows } = await client.query(
+      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+      [entryNumber, reverseDescription, expense.date || new Date(), 'expense', expense.id, 'posted', expense.branch || null]
+    );
+    
+    const reverseEntryId = reverseEntryRows && reverseEntryRows[0] ? reverseEntryRows[0].id : null;
+    
+    if (!reverseEntryId) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "create_failed", details: "Failed to create reverse journal entry" });
+    }
+    
+    // Create reverse postings (swap debit and credit)
+    for (const posting of postingRows) {
+      await client.query(
+        `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+         VALUES ($1, $2, $3, $4)`,
+        [reverseEntryId, posting.account_id, posting.credit, posting.debit] // Swapped
+      );
+    }
+    
+    // Update expense status to reversed
+    await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['reversed', id]);
+    
+    await client.query('COMMIT');
+    
+    console.log(`[EXPENSES] Reversed expense ${id}, created reverse journal entry ${reverseEntryId}`);
+    
+    // Fetch updated expense
+    const { rows: updatedRows } = await client.query('SELECT * FROM expenses WHERE id = $1', [id]);
+    const updatedExpense = updatedRows && updatedRows[0];
+    if (updatedExpense) {
+      updatedExpense.invoice_number = updatedExpense.invoice_number || `EXP-${updatedExpense.id}`;
+      updatedExpense.total = Number(updatedExpense.total || updatedExpense.amount || 0);
+    }
+    
+    res.json(updatedExpense);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error reversing expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
 // DELETE /expenses/:id - Delete expense (only if draft, or delete journal entry if posted)
 app.delete("/expenses/:id", authenticateToken, authorize("expenses","delete"), async (req, res) => {
   const client = await pool.connect();
