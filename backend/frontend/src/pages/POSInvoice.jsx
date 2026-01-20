@@ -748,7 +748,14 @@ export default function POSInvoice(){
   }
   async function lockedSaveDraft(payload){
     const currentItems = Array.isArray(itemsRef.current)
-      ? itemsRef.current.map(it => ({ id: it.product_id||it.id, name: it.name, quantity: Number(it.qty||it.quantity||0), price: Number(it.price||0), discount: Number(it.discount||0) }))
+      ? itemsRef.current.map(it => ({ 
+          id: it.product_id||it.id, 
+          name: it.name, 
+          name_en: it.name_en || '',
+          quantity: Number(it.qty||it.quantity||0), 
+          price: Number(it.price||0), 
+          discount: Number(it.discount||0) 
+        }))
       : (Array.isArray(payload.items)?payload.items:[])
     const normalizedPay = Array.isArray(payload.payLines)
       ? payload.payLines.map(l => ({ method: String(l.method||''), amount: Number(l.amount||0) }))
