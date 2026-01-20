@@ -4082,8 +4082,9 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
     const accountCode = b.account_code || null;
     const partnerId = b.partner_id || null;
     const description = b.description || null;
-    // ✅ ترحيل تلقائي عند الإنشاء إذا كان status = 'posted' أو auto_post = true
-    const autoPost = b.auto_post === true || b.status === 'posted';
+    // ✅ ترحيل تلقائي افتراضي عند الإنشاء (يمكن تعطيله بـ auto_post = false)
+    // Frontend يتوقع ترحيل تلقائي، لذلك نجعل auto_post = true افتراضياً
+    const autoPost = b.auto_post !== false; // Default to true unless explicitly set to false
     const status = autoPost ? 'posted' : (b.status || 'draft');
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const date = b.date || new Date().toISOString().slice(0, 10);
@@ -4237,8 +4238,9 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
     const accountCode = b.account_code || null;
     const partnerId = b.partner_id || null;
     const description = b.description || null;
-    // ✅ ترحيل تلقائي عند الإنشاء إذا كان status = 'posted' أو auto_post = true
-    const autoPost = b.auto_post === true || b.status === 'posted';
+    // ✅ ترحيل تلقائي افتراضي عند الإنشاء (يمكن تعطيله بـ auto_post = false)
+    // Frontend يتوقع ترحيل تلقائي، لذلك نجعل auto_post = true افتراضياً
+    const autoPost = b.auto_post !== false; // Default to true unless explicitly set to false
     const status = autoPost ? 'posted' : (b.status || 'draft');
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const date = b.date || new Date().toISOString().slice(0, 10);
@@ -4355,20 +4357,53 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
           }
         } else {
           console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
+          // CRITICAL: If auto-post is enabled but accounts are missing, delete expense and return error
+          if (autoPost) {
+            await client.query('ROLLBACK');
+            console.error('[EXPENSES] Auto-post failed (missing accounts), deleting expense', expense.id);
+            try {
+              await pool.query('DELETE FROM expenses WHERE id = $1', [expense.id]);
+            } catch (deleteErr) {
+              console.error('[EXPENSES] Failed to delete expense after account error:', deleteErr);
+            }
+            return res.status(400).json({ 
+              error: "post_failed", 
+              details: "Could not create journal entry - expense account or payment account not found",
+              expenseAccountId: expenseAccountId,
+              paymentAccountId: paymentAccountId
+            });
+          }
         }
       } catch (journalError) {
         console.error('[EXPENSES] Error creating journal entry:', journalError);
-        // Don't fail expense creation if journal entry fails - just log it
+        // CRITICAL: If auto-post is enabled and journal entry fails, delete expense and return error
+        // Frontend expects expense to be deleted if posting fails
+        await client.query('ROLLBACK');
+        console.error('[EXPENSES] Auto-post failed, deleting expense', expense.id);
+        // Try to delete expense (outside transaction since we already rolled back)
+        try {
+          await pool.query('DELETE FROM expenses WHERE id = $1', [expense.id]);
+        } catch (deleteErr) {
+          console.error('[EXPENSES] Failed to delete expense after journal error:', deleteErr);
+        }
+        return res.status(500).json({ 
+          error: "post_failed", 
+          details: journalError?.message || "Failed to create journal entry",
+          code: journalError?.code,
+          detail: journalError?.detail
+        });
       }
     }
     
     await client.query('COMMIT');
-    // Format expense response
+    // Format expense response - ensure status is included
     const formattedExpense = {
       ...expense,
       invoice_number: expense.invoice_number || `EXP-${expense.id}`,
-      total: Number(expense.total || expense.amount || 0)
+      total: Number(expense.total || expense.amount || 0),
+      status: expense.status || status // Ensure status is included in response
     };
+    console.log(`[EXPENSES] Successfully created expense ${formattedExpense.id} with status=${formattedExpense.status}`);
     res.json(formattedExpense);
   } catch (e) {
     await client.query('ROLLBACK');
@@ -4733,6 +4768,105 @@ app.post("/api/expenses/:id/post", authenticateToken, authorize("expenses","edit
   } catch (e) {
     await client.query('ROLLBACK');
     console.error('[EXPENSES] Error posting expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /expenses/:id - Delete expense (only if draft, or delete journal entry if posted)
+app.delete("/expenses/:id", authenticateToken, authorize("expenses","delete"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    
+    if (!id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_id", details: "Invalid expense ID" });
+    }
+    
+    // Get expense to check status and journal_entry_id
+    const { rows: expenseRows } = await client.query('SELECT id, status, journal_entry_id FROM expenses WHERE id = $1', [id]);
+    if (!expenseRows || !expenseRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Expense not found" });
+    }
+    
+    const expense = expenseRows[0];
+    const journalEntryId = expense.journal_entry_id;
+    
+    // If expense is posted, delete journal entry first
+    if (expense.status === 'posted' && journalEntryId) {
+      console.log(`[EXPENSES] Deleting posted expense ${id}, removing journal entry ${journalEntryId}`);
+      
+      // Delete journal postings first (foreign key constraint)
+      await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [journalEntryId]);
+      
+      // Delete journal entry
+      await client.query('DELETE FROM journal_entries WHERE id = $1', [journalEntryId]);
+      
+      console.log(`[EXPENSES] Deleted journal entry ${journalEntryId} for expense ${id}`);
+    }
+    
+    // Delete expense
+    await client.query('DELETE FROM expenses WHERE id = $1', [id]);
+    
+    await client.query('COMMIT');
+    console.log(`[EXPENSES] Deleted expense ${id}`);
+    res.json({ ok: true, id });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error deleting expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
+app.delete("/api/expenses/:id", authenticateToken, authorize("expenses","delete"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    
+    if (!id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_id", details: "Invalid expense ID" });
+    }
+    
+    // Get expense to check status and journal_entry_id
+    const { rows: expenseRows } = await client.query('SELECT id, status, journal_entry_id FROM expenses WHERE id = $1', [id]);
+    if (!expenseRows || !expenseRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Expense not found" });
+    }
+    
+    const expense = expenseRows[0];
+    const journalEntryId = expense.journal_entry_id;
+    
+    // If expense is posted, delete journal entry first
+    if (expense.status === 'posted' && journalEntryId) {
+      console.log(`[EXPENSES] Deleting posted expense ${id}, removing journal entry ${journalEntryId}`);
+      
+      // Delete journal postings first (foreign key constraint)
+      await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [journalEntryId]);
+      
+      // Delete journal entry
+      await client.query('DELETE FROM journal_entries WHERE id = $1', [journalEntryId]);
+      
+      console.log(`[EXPENSES] Deleted journal entry ${journalEntryId} for expense ${id}`);
+    }
+    
+    // Delete expense
+    await client.query('DELETE FROM expenses WHERE id = $1', [id]);
+    
+    await client.query('COMMIT');
+    console.log(`[EXPENSES] Deleted expense ${id}`);
+    res.json({ ok: true, id });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error deleting expense:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   } finally {
     client.release();
