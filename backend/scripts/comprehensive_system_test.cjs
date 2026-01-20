@@ -130,7 +130,7 @@ async function testDraftOrdersIntegrity(client) {
     const { rows } = await client.query(`
       SELECT id, branch, table_code, status, lines,
              subtotal, discount_amount, tax_amount, total_amount,
-             customerId, customer_name, customer_phone
+             "customerId", customer_name, customer_phone
       FROM orders
       WHERE status = 'DRAFT'
       ORDER BY id DESC

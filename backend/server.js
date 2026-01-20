@@ -5731,7 +5731,7 @@ async function handleGetOrders(req, res) {
     const table = req.query?.table || null;
     const status = req.query?.status || null;
     
-    let query = 'SELECT id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customerId, customer_name, customer_phone, created_at FROM orders WHERE 1=1';
+    let query = 'SELECT id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, "customerId", customer_name, customer_phone, created_at FROM orders WHERE 1=1';
     const params = [];
     let paramIndex = 1;
     
@@ -5827,7 +5827,7 @@ app.get("/api/orders", authenticateToken, authorize("sales","view"), handleGetOr
 async function handleGetOrder(req, res) {
   try {
     const id = Number(req.params.id||0);
-    const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customerId, customer_name, customer_phone, created_at FROM orders WHERE id=$1', [id]);
+    const { rows } = await pool.query('SELECT id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, "customerId", customer_name, customer_phone, created_at FROM orders WHERE id=$1', [id]);
     const order = rows && rows[0];
     if (!order) {
       return res.json(null);
@@ -5939,7 +5939,7 @@ function calculateOrderTotals(lines) {
   // Extract customer info from meta or first item
   const customer_name = meta ? (meta.customer_name || meta.customerName || '') : (lines[0]?.customer_name || '');
   const customer_phone = meta ? (meta.customer_phone || meta.customerPhone || '') : (lines[0]?.customer_phone || '');
-  const customerid = meta ? (meta.customerId || meta.customer_id || null) : (lines[0]?.customerId || null);
+  const customerId = meta ? (meta.customerId || meta.customer_id || null) : (lines[0]?.customerId || null);
   
   return {
     subtotal,
@@ -5948,7 +5948,7 @@ function calculateOrderTotals(lines) {
     total_amount,
     customer_name,
     customer_phone,
-    customerid
+    customerId
   };
 }
 
@@ -5964,10 +5964,10 @@ async function handleCreateOrder(req, res) {
     
     // Insert order with calculated totals
     const { rows } = await pool.query(
-      `INSERT INTO orders(branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid) 
+      `INSERT INTO orders(branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, "customerId") 
        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11) 
-       RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`,
-      [branch, table_code, JSON.stringify(lines), 'DRAFT', totals.subtotal, totals.discount_amount, totals.tax_amount, totals.total_amount, totals.customer_name, totals.customer_phone, totals.customerid]
+       RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, "customerId"`,
+      [branch, table_code, JSON.stringify(lines), 'DRAFT', totals.subtotal, totals.discount_amount, totals.tax_amount, totals.total_amount, totals.customer_name, totals.customer_phone, totals.customerId]
     );
     
     const order = rows && rows[0];
@@ -6035,13 +6035,13 @@ async function handleUpdateOrder(req, res) {
                          total_amount=$8,
                          customer_name=COALESCE($9,customer_name),
                          customer_phone=COALESCE($10,customer_phone),
-                         customerid=COALESCE($11,customerid),
+                         "customerId"=COALESCE($11,"customerId"),
                          updated_at=NOW() 
                      WHERE id=$12 
-                     RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`;
+                     RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, "customerId"`;
       updateParams = [b.branch||null, (b.table||b.table_code||null), linesJson, b.status||null, 
                       totals.subtotal, totals.discount_amount, totals.tax_amount, totals.total_amount,
-                      totals.customer_name, totals.customer_phone, totals.customerid, id];
+                      totals.customer_name, totals.customer_phone, totals.customerId, id];
     } else {
       updateQuery = `UPDATE orders 
                      SET branch=COALESCE($1,branch), 
@@ -6050,7 +6050,7 @@ async function handleUpdateOrder(req, res) {
                          status=COALESCE($4,status), 
                          updated_at=NOW() 
                      WHERE id=$5 
-                     RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`;
+                     RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, "customerId"`;
       updateParams = [b.branch||null, (b.table||b.table_code||null), linesJson, b.status||null, id];
     }
     
@@ -7624,10 +7624,10 @@ async function handleSaveDraft(req, res) {
              total_amount=$5,
              customer_name=$6,
              customer_phone=$7,
-             customerid=$8,
+             "customerId"=$8,
              updated_at=NOW() 
          WHERE id=$9 
-         RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid`,
+         RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, "customerId"`,
         [linesJson, subtotal, totalDiscount, totalTax, totalAmount, 
          meta.customer_name || '', meta.customer_phone || '', meta.customerId || null, order_id]
       );
@@ -7707,9 +7707,9 @@ async function handleSaveDraft(req, res) {
     console.log(`[POS] saveDraft - INSERT VALUES: branch='${branch}', table_code='${table_code_normalized}', status='DRAFT'`);
     
     const { rows } = await pool.query(
-      `INSERT INTO orders(branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid) 
+      `INSERT INTO orders(branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, "customerId") 
        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11) 
-       RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid, created_at`,
+       RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, "customerId", created_at`,
       [branch, table_code_normalized, linesJson, 'DRAFT', subtotal, totalDiscount, totalTax, totalAmount,
        meta.customer_name || '', meta.customer_phone || '', meta.customerId || null]
     );

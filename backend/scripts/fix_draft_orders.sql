@@ -40,7 +40,7 @@ BEGIN
     -- Add customerId column
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name='orders' AND column_name='customerId') THEN
-        ALTER TABLE orders ADD COLUMN customerId INTEGER;
+        ALTER TABLE orders ADD COLUMN "customerId" INTEGER;
     END IF;
     
     -- Add customer_name column
@@ -158,7 +158,7 @@ SET
     discount_amount = COALESCE((lines->0->>'discount_amount')::numeric, 0),
     tax_amount = COALESCE((lines->0->>'tax_amount')::numeric, 0),
     total_amount = COALESCE((lines->0->>'total_amount')::numeric, 0),
-    customerId = COALESCE((lines->0->>'customerId')::integer, 0),
+    "customerId" = COALESCE((lines->0->>'customerId')::integer, 0),
     customer_name = COALESCE(lines->0->>'customer_name', lines->0->>'customerName', ''),
     customer_phone = COALESCE(lines->0->>'customer_phone', lines->0->>'customerPhone', '')
 WHERE status = 'DRAFT'
