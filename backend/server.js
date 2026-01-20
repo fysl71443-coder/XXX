@@ -5326,12 +5326,27 @@ app.put("/api/pos/tables-layout", authenticateToken, authorize("sales","edit"), 
 async function handleGetTableState(req, res) {
   try {
     // CRITICAL: Guards - return empty array if branch is missing
-    const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
+    let branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
     if (!branch || String(branch).trim() === '') {
       return res.json({ busy: [] });
     }
     
-    const { rows } = await pool.query('SELECT table_code FROM orders WHERE branch = $1 AND status = $2', [branch, 'DRAFT']);
+    // CRITICAL: Normalize branch name to handle variations (palace_india -> place_india)
+    const normalizeBranch = (b) => {
+      const s = String(b || '').trim().toLowerCase().replace(/\s+/g, '_');
+      if (s === 'palace_india' || s === 'palce_india') return 'place_india';
+      return s;
+    };
+    
+    const normalizedBranch = normalizeBranch(branch);
+    
+    // Query with both original and normalized branch names to handle all cases
+    const { rows } = await pool.query(
+      `SELECT table_code FROM orders 
+       WHERE (branch = $1 OR branch = $2) 
+       AND status = $3`,
+      [branch, normalizedBranch, 'DRAFT']
+    );
     
     // CRITICAL: Guards - ensure rows is array
     if (!Array.isArray(rows)) {

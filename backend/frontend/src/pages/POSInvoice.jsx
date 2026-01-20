@@ -385,7 +385,6 @@ export default function POSInvoice(){
     return ()=>{ cancelled=true }
   },[orderId, branch, table])
   useEffect(()=>{ (async()=>{ if (partnerId) return; if (!customerPhone && !customerName) return; setLoadingPartner(true); try { await resolvePartner() } catch {} finally { setLoadingPartner(false) } })() },[orderId, customerPhone, customerName])
-  useEffect(()=>{ (async()=>{ try { const r = await pos.tableState(branch).catch(()=>({ busy: [] })); const arr = Array.isArray(r?.busy)?r.busy:[]; setTableBusy(arr.map(x=> String(x)).includes(String(table))) } catch { setTableBusy(false) } })() },[branch, table])
   // OPTIMIZATION: Prevent duplicate API calls for table state hydration
   const tableStateLoadedRef = useRef(false)
   // Note: tableHydrationInProgressRef and lastHydratedTableKeyRef are already declared above (lines 41-42) - removed duplicate declarations
@@ -404,10 +403,21 @@ export default function POSInvoice(){
       tableHydrationInProgressRef.current = true
       lastHydratedTableKeyRef.current = tableKey
       
+      // CRITICAL: Normalize branch name before API call
+      const normalizeBranch = (b) => {
+        const s = String(b || '').trim().toLowerCase().replace(/\s+/g, '_');
+        if (s === 'palace_india' || s === 'palce_india') return 'place_india';
+        return s;
+      };
+      const normalizedBranch = normalizeBranch(branch);
+      
       try { 
-        const r = await pos.tableState(branch).catch(()=>({ busy: [] }))
+        const r = await pos.tableState(normalizedBranch).catch(()=>({ busy: [] }))
         const arr = Array.isArray(r?.busy)?r.busy:[]
         const busyNow = arr.map(x=> String(x)).includes(String(table))
+        
+        // Update tableBusy state
+        setTableBusy(busyNow)
         
         if (process.env.NODE_ENV==='test') { 
           try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} 
@@ -415,6 +425,7 @@ export default function POSInvoice(){
         
         if (!busyNow) {
           tableHydrationInProgressRef.current = false
+          tableStateLoadedRef.current = false // Allow reload if table becomes busy later
           return
         }
         
@@ -424,12 +435,10 @@ export default function POSInvoice(){
         setHydrating(true)
         
         // OPTIMIZATION: Only fetch orders list if table is busy
-        const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
+        const list = await apiOrders.list({ branch: normalizedBranch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
         
-        function normalizeBranchName(b){ 
-          const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_')
-          return (s==='palace_india'||s==='palce_india')?'place_india':s 
-        } 
+        // Use the same normalization function
+        const normalizeBranchName = normalizeBranch 
         
         // CRITICAL: Normalize lines - backend may return array or string
         const found = (Array.isArray(list)?list:[]).find(o=>{ 
