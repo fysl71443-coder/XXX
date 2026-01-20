@@ -41,11 +41,27 @@ export default function Products() {
     setLoading(true)
     try {
       const data = await products.list(showDisabled ? { include_disabled: 1 } : {})
-      const arr = Array.isArray(data) ? data : ((data && Array.isArray(data.items)) ? data.items : [])
-      const dis = (data && Array.isArray(data.disabled_ids)) ? data.disabled_ids.map(n=> Number(n)) : []
+      
+      // Handle both array response and object with items property
+      let arr = []
+      let dis = []
+      
+      if (Array.isArray(data)) {
+        // Direct array response
+        arr = data
+        dis = []
+      } else if (data && typeof data === 'object') {
+        // Object with items property
+        arr = Array.isArray(data.items) ? data.items : []
+        dis = Array.isArray(data.disabled_ids) ? data.disabled_ids.map(n => Number(n)) : []
+      }
+      
+      console.log('[Products] Loaded products:', arr.length, 'items,', dis.length, 'disabled');
+      
       setItems(arr)
       setDisabledIds(dis)
     } catch (e) {
+      console.error('[Products] Error loading products:', e);
       setItems([])
       setDisabledIds([])
     } finally {
@@ -248,10 +264,23 @@ export default function Products() {
         <section className="bg-white rounded-xl shadow p-4" dir="rtl">
           <div className="flex items-center justify-between mb-3">
             <div className="text-lg font-semibold">{lang==='ar'?'الأقسام':'Categories'}</div>
-            <div className="text-sm text-gray-600">{lang==='ar'?'تجميع المنتجات حسب الفئة':'Group products by category'}</div>
+            <div className="text-sm text-gray-600">
+              {lang==='ar'?'تجميع المنتجات حسب الفئة':'Group products by category'}
+              {items.length > 0 && ` (${items.length} ${lang==='ar'?'منتج':'products'})`}
+            </div>
           </div>
           {loading ? (
             <div className="text-sm text-gray-600">{lang==='ar'?'جار التحميل...':'Loading...'}</div>
+          ) : items.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-gray-500 mb-2">{lang==='ar'?'لا توجد منتجات في قاعدة البيانات':'No products in database'}</div>
+              <div className="text-sm text-gray-400">{lang==='ar'?'استخدم زر "إضافة منتج" لإضافة منتجات جديدة':'Use "Add Product" button to add new products'}</div>
+            </div>
+          ) : categories.length === 0 ? (
+            <div className="text-center py-8">
+              <div className="text-gray-500 mb-2">{lang==='ar'?'لا توجد فئات':'No categories'}</div>
+              <div className="text-sm text-gray-400">{lang==='ar'?'المنتجات موجودة لكن لا توجد فئات':'Products exist but no categories found'}</div>
+            </div>
           ) : (
             <div className="space-y-4">
               {categories.map(cat => (

@@ -2521,8 +2521,11 @@ app.get("/products", authenticateToken, authorize("products", "view"), async (re
 
 app.get("/api/products", authenticateToken, authorize("products", "view"), async (req, res) => {
   try {
+    const includeDisabled = req.query.include_disabled === '1' || req.query.include_disabled === 1;
+    
     // CRITICAL: Select all columns including sale_price, price, name_en for bilingual support
-    const { rows } = await pool.query(`
+    // Filter by is_active only if include_disabled is not set
+    let query = `
       SELECT 
         id, name, name_en, sku, barcode, category, unit, 
         COALESCE(sale_price, price, 0) as sale_price,
@@ -2530,9 +2533,25 @@ app.get("/api/products", authenticateToken, authorize("products", "view"), async
         description, is_active, is_service, can_be_sold, 
         can_be_purchased, can_be_expensed, created_at, updated_at
       FROM products 
-      ORDER BY id DESC
-    `);
-    res.json(rows || []);
+    `;
+    
+    if (!includeDisabled) {
+      query += ` WHERE is_active = true OR is_active IS NULL `;
+    }
+    
+    query += ` ORDER BY category ASC, name ASC `;
+    
+    const { rows } = await pool.query(query);
+    
+    // Separate active and disabled products
+    const activeProducts = rows.filter(p => p.is_active !== false);
+    const disabledProducts = rows.filter(p => p.is_active === false);
+    const disabledIds = disabledProducts.map(p => p.id);
+    
+    res.json({
+      items: activeProducts,
+      disabled_ids: disabledIds
+    });
   } catch (e) {
     console.error('[PRODUCTS] Error listing products:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
