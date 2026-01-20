@@ -6758,6 +6758,7 @@ async function handleSaveDraft(req, res) {
         product_id: item.id || item.product_id || null,
         id: item.id || item.product_id || null,
         name: item.name || '',
+        name_en: item.name_en || '', // Preserve bilingual name
         qty: Number(item.quantity || item.qty || 0),
         quantity: Number(item.quantity || item.qty || 0),
         price: Number(item.price || 0),
