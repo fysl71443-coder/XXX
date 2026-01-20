@@ -2014,20 +2014,37 @@ export default function POSInvoice(){
                   ) })()}
                   <button className="px-3 py-1 text-sm border rounded bg-white hover:bg-gray-50" onClick={()=> { setSectionOpen(false); setSelectedCategory(null) }}>{t('labels.close', lang)}</button>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-3 max-h-[60vh] overflow-y-auto" data-ready={loadingProducts ? 'false' : 'true'}>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4 max-h-[60vh] overflow-y-auto" data-ready={loadingProducts ? 'false' : 'true'}>
                   {(function(){ const base = (products.length>0 ? products : [
                     { id: 'p1', name: 'منتج 1', category: 'عام', price: 10 },
                     { id: 'p2', name: 'منتج 2', category: 'عام', price: 5 },
                   ]); const filtered = base.filter(p=> String(p.category||'عام').trim() === String(selectedCategory||'').trim()); const list = filtered.length>0 ? filtered : base; return list })().map(p=> {
                     const nm = splitBilingual(p.name, p.name_en)
                     return (
-                      <button data-testid={`product-btn-${p.id}`} key={p.id} className="relative p-3 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-primary-300 transition-colors text-right min-h-[100px] flex flex-col justify-between" style={{ fontFamily: 'Cairo, sans-serif' }} onClick={()=> { ensureOrderThenAdd(p) }}>
-                        {countById.get(String(p.id))>0 ? (<span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{countById.get(String(p.id))}</span>) : null}
-                        <div className="flex-1 flex flex-col justify-center gap-1">
-                          <div className="text-lg font-semibold text-gray-800 leading-tight">{mealIcon(p)} {nm.en || p.name}</div>
-                          {nm.ar ? (<div className="text-sm text-gray-600 leading-tight">{nm.ar}</div>) : null}
+                      <button 
+                        data-testid={`product-btn-${p.id}`} 
+                        key={p.id} 
+                        className="relative p-4 bg-white border-2 rounded-xl shadow-md hover:shadow-lg hover:border-primary-400 transition-all text-right min-h-[120px] flex flex-col justify-between group" 
+                        style={{ fontFamily: 'Cairo, sans-serif' }} 
+                        onClick={()=> { ensureOrderThenAdd(p) }}
+                      >
+                        {countById.get(String(p.id))>0 ? (
+                          <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-md z-10">
+                            {countById.get(String(p.id))}
+                          </span>
+                        ) : null}
+                        <div className="flex-1 flex flex-col justify-center gap-2">
+                          <div className="text-xl font-bold text-gray-900 leading-tight break-words">
+                            <span className="text-2xl mr-1">{mealIcon(p)}</span>
+                            <span>{nm.en || p.name}</span>
+                          </div>
+                          {nm.ar && nm.ar !== nm.en ? (
+                            <div className="text-sm text-gray-700 leading-tight break-words font-medium">{nm.ar}</div>
+                          ) : null}
                         </div>
-                        <div className="text-sm font-bold text-primary-600 mt-1">{currencyCode} {Number(p.price||0).toFixed(2)}</div>
+                        <div className="text-base font-bold text-primary-700 mt-2 pt-2 border-t border-gray-200">
+                          {currencyCode} {Number(p.price||0).toFixed(2)}
+                        </div>
                       </button>
                     )
                   })}
@@ -2037,17 +2054,34 @@ export default function POSInvoice(){
             )}
             {selectedCategory && !sectionOpen && (
               <div className="mt-3">
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-3" data-ready={loadingProducts ? 'false' : 'true'}>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 p-4" data-ready={loadingProducts ? 'false' : 'true'}>
                   {(function(){ const filtered = products.filter(p=> String(p.category||'عام').trim() === String(selectedCategory||'').trim()); const list = filtered.length>0 ? filtered : products; return list })().map(p=> {
                     const nm = splitBilingual(p.name, p.name_en)
                     return (
-                      <button data-testid={`product-btn-${p.id}`} key={p.id} className="relative p-3 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-primary-300 transition-colors text-right min-h-[100px] flex flex-col justify-between" style={{ fontFamily: 'Cairo, sans-serif' }} onClick={()=> { ensureOrderThenAdd(p) }}>
-                        {countById.get(String(p.id))>0 ? (<span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{countById.get(String(p.id))}</span>) : null}
-                        <div className="flex-1 flex flex-col justify-center gap-1">
-                          <div className="text-lg font-semibold text-gray-800 leading-tight">{mealIcon(p)} {nm.en || p.name}</div>
-                          {nm.ar ? (<div className="text-sm text-gray-600 leading-tight">{nm.ar}</div>) : null}
+                      <button 
+                        data-testid={`product-btn-${p.id}`} 
+                        key={p.id} 
+                        className="relative p-4 bg-white border-2 rounded-xl shadow-md hover:shadow-lg hover:border-primary-400 transition-all text-right min-h-[120px] flex flex-col justify-between group" 
+                        style={{ fontFamily: 'Cairo, sans-serif' }} 
+                        onClick={()=> { ensureOrderThenAdd(p) }}
+                      >
+                        {countById.get(String(p.id))>0 ? (
+                          <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs px-2.5 py-1 rounded-full font-bold shadow-md z-10">
+                            {countById.get(String(p.id))}
+                          </span>
+                        ) : null}
+                        <div className="flex-1 flex flex-col justify-center gap-2">
+                          <div className="text-xl font-bold text-gray-900 leading-tight break-words">
+                            <span className="text-2xl mr-1">{mealIcon(p)}</span>
+                            <span>{nm.en || p.name}</span>
+                          </div>
+                          {nm.ar && nm.ar !== nm.en ? (
+                            <div className="text-sm text-gray-700 leading-tight break-words font-medium">{nm.ar}</div>
+                          ) : null}
                         </div>
-                        <div className="text-sm font-bold text-primary-600 mt-1">{currencyCode} {Number(p.price||0).toFixed(2)}</div>
+                        <div className="text-base font-bold text-primary-700 mt-2 pt-2 border-t border-gray-200">
+                          {currencyCode} {Number(p.price||0).toFixed(2)}
+                        </div>
                       </button>
                     )
                   })}
