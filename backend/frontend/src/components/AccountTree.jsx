@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 
-export default function AccountTree({ accounts = [], onSelect }) {
+export default function AccountTree({ accounts = [], onSelect, onEdit }) {
   const [lang, setLang] = useState(localStorage.getItem('lang')||'ar')
   const [expanded, setExpanded] = useState(() => new Set())
   useEffect(()=>{
@@ -145,10 +145,21 @@ export default function AccountTree({ accounts = [], onSelect }) {
               {labelName(node)}
             </div>
           ) : (
-            <button onClick={() => onSelect(node)} className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded w-full text-left">
-              <span className={`w-3 h-3 rounded-full ${getColor(node.type)}`}></span>
-              {pad(node) + ' • ' + labelName(node)}
-            </button>
+            <div className="flex items-center gap-2 w-full">
+              <button onClick={() => onSelect(node)} className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded flex-1 text-left">
+                <span className={`w-3 h-3 rounded-full ${getColor(node.type)}`}></span>
+                {pad(node) + ' • ' + labelName(node)}
+              </button>
+              {onEdit && (
+                <button 
+                  onClick={(e) => { e.stopPropagation(); onEdit(node) }} 
+                  className="px-2 py-1 text-blue-600 hover:bg-blue-50 rounded text-sm"
+                  title={lang==='ar'?'تعديل':'Edit'}
+                >
+                  ✏️
+                </button>
+              )}
+            </div>
           )}
         </div>
         {hasChildren && isOpen ? (node.children||[]).map(ch => renderNode(ch, level+1)) : null}

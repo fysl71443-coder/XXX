@@ -387,9 +387,12 @@ export default function AccountsScreen() {
             {loadError ? (
               <div className="text-red-600 text-sm">{lang==='ar'?'تعذّر تحميل الحسابات. تأكد من اتصال الخادم.':'Failed to load accounts. Ensure server is running.'}</div>
             ) : (
-              <AccountTree accounts={filteredAccounts} onSelect={a=>{ setSelectedAccount(a); setView('account') }} />
+              <AccountTree 
+                accounts={filteredAccounts} 
+                onSelect={a=>{ setSelectedAccount(a); setView('account') }}
+                onEdit={a=>{ setSelectedAccount(a); setForm({ name: a.name||'', name_en: a.name_en||'', type: a.type||'', opening_balance: String(a.opening_balance||0) }); setShowEdit(true) }}
+              />
             )}
-            {/* تم إزالة أزرار إضافة/تعديل/حذف الحسابات - الشجرة تُزرع من قاعدة البيانات فقط */}
           </div>
           <div>
             <div className="font-semibold mb-2">{lang==='ar'?'📘 الدفاتر المحاسبية':'📘 Ledgers'}</div>
@@ -577,7 +580,224 @@ export default function AccountsScreen() {
           )}
         </div>
       </div>
-      {/* تم إزالة جميع نوافذ إضافة/تعديل/حذف الحسابات - الشجرة تُزرع من قاعدة البيانات فقط */}
+      {showEdit && selectedAccount && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white w-full max-w-md rounded-xl border border-gray-200 shadow-xl p-6" dir={lang==='ar'?'rtl':'ltr'}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-semibold text-gray-800">{lang==='ar'?'تعديل الحساب':'Edit Account'}</div>
+              <button className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-md" onClick={()=>{ setShowEdit(false); setForm({ name: '', name_en: '', type: '', opening_balance: '' }); setCreateError('') }}>{lang==='ar'?'إغلاق':'Close'}</button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm text-gray-700 mb-1 block">{lang==='ar'?'اسم الحساب':'Account Name'}</label>
+                <input 
+                  className="w-full px-3 py-2 border rounded" 
+                  value={form.name} 
+                  onChange={e=>setForm({...form, name: e.target.value})} 
+                  placeholder={lang==='ar'?'اسم الحساب':'Account Name'}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-700 mb-1 block">{lang==='ar'?'اسم الحساب (إنجليزي)':'Account Name (English)'}</label>
+                <input 
+                  className="w-full px-3 py-2 border rounded" 
+                  value={form.name_en} 
+                  onChange={e=>setForm({...form, name_en: e.target.value})} 
+                  placeholder={lang==='ar'?'اسم الحساب بالإنجليزية':'Account Name in English'}
+                />
+              </div>
+              <div>
+                <label className="text-sm text-gray-700 mb-1 block">{lang==='ar'?'نوع الحساب':'Account Type'}</label>
+                <select 
+                  className="w-full px-3 py-2 border rounded" 
+                  value={form.type} 
+                  onChange={e=>setForm({...form, type: e.target.value})}
+                >
+                  <option value="asset">{lang==='ar'?'أصل':'Asset'}</option>
+                  <option value="liability">{lang==='ar'?'التزام':'Liability'}</option>
+                  <option value="equity">{lang==='ar'?'حقوق ملكية':'Equity'}</option>
+                  <option value="revenue">{lang==='ar'?'إيراد':'Revenue'}</option>
+                  <option value="expense">{lang==='ar'?'مصروف':'Expense'}</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm text-gray-700 mb-1 block">{lang==='ar'?'الرصيد الافتتاحي':'Opening Balance'}</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  className="w-full px-3 py-2 border rounded" 
+                  value={form.opening_balance} 
+                  onChange={e=>setForm({...form, opening_balance: e.target.value})} 
+                  placeholder={lang==='ar'?'الرصيد الافتتاحي':'Opening Balance'}
+                />
+                <div className="text-xs text-gray-500 mt-1">
+                  {lang==='ar'?'ملاحظة: عند إضافة رصيد افتتاحي، سيتم إنشاء قيد محاسبي':'Note: Adding opening balance will create a journal entry'}
+                </div>
+              </div>
+              {createError && (
+                <div className="text-red-600 text-sm">{createError}</div>
+              )}
+              <div className="flex justify-end gap-2 mt-4">
+                <button 
+                  className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md" 
+                  onClick={()=>{ setShowEdit(false); setForm({ name: '', name_en: '', type: '', opening_balance: '' }); setCreateError('') }}
+                >
+                  {lang==='ar'?'إلغاء':'Cancel'}
+                </button>
+                <button 
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md flex items-center gap-2" 
+                  onClick={async ()=>{
+                    try {
+                      setCreateError('')
+                      const payload = { 
+                        name: form.name || selectedAccount.name, 
+                        name_en: form.name_en || selectedAccount.name_en, 
+                        type: form.type || selectedAccount.type 
+                      }
+                      
+                      // Check if opening balance changed
+                      const currentBalance = parseFloat(selectedAccount.opening_balance || 0)
+                      const newBalance = parseFloat(form.opening_balance || 0)
+                      
+                      if (Math.abs(newBalance - currentBalance) > 0.01) {
+                        // Opening balance changed - need to create journal entry
+                        // Show modal for date input instead of prompt
+                        const balanceDateInput = window.prompt(
+                          lang==='ar' 
+                            ? 'يرجى إدخال تاريخ الرصيد الافتتاحي (YYYY-MM-DD):' 
+                            : 'Please enter opening balance date (YYYY-MM-DD):',
+                          new Date().toISOString().slice(0, 10)
+                        )
+                        
+                        if (!balanceDateInput) {
+                          setCreateError(lang==='ar'?'تم إلغاء العملية':'Operation cancelled')
+                          return
+                        }
+                        
+                        if (!/^\d{4}-\d{2}-\d{2}$/.test(balanceDateInput)) {
+                          setCreateError(lang==='ar'?'تاريخ غير صحيح. يجب أن يكون بصيغة YYYY-MM-DD':'Invalid date. Must be YYYY-MM-DD format')
+                          return
+                        }
+                        
+                        // Validate date
+                        const dateObj = new Date(balanceDateInput)
+                        if (isNaN(dateObj.getTime())) {
+                          setCreateError(lang==='ar'?'تاريخ غير صحيح':'Invalid date')
+                          return
+                        }
+                        
+                        // Determine debit/credit based on account nature and balance
+                        const accountNature = selectedAccount.nature || 'debit'
+                        const balanceAmount = Math.abs(newBalance)
+                        let accountDebit = 0
+                        let accountCredit = 0
+                        
+                        // For opening balance:
+                        // - Debit nature accounts: positive balance = debit, negative = credit
+                        // - Credit nature accounts: positive balance = credit, negative = debit
+                        if (accountNature === 'debit') {
+                          if (newBalance >= 0) {
+                            accountDebit = balanceAmount
+                            accountCredit = 0
+                          } else {
+                            accountDebit = 0
+                            accountCredit = balanceAmount
+                          }
+                        } else {
+                          // Credit nature
+                          if (newBalance >= 0) {
+                            accountDebit = 0
+                            accountCredit = balanceAmount
+                          } else {
+                            accountDebit = balanceAmount
+                            accountCredit = 0
+                          }
+                        }
+                        
+                        // Find equity account for balancing (usually starts with 3000 or equity type)
+                        const equityAccount = flatAccounts.find(a => 
+                          String(a.type) === 'equity' && 
+                          (String(a.account_code || a.account_number || '').startsWith('3000') || 
+                           String(a.account_code || a.account_number || '').startsWith('3'))
+                        )
+                        
+                        if (!equityAccount) {
+                          setCreateError(lang==='ar'?'لم يتم العثور على حساب حقوق الملكية. يرجى التأكد من وجود حساب حقوق ملكية في النظام':'Equity account not found. Please ensure an equity account exists')
+                          return
+                        }
+                        
+                        // Create balanced opening balance journal entry
+                        // The equity account gets the opposite entry to balance
+                        const journalPayload = {
+                          description: lang==='ar' 
+                            ? `رصيد افتتاحي - ${selectedAccount.name || selectedAccount.name_en || ''}` 
+                            : `Opening Balance - ${selectedAccount.name_en || selectedAccount.name || ''}`,
+                          date: balanceDateInput,
+                          postings: [
+                            {
+                              account_id: selectedAccount.id,
+                              debit: accountDebit,
+                              credit: accountCredit
+                            },
+                            {
+                              account_id: equityAccount.id,
+                              debit: accountCredit, // Opposite to balance
+                              credit: accountDebit  // Opposite to balance
+                            }
+                          ],
+                          reference_type: 'opening_balance',
+                          reference_id: selectedAccount.id
+                        }
+                        
+                        // Validate that entries are balanced
+                        const totalDebit = accountDebit + accountCredit
+                        const totalCredit = accountCredit + accountDebit
+                        if (Math.abs(totalDebit - totalCredit) > 0.01) {
+                          setCreateError(lang==='ar'?'القيد غير متوازن':'Entry is not balanced')
+                          return
+                        }
+                        
+                        // Create journal entry first
+                        const createdEntry = await apiJournal.create(journalPayload)
+                        
+                        // Post the entry immediately if it was created
+                        if (createdEntry && createdEntry.id) {
+                          try {
+                            await apiJournal.postEntry(createdEntry.id)
+                          } catch (postErr) {
+                            console.error('[AccountsScreen] Error posting opening balance entry:', postErr)
+                            setCreateError(lang==='ar'?'تم إنشاء القيد لكن فشل الترحيل. يمكنك ترحيله يدوياً من شاشة القيود':'Entry created but posting failed. You can post it manually from journal screen')
+                            // Continue to update account balance
+                          }
+                        } else {
+                          setCreateError(lang==='ar'?'فشل إنشاء القيد':'Failed to create journal entry')
+                          return
+                        }
+                      }
+                      
+                      // Update account
+                      payload.opening_balance = newBalance
+                      await apiAccounts.update(selectedAccount.id, payload)
+                      
+                      // Reload accounts
+                      const data = await apiAccounts.tree()
+                      setAccounts(data)
+                      setShowEdit(false)
+                      setForm({ name: '', name_en: '', type: '', opening_balance: '' })
+                      
+                    } catch (e) {
+                      console.error('[AccountsScreen] Error updating account:', e)
+                      setCreateError(lang==='ar'?'فشل تحديث الحساب':'Failed to update account')
+                    }
+                  }}
+                >
+                  <FaEdit/> {lang==='ar'?'حفظ':'Save'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
