@@ -175,17 +175,8 @@ async function cleanDatabase() {
       console.log(`   ⚠️ employees: ${e.message}\n`);
     }
     
-    // حذف products
-    try {
-      await client.query('BEGIN');
-      console.log('   حذف products...');
-      await client.query('DELETE FROM products');
-      await client.query('COMMIT');
-      console.log('   ✅ تم حذف products\n');
-    } catch (e) {
-      await client.query('ROLLBACK');
-      console.log(`   ⚠️ products: ${e.message}\n`);
-    }
+    // الاحتفاظ بـ products (المنتجات)
+    console.log('   ℹ️ products: تم الاحتفاظ بالمنتجات (لم يتم الحذف)\n');
     
     // حذف inventory_transactions (إن وجدت)
     try {
@@ -259,7 +250,7 @@ async function cleanDatabase() {
       'invoices',
       'expenses',
       'orders',
-      'products',
+      // 'products' - تم الاحتفاظ بالمنتجات، لا نعيد تعيين الترقيم
       'partners',
       'employees'
     ];
@@ -304,7 +295,7 @@ async function cleanDatabase() {
     console.log('📋 ملخص:');
     console.log('   ✅ تم حذف جميع البيانات');
     console.log('   ✅ تم إعادة تعيين جميع الترقيمات');
-    console.log('   ✅ تم الاحتفاظ بـ users و accounts');
+    console.log('   ✅ تم الاحتفاظ بـ users و accounts و products');
     console.log('   ✅ النظام جاهز للبدء من جديد');
     console.log('   ✅ سيتم إعادة استخدام الأرقام المحذوفة تلقائياً\n');
     
@@ -331,7 +322,7 @@ async function verifyCleanup() {
       { table: 'invoices', name: 'الفواتير' },
       { table: 'expenses', name: 'المصروفات' },
       { table: 'orders', name: 'الطلبات' },
-      { table: 'products', name: 'المنتجات' },
+      { table: 'products', name: 'المنتجات (محفوظة)' },
       { table: 'partners', name: 'الشركاء' },
       { table: 'employees', name: 'الموظفين' }
     ];
@@ -340,7 +331,10 @@ async function verifyCleanup() {
       try {
         const { rows } = await dbPool.query(`SELECT COUNT(*) as count FROM ${check.table}`);
         const count = Number(rows[0].count || 0);
-        if (count === 0) {
+        if (check.table === 'products') {
+          // المنتجات محفوظة - هذا متوقع
+          console.log(`   ✅ ${check.name}: ${count} سجل (محفوظة)`);
+        } else if (count === 0) {
           console.log(`   ✅ ${check.name}: 0 سجل`);
         } else {
           console.log(`   ⚠️ ${check.name}: ${count} سجل متبقي`);
