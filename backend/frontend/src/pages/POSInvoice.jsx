@@ -340,9 +340,8 @@ export default function POSInvoice(){
     }
   }
   // OPTIMIZATION: Prevent duplicate API calls with ref tracking
-  const orderLoadInProgressRef = useRef(false)
-  const lastLoadedOrderKeyRef = useRef(null)
-  useEffect(()=>{
+  // Note: orderLoadInProgressRef and lastLoadedOrderKeyRef are already declared above (lines 38-39)
+  useEffect(() => {
     let cancelled = false
     ;(async()=>{
       try {
@@ -389,8 +388,7 @@ export default function POSInvoice(){
   useEffect(()=>{ (async()=>{ try { const r = await pos.tableState(branch).catch(()=>({ busy: [] })); const arr = Array.isArray(r?.busy)?r.busy:[]; setTableBusy(arr.map(x=> String(x)).includes(String(table))) } catch { setTableBusy(false) } })() },[branch, table])
   // OPTIMIZATION: Prevent duplicate API calls for table state hydration
   const tableStateLoadedRef = useRef(false)
-  const tableHydrationInProgressRef = useRef(false)
-  const lastHydratedTableKeyRef = useRef(null)
+  // Note: tableHydrationInProgressRef and lastHydratedTableKeyRef are already declared above (lines 41-42) - removed duplicate declarations
   useEffect(()=>{ 
     (async()=>{ 
       if (tableStateLoadedRef.current) return
@@ -495,7 +493,7 @@ export default function POSInvoice(){
   const categories = categoriesState
   useEffect(()=>{ setLoadingCategories(true); const setCat = new Set(products.map(p=> p.category||'عام')); const arr = Array.from(setCat); setCategoriesState(arr.length ? arr : ['عام']); setLoadingCategories(false) },[products])
   // OPTIMIZATION: Prevent duplicate calls - only run when orderId changes, not when loading states change
-  const orderHydrationInProgressRef = useRef(false)
+  // Note: orderHydrationInProgressRef is already declared above (line 40) - removed duplicate declaration
   useEffect(()=>{ 
     (async()=>{ 
       if (hydratedFromOrderRef.current) return
