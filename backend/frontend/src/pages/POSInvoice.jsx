@@ -266,7 +266,18 @@ export default function POSInvoice(){
       const arr = Array.isArray(o.lines) ? o.lines : [];
       
       const meta = arr.find(x=> x && x.type==='meta') || {}
-      const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
+      const orderItems = arr.filter(x=> x && x.type==='item').map(l=> {
+        // Get product from products list to get name_en
+        const product = products.find(p => String(p.id) === String(l.product_id))
+        return {
+          product_id: l.product_id, 
+          name: l.name||'', 
+          name_en: l.name_en || product?.name_en || '',
+          qty: Number(l.qty||0), 
+          price: Number(l.price||0), 
+          discount: Number(l.discount||0) 
+        }
+      })
       const safeOrderItems2 = Array.isArray(orderItems) ? orderItems : []
       
       // OPTIMIZATION: Update state immediately for instant UI feedback
@@ -986,7 +997,18 @@ export default function POSInvoice(){
       try {
         const o = await apiOrders.get(id)
         const arr = (function(){ try { if (Array.isArray(o?.lines)) return o.lines; if (typeof o?.lines === 'string') { const parsed = JSON.parse(o?.lines||'[]'); return Array.isArray(parsed) ? parsed : []; } return []; } catch { return [] } })()
-      const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
+      const orderItems = arr.filter(x=> x && x.type==='item').map(l=> {
+        // Get product from products list to get name_en
+        const product = products.find(p => String(p.id) === String(l.product_id))
+        return {
+          product_id: l.product_id, 
+          name: l.name||'', 
+          name_en: l.name_en || product?.name_en || '',
+          qty: Number(l.qty||0), 
+          price: Number(l.price||0), 
+          discount: Number(l.discount||0) 
+        }
+      })
       const safeOrderItems = Array.isArray(orderItems)?orderItems:[]
       itemsRef.current = safeOrderItems
       setItems(safeOrderItems)
