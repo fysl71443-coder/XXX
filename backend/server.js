@@ -818,6 +818,165 @@ app.post("/debug/bootstrap-admin", async (req, res) => {
   }
 });
 
+// Purge unlinked data - Delete expenses/invoices that are not linked to any journal entry
+// CRITICAL: Only deletes data that has NO journal_entry_id (completely unlinked)
+// Does NOT delete data linked to draft journal entries (those are valid)
+app.post("/debug/purge-unlinked", authenticateToken, authorize("journal", "delete"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    let deletedCount = {
+      expenses: 0,
+      invoices: 0,
+      supplier_invoices: 0,
+      orders: 0
+    };
+    
+    // 1. Delete expenses that have NO journal_entry_id (completely unlinked)
+    // Do NOT delete expenses linked to draft journal entries
+    const { rows: unlinkedExpenses } = await client.query(`
+      SELECT id FROM expenses 
+      WHERE journal_entry_id IS NULL
+    `);
+    
+    for (const expense of unlinkedExpenses || []) {
+      await client.query('DELETE FROM expenses WHERE id = $1', [expense.id]);
+      deletedCount.expenses++;
+    }
+    
+    // 2. Delete invoices that have NO journal_entry_id (completely unlinked)
+    // Do NOT delete invoices linked to draft journal entries
+    const { rows: unlinkedInvoices } = await client.query(`
+      SELECT id FROM invoices 
+      WHERE journal_entry_id IS NULL
+    `);
+    
+    for (const invoice of unlinkedInvoices || []) {
+      await client.query('DELETE FROM invoices WHERE id = $1', [invoice.id]);
+      deletedCount.invoices++;
+    }
+    
+    // 3. Delete supplier_invoices that have NO journal_entry_id (completely unlinked)
+    const { rows: unlinkedSupplierInvoices } = await client.query(`
+      SELECT id FROM supplier_invoices 
+      WHERE journal_entry_id IS NULL
+    `);
+    
+    for (const supplierInvoice of unlinkedSupplierInvoices || []) {
+      await client.query('DELETE FROM supplier_invoices WHERE id = $1', [supplierInvoice.id]);
+      deletedCount.supplier_invoices++;
+    }
+    
+    // 4. Delete orders that are not linked to any invoice and are in DRAFT status
+    // Only delete DRAFT orders that have no invoice_id
+    const { rows: unlinkedOrders } = await client.query(`
+      SELECT id FROM orders 
+      WHERE invoice_id IS NULL 
+      AND UPPER(status) = 'DRAFT'
+    `);
+    
+    for (const order of unlinkedOrders || []) {
+      await client.query('DELETE FROM orders WHERE id = $1', [order.id]);
+      deletedCount.orders++;
+    }
+    
+    await client.query('COMMIT');
+    
+    console.log(`[PURGE] Deleted unlinked data:`, deletedCount);
+    
+    res.json({ 
+      ok: true, 
+      deleted: deletedCount,
+      message: `Deleted ${deletedCount.expenses} expenses, ${deletedCount.invoices} invoices, ${deletedCount.supplier_invoices} supplier invoices, ${deletedCount.orders} orders`
+    });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PURGE] Error purging unlinked data:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/debug/purge-unlinked", authenticateToken, authorize("journal", "delete"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    let deletedCount = {
+      expenses: 0,
+      invoices: 0,
+      supplier_invoices: 0,
+      orders: 0
+    };
+    
+    // 1. Delete expenses that have NO journal_entry_id (completely unlinked)
+    // Do NOT delete expenses linked to draft journal entries
+    const { rows: unlinkedExpenses } = await client.query(`
+      SELECT id FROM expenses 
+      WHERE journal_entry_id IS NULL
+    `);
+    
+    for (const expense of unlinkedExpenses || []) {
+      await client.query('DELETE FROM expenses WHERE id = $1', [expense.id]);
+      deletedCount.expenses++;
+    }
+    
+    // 2. Delete invoices that have NO journal_entry_id (completely unlinked)
+    // Do NOT delete invoices linked to draft journal entries
+    const { rows: unlinkedInvoices } = await client.query(`
+      SELECT id FROM invoices 
+      WHERE journal_entry_id IS NULL
+    `);
+    
+    for (const invoice of unlinkedInvoices || []) {
+      await client.query('DELETE FROM invoices WHERE id = $1', [invoice.id]);
+      deletedCount.invoices++;
+    }
+    
+    // 3. Delete supplier_invoices that have NO journal_entry_id (completely unlinked)
+    const { rows: unlinkedSupplierInvoices } = await client.query(`
+      SELECT id FROM supplier_invoices 
+      WHERE journal_entry_id IS NULL
+    `);
+    
+    for (const supplierInvoice of unlinkedSupplierInvoices || []) {
+      await client.query('DELETE FROM supplier_invoices WHERE id = $1', [supplierInvoice.id]);
+      deletedCount.supplier_invoices++;
+    }
+    
+    // 4. Delete orders that are not linked to any invoice and are in DRAFT status
+    // Only delete DRAFT orders that have no invoice_id
+    const { rows: unlinkedOrders } = await client.query(`
+      SELECT id FROM orders 
+      WHERE invoice_id IS NULL 
+      AND UPPER(status) = 'DRAFT'
+    `);
+    
+    for (const order of unlinkedOrders || []) {
+      await client.query('DELETE FROM orders WHERE id = $1', [order.id]);
+      deletedCount.orders++;
+    }
+    
+    await client.query('COMMIT');
+    
+    console.log(`[PURGE] Deleted unlinked data:`, deletedCount);
+    
+    res.json({ 
+      ok: true, 
+      deleted: deletedCount,
+      message: `Deleted ${deletedCount.expenses} expenses, ${deletedCount.invoices} invoices, ${deletedCount.supplier_invoices} supplier invoices, ${deletedCount.orders} orders`
+    });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PURGE] Error purging unlinked data:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
 // /auth/me endpoint - CRITICAL: Only returns user if token is valid
 // Does NOT check permissions - that's authorization, not authentication
 // Must NEVER fail due to permission loading errors
