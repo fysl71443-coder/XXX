@@ -2521,7 +2521,17 @@ app.get("/products", authenticateToken, authorize("products", "view"), async (re
 
 app.get("/api/products", authenticateToken, authorize("products", "view"), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM products ORDER BY id DESC');
+    // CRITICAL: Select all columns including sale_price, price, name_en for bilingual support
+    const { rows } = await pool.query(`
+      SELECT 
+        id, name, name_en, sku, barcode, category, unit, 
+        COALESCE(sale_price, price, 0) as sale_price,
+        price, cost, tax_rate, stock_quantity, min_stock, 
+        description, is_active, is_service, can_be_sold, 
+        can_be_purchased, can_be_expensed, created_at, updated_at
+      FROM products 
+      ORDER BY id DESC
+    `);
     res.json(rows || []);
   } catch (e) {
     console.error('[PRODUCTS] Error listing products:', e);
