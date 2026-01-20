@@ -775,15 +775,33 @@ export default function AccountsScreen() {
                         }
                       }
                       
-                      // Update account
+                      // Update account (always update, even if balance didn't change)
                       payload.opening_balance = newBalance
                       await apiAccounts.update(selectedAccount.id, payload)
                       
-                      // Reload accounts
+                      // Reload accounts to reflect changes
                       const data = await apiAccounts.tree()
                       setAccounts(data)
+                      
+                      // Update selected account if it's still selected
+                      if (selectedAccount && data) {
+                        function findAccount(tree, id) {
+                          for (const acc of tree || []) {
+                            if (acc.id === id) return acc
+                            if (acc.children) {
+                              const found = findAccount(acc.children, id)
+                              if (found) return found
+                            }
+                          }
+                          return null
+                        }
+                        const updated = findAccount(data, selectedAccount.id)
+                        if (updated) setSelectedAccount(updated)
+                      }
+                      
                       setShowEdit(false)
                       setForm({ name: '', name_en: '', type: '', opening_balance: '' })
+                      setCreateError('')
                       
                     } catch (e) {
                       console.error('[AccountsScreen] Error updating account:', e)
