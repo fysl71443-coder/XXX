@@ -4993,33 +4993,54 @@ app.get("/invoice_items/:id", authenticateToken, authorize("sales","view"), asyn
 // Orders API - both /orders and /api/orders paths
 async function handleGetOrders(req, res) {
   try {
-    const branch = req.query?.branch || null;
+    // Normalize branch - same logic as handleSaveDraft
+    let branch = req.query?.branch || null;
+    if (branch) {
+      const branchLower = String(branch).toLowerCase().replace(/\s+/g, '_');
+      if (branchLower === 'palace_india' || branchLower === 'palce_india') {
+        branch = 'place_india';
+      } else {
+        branch = branchLower;
+      }
+    }
+    
     const table = req.query?.table || null;
     const status = req.query?.status || null;
+    
     let query = 'SELECT id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customerId, customer_name, customer_phone, created_at FROM orders WHERE 1=1';
     const params = [];
     let paramIndex = 1;
     
     if (branch) {
-      query += ` AND branch = $${paramIndex}`;
+      query += ` AND LOWER(branch) = LOWER($${paramIndex})`;
       params.push(branch);
       paramIndex++;
     }
     if (table) {
+      // Normalize table - handle both string and number
+      const tableValue = String(table).trim();
       query += ` AND table_code = $${paramIndex}`;
-      params.push(table);
+      params.push(tableValue);
       paramIndex++;
     }
     if (status) {
+      // Normalize status - convert to uppercase for comparison
       const statuses = status.split(',').map(s => s.trim().toUpperCase());
-      query += ` AND status = ANY($${paramIndex})`;
-      params.push(statuses);
+      query += ` AND UPPER(status) = ANY($${paramIndex})`;
+      params.push(statuses.map(s => s.toUpperCase()));
       paramIndex++;
     }
     query += ' ORDER BY id DESC';
     
+    console.log(`[ORDERS] GET /api/orders - Query: ${query}`);
+    console.log(`[ORDERS] GET /api/orders - Params:`, params);
+    
     const { rows } = await pool.query(query, params);
     console.log(`[ORDERS] GET /api/orders - Found ${rows?.length || 0} orders for branch=${branch}, table=${table}, status=${status}`);
+    
+    if (rows && rows.length > 0) {
+      console.log(`[ORDERS] Sample order: id=${rows[0].id}, branch='${rows[0].branch}', table_code='${rows[0].table_code}', status='${rows[0].status}'`);
+    }
     
     // Parse lines from JSONB/JSON string to array - handle all cases
     const orders = (rows || []).map(order => {
@@ -6736,7 +6757,9 @@ async function handleSaveDraft(req, res) {
       }
     }
     
-    const table_code = b.table || b.table_code || null;
+    // Normalize table_code - ensure it's a string (can be number or string)
+    const table_code = b.table || b.table_code || b.tableId || null;
+    const table_code_normalized = table_code ? String(table_code).trim() : null;
     const order_id = b.order_id ? Number(b.order_id) : null;
     
     // Handle both 'lines' and 'items' - frontend may send either
@@ -6744,11 +6767,12 @@ async function handleSaveDraft(req, res) {
     // Otherwise, if items is provided, convert it to the correct format
     let rawLines = Array.isArray(b.lines) ? b.lines : (Array.isArray(b.items) ? b.items : []);
     
-    console.log(`[POS] saveDraft - branch=${branch}, table=${table_code}, order_id=${order_id}, raw_lines_count=${rawLines.length}`);
+    console.log(`[POS] saveDraft - branch=${branch}, table=${table_code_normalized}, order_id=${order_id}, raw_lines_count=${rawLines.length}`);
     console.log(`[POS] saveDraft - Full payload:`, JSON.stringify({
       branch: b.branch,
       table: b.table,
       table_code: b.table_code,
+      tableId: b.tableId,
       order_id: b.order_id,
       lines_count: Array.isArray(b.lines) ? b.lines.length : 0,
       items_count: Array.isArray(b.items) ? b.items.length : 0
@@ -6790,7 +6814,7 @@ async function handleSaveDraft(req, res) {
     const meta = {
       type: 'meta',
       branch: branch,
-      table: table_code,
+      table: table_code_normalized,
       customer_name: b.customerName || b.customer_name || '',
       customer_phone: b.customerPhone || b.customer_phone || '',
       customerId: b.customerId || null,
@@ -6853,6 +6877,11 @@ async function handleSaveDraft(req, res) {
     if (!branch || String(branch).trim() === '') {
       console.error('[POS] saveDraft - Invalid branch:', branch);
       return res.status(400).json({ error: "invalid_branch", details: "Branch is required" });
+    }
+    
+    if (!table_code_normalized || table_code_normalized === '') {
+      console.error('[POS] saveDraft - Invalid table_code:', table_code);
+      return res.status(400).json({ error: "invalid_table", details: "Table is required" });
     }
     
     // For PostgreSQL JSONB, we'll use JSON.stringify
@@ -6948,23 +6977,26 @@ async function handleSaveDraft(req, res) {
     }
     
     // Create new order
-    console.log(`[POS] saveDraft - Creating new order for branch=${branch}, table=${table_code}`);
+    console.log(`[POS] saveDraft - Creating new order for branch=${branch}, table=${table_code_normalized}`);
+    
+    console.log(`[POS] saveDraft - INSERT VALUES: branch='${branch}', table_code='${table_code_normalized}', status='DRAFT'`);
     
     const { rows } = await pool.query(
       `INSERT INTO orders(branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid) 
        VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, $11) 
        RETURNING id, branch, table_code, lines, status, subtotal, discount_amount, tax_amount, total_amount, customer_name, customer_phone, customerid, created_at`,
-      [branch, table_code, linesJson, 'DRAFT', subtotal, totalDiscount, totalTax, totalAmount,
+      [branch, table_code_normalized, linesJson, 'DRAFT', subtotal, totalDiscount, totalTax, totalAmount,
        meta.customer_name || '', meta.customer_phone || '', meta.customerId || null]
     );
     const order = rows && rows[0];
     
     if (!order || !order.id) {
       console.error('[POS] saveDraft - Failed to create order - no ID returned');
+      console.error('[POS] saveDraft - Rows returned:', rows);
       return res.status(500).json({ error: "create_failed", details: "Failed to create order" });
     }
     
-    console.log(`[POS] saveDraft - SUCCESS - Created order ${order.id}, lines type:`, typeof order?.lines);
+    console.log(`[POS] saveDraft - SUCCESS - Created order ${order.id}, branch='${order.branch}', table_code='${order.table_code}', status='${order.status}'`);
     
     // Parse lines back for response
     let parsedLines = linesArray;
