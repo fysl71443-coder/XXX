@@ -142,7 +142,7 @@ app.get("/api/bootstrap", authenticateToken, async (req, res) => {
       pool.query("SELECT id, name, code, address, phone FROM branches ORDER BY name").then(r => r.rows || []).catch(() => []),
       
       // Load products (active only, limit to 1000 for performance)
-      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
+      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, COALESCE(stock_qty, 0) as stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
       
       // Load partners (customers only, limit to 500)
       pool.query("SELECT id, name, phone, type, customer_type FROM partners WHERE type LIKE '%عميل%' OR type LIKE '%customer%' ORDER BY name LIMIT 500").then(r => r.rows || []).catch(() => []),
@@ -209,7 +209,7 @@ app.get("/api/bootstrap", authenticateToken, async (req, res) => {
       pool.query("SELECT id, name, code, address, phone FROM branches ORDER BY name").then(r => r.rows || []).catch(() => []),
       
       // Load products (active only, limit to 1000 for performance)
-      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
+      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, COALESCE(stock_qty, 0) as stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
       
       // Load partners (customers only, limit to 500)
       pool.query("SELECT id, name, phone, type, customer_type FROM partners WHERE type LIKE '%عميل%' OR type LIKE '%customer%' ORDER BY name LIMIT 500").then(r => r.rows || []).catch(() => []),
@@ -2517,14 +2517,19 @@ app.get("/products", authenticateToken, authorize("products", "view"), async (re
       SELECT 
         id, name, name_en, sku, barcode, category, unit, 
         COALESCE(sale_price, price, 0) as sale_price,
-        price, cost, tax_rate, stock_quantity, min_stock, 
-        description, is_active, is_service, can_be_sold, 
-        can_be_purchased, can_be_expensed, created_at, updated_at
+        price, cost, tax_rate, COALESCE(stock_qty, stock_quantity, 0) as stock_quantity, min_stock, 
+        description, is_active, is_service, 
+        true as can_be_sold, 
+        true as can_be_purchased, 
+        false as can_be_expensed,
+        created_at, updated_at
       FROM products 
     `;
     
     if (!includeDisabled) {
-      query += ` WHERE is_active = true OR is_active IS NULL `;
+      // Show products where is_active is true OR NULL (NULL means active by default)
+      // This ensures products added manually will show even if is_active is NULL
+      query += ` WHERE (is_active = true OR is_active IS NULL) `;
     }
     
     query += ` ORDER BY category ASC, name ASC `;
@@ -2532,6 +2537,7 @@ app.get("/products", authenticateToken, authorize("products", "view"), async (re
     const { rows } = await pool.query(query);
     
     // Separate active and disabled products
+    // Products with is_active = NULL are considered active
     const activeProducts = rows.filter(p => p.is_active !== false);
     const disabledProducts = rows.filter(p => p.is_active === false);
     const disabledIds = disabledProducts.map(p => p.id);
@@ -2556,14 +2562,19 @@ app.get("/api/products", authenticateToken, authorize("products", "view"), async
       SELECT 
         id, name, name_en, sku, barcode, category, unit, 
         COALESCE(sale_price, price, 0) as sale_price,
-        price, cost, tax_rate, stock_quantity, min_stock, 
-        description, is_active, is_service, can_be_sold, 
-        can_be_purchased, can_be_expensed, created_at, updated_at
+        price, cost, tax_rate, COALESCE(stock_qty, stock_quantity, 0) as stock_quantity, min_stock, 
+        description, is_active, is_service, 
+        true as can_be_sold, 
+        true as can_be_purchased, 
+        false as can_be_expensed,
+        created_at, updated_at
       FROM products 
     `;
     
     if (!includeDisabled) {
-      query += ` WHERE is_active = true OR is_active IS NULL `;
+      // Show products where is_active is true OR NULL (NULL means active by default)
+      // This ensures products added manually will show even if is_active is NULL
+      query += ` WHERE (is_active = true OR is_active IS NULL) `;
     }
     
     query += ` ORDER BY category ASC, name ASC `;
@@ -2571,6 +2582,7 @@ app.get("/api/products", authenticateToken, authorize("products", "view"), async
     const { rows } = await pool.query(query);
     
     // Separate active and disabled products
+    // Products with is_active = NULL are considered active
     const activeProducts = rows.filter(p => p.is_active !== false);
     const disabledProducts = rows.filter(p => p.is_active === false);
     const disabledIds = disabledProducts.map(p => p.id);
@@ -2589,10 +2601,10 @@ app.post("/products", authenticateToken, authorize("products", "create"), async 
   try {
     const b = req.body || {};
     const { rows } = await pool.query(
-      `INSERT INTO products(name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_quantity, min_stock, description, is_active) 
+      `INSERT INTO products(name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_qty, min_stock, description, is_active) 
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [b.name||'', b.name_en||'', b.sku||null, b.barcode||null, b.category||null, b.unit||'unit', 
-       Number(b.price||0), Number(b.cost||0), Number(b.tax_rate||15), Number(b.stock_quantity||0), 
+       Number(b.price||0), Number(b.cost||0), Number(b.tax_rate||15), Number(b.stock_quantity||b.stock_qty||0), 
        Number(b.min_stock||0), b.description||null, b.is_active!==false]
     );
     res.json(rows && rows[0]);
@@ -2606,10 +2618,10 @@ app.post("/api/products", authenticateToken, authorize("products", "create"), as
   try {
     const b = req.body || {};
     const { rows } = await pool.query(
-      `INSERT INTO products(name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_quantity, min_stock, description, is_active) 
+      `INSERT INTO products(name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_qty, min_stock, description, is_active) 
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
       [b.name||'', b.name_en||'', b.sku||null, b.barcode||null, b.category||null, b.unit||'unit', 
-       Number(b.price||0), Number(b.cost||0), Number(b.tax_rate||15), Number(b.stock_quantity||0), 
+       Number(b.price||0), Number(b.cost||0), Number(b.tax_rate||15), Number(b.stock_quantity||b.stock_qty||0), 
        Number(b.min_stock||0), b.description||null, b.is_active!==false]
     );
     res.json(rows && rows[0]);
@@ -2627,7 +2639,7 @@ app.put("/products/:id", authenticateToken, authorize("products", "edit"), async
       `UPDATE products SET name=COALESCE($1,name), name_en=COALESCE($2,name_en), sku=COALESCE($3,sku), 
        barcode=COALESCE($4,barcode), category=COALESCE($5,category), unit=COALESCE($6,unit), 
        price=COALESCE($7,price), cost=COALESCE($8,cost), tax_rate=COALESCE($9,tax_rate), 
-       stock_quantity=COALESCE($10,stock_quantity), min_stock=COALESCE($11,min_stock), 
+       stock_qty=COALESCE($10,stock_qty), min_stock=COALESCE($11,min_stock), 
        description=COALESCE($12,description), is_active=COALESCE($13,is_active), updated_at=NOW() 
        WHERE id=$14 RETURNING *`,
       [b.name||null, b.name_en||null, b.sku||null, b.barcode||null, b.category||null, b.unit||null,
@@ -2650,7 +2662,7 @@ app.put("/api/products/:id", authenticateToken, authorize("products", "edit"), a
       `UPDATE products SET name=COALESCE($1,name), name_en=COALESCE($2,name_en), sku=COALESCE($3,sku), 
        barcode=COALESCE($4,barcode), category=COALESCE($5,category), unit=COALESCE($6,unit), 
        price=COALESCE($7,price), cost=COALESCE($8,cost), tax_rate=COALESCE($9,tax_rate), 
-       stock_quantity=COALESCE($10,stock_quantity), min_stock=COALESCE($11,min_stock), 
+       stock_qty=COALESCE($10,stock_qty), min_stock=COALESCE($11,min_stock), 
        description=COALESCE($12,description), is_active=COALESCE($13,is_active), updated_at=NOW() 
        WHERE id=$14 RETURNING *`,
       [b.name||null, b.name_en||null, b.sku||null, b.barcode||null, b.category||null, b.unit||null,
@@ -2750,7 +2762,7 @@ app.post("/products/bulk-import", authenticateToken, authorize("products", "crea
           } else {
             // Create new product
             await pool.query(
-              `INSERT INTO products(name, name_en, category, unit, price, cost, tax_rate, stock_quantity, min_stock, is_active) 
+              `INSERT INTO products(name, name_en, category, unit, price, cost, tax_rate, stock_qty, min_stock, is_active) 
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
               [nameAr || nameEn, nameEn || nameAr, sectionName, 'unit', itemPrice, 0, 15, 0, 0, true]
             );
@@ -2839,7 +2851,7 @@ app.post("/api/products/bulk-import", authenticateToken, authorize("products", "
           } else {
             // Create new product
             await pool.query(
-              `INSERT INTO products(name, name_en, category, unit, price, cost, tax_rate, stock_quantity, min_stock, is_active) 
+              `INSERT INTO products(name, name_en, category, unit, price, cost, tax_rate, stock_qty, min_stock, is_active) 
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
               [nameAr || nameEn, nameEn || nameAr, sectionName, 'unit', itemPrice, 0, 15, 0, 0, true]
             );

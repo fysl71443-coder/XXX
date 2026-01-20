@@ -3,8 +3,16 @@ import dotenv from 'dotenv';
 const { Pool } = pg;
 dotenv.config();
 
+// Support DATABASE_URL from command line or environment
+const databaseUrl = process.argv[2] || process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/xxx';
+const dbSsl = process.env.DB_SSL === 'true' || process.argv[3] === 'ssl' || databaseUrl.includes('render.com') || databaseUrl.includes('dpg-');
+
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/xxx'
+  connectionString: databaseUrl,
+  ssl: dbSsl ? { rejectUnauthorized: false } : false,
+  // Add connection timeout and retry settings
+  connectionTimeoutMillis: 10000,
+  idleTimeoutMillis: 30000,
 });
 
 // Menu products data
@@ -237,7 +245,14 @@ const menuProducts = [
 async function addMenuProducts() {
   try {
     console.log('=== إضافة منتجات القائمة إلى قاعدة البيانات ===\n');
+    console.log(`Database URL: ${databaseUrl.substring(0, 50)}...`);
+    console.log(`SSL Enabled: ${dbSsl}\n`);
     console.log(`عدد المنتجات: ${menuProducts.length}\n`);
+
+    // Test connection first
+    console.log('🔌 جاري اختبار الاتصال بقاعدة البيانات...');
+    await pool.query('SELECT 1');
+    console.log('✅ تم الاتصال بقاعدة البيانات بنجاح!\n');
 
     let added = 0;
     let skipped = 0;
@@ -258,11 +273,11 @@ async function addMenuProducts() {
         }
 
         // Insert product - using same structure as server.js POST /products
-        // Table structure: name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_quantity, min_stock, description, is_active
+        // Table structure: name, name_en, sku, barcode, category, unit, price, cost, tax_rate, stock_qty, min_stock, description, is_active
         const result = await pool.query(
           `INSERT INTO products (
             name, name_en, category, price, cost, tax_rate,
-            stock_quantity, min_stock, is_active, created_at, updated_at
+            stock_qty, min_stock, is_active, created_at, updated_at
           ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
           RETURNING id, name`,
           [
@@ -272,7 +287,7 @@ async function addMenuProducts() {
             product.price,                  // price
             product.price * 0.7,            // cost (70% of sale price)
             15,                             // tax_rate (default 15%)
-            0,                              // stock_quantity
+            0,                              // stock_qty
             0,                              // min_stock
             true                            // is_active
           ]
