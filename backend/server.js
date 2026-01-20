@@ -4061,8 +4061,36 @@ app.get("/api/expenses/:id", authenticateToken, async (req, res) => {
       return res.status(404).json({ error: "not_found", details: "Expense not found" });
     }
     const expense = rows[0];
+    
+    // Format expense response with all required fields for frontend
     expense.invoice_number = expense.invoice_number || `EXP-${expense.id}`;
     expense.total = Number(expense.total || expense.amount || 0);
+    
+    // Frontend expects expense_account_code and payment_account_code
+    expense.expense_account_code = expense.account_code || null;
+    
+    // Calculate payment_account_code based on payment_method
+    const paymentMethod = String(expense.payment_method || 'cash').toLowerCase();
+    if (paymentMethod === 'bank') {
+      expense.payment_account_code = '1121'; // Default bank account
+    } else {
+      expense.payment_account_code = '1111'; // Default cash account
+    }
+    
+    // Add expense_type for compatibility
+    expense.expense_type = expense.type || 'expense';
+    
+    // Ensure items is an array
+    if (expense.items && typeof expense.items === 'string') {
+      try {
+        expense.items = JSON.parse(expense.items);
+      } catch (e) {
+        expense.items = [];
+      }
+    } else if (!Array.isArray(expense.items)) {
+      expense.items = [];
+    }
+    
     res.json(expense);
   } catch (e) {
     console.error('[EXPENSES] Error getting expense:', e);

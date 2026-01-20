@@ -327,6 +327,34 @@ export default function ExpensesInvoices(){
                     {viewInv?.description ? (
                       <div className="text-sm text-gray-700 bg-gray-50 border rounded p-3 whitespace-pre-wrap">{viewInv.description}</div>
                     ) : null}
+                    <div className="grid grid-cols-2 gap-3 text-sm border-t pt-3">
+                      <div className="p-3 bg-gray-50 rounded border">
+                        <div className="text-gray-500">{lang==='ar'?'نوع العملية':'Operation Type'}</div>
+                        <div className="font-semibold">{viewInv?.expense_type === 'expense' ? (lang==='ar'?'مصروف':'Expense') : viewInv?.expense_type === 'payment' ? (lang==='ar'?'دفع':'Payment') : (viewInv?.type || viewInv?.expense_type || '—')}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded border">
+                        <div className="text-gray-500">{lang==='ar'?'نوع الدفع':'Payment Type'}</div>
+                        <div className="font-semibold">{fmtMethod(viewInv?.payment_method, lang)}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded border">
+                        <div className="text-gray-500">{lang==='ar'?'فرع النشاط':'Branch'}</div>
+                        <div className="font-semibold">{viewInv?.branch || '—'}</div>
+                      </div>
+                      <div className="p-3 bg-gray-50 rounded border">
+                        <div className="text-gray-500">{lang==='ar'?'الحالة':'Status'}</div>
+                        <div className="font-semibold">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            viewInv?.status === 'posted' ? 'bg-green-100 text-green-700' : 
+                            viewInv?.status === 'draft' ? 'bg-gray-100 text-gray-700' : 
+                            'bg-blue-100 text-blue-700'
+                          }`}>
+                            {viewInv?.status === 'posted' ? (lang==='ar'?'منشورة':'Posted') : 
+                             viewInv?.status === 'draft' ? (lang==='ar'?'مسودة':'Draft') : 
+                             (viewInv?.status || '—')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </>
                 )}
               </div>
