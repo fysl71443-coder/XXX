@@ -951,6 +951,22 @@ app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/users/:id - Get single user by ID
+app.get("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
+    const id = Number(req.params.id || 0);
+    const { rows } = await pool.query('SELECT id, email, role, is_active, default_branch, created_at FROM "users" WHERE id = $1', [id]);
+    if (!rows || rows.length === 0) {
+      return res.status(404).json({ error: "not_found", details: "User not found" });
+    }
+    const user = rows[0];
+    res.json({ id: user.id, email: user.email, role: user.role || "user", is_active: user.is_active !== false, default_branch: user.default_branch, created_at: user.created_at });
+  } catch (e) {
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
 app.post("/users", authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { email, password, role, default_branch } = req.body || {};
@@ -1958,11 +1974,8 @@ app.post("/journal", authenticateToken, authorize("journal", "create"), async (r
     const b = req.body || {};
     const postings = Array.isArray(b.postings) ? b.postings : [];
     
-    // Generate entry number
-    const { rows: lastEntry } = await client.query(
-      'SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1'
-    );
-    const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
+    // Generate entry number (reuses deleted numbers)
+    const entryNumber = await getNextEntryNumber();
     
     // Extract period from date (YYYY-MM format)
     const entryDate = b.date || new Date();
@@ -2035,11 +2048,8 @@ app.post("/api/journal", authenticateToken, authorize("journal", "create"), asyn
     const b = req.body || {};
     const postings = Array.isArray(b.postings) ? b.postings : [];
     
-    // Generate entry number
-    const { rows: lastEntry } = await client.query(
-      'SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1'
-    );
-    const entryNumber = lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
+    // Generate entry number (reuses deleted numbers)
+    const entryNumber = await getNextEntryNumber();
     
     // Extract period from date (YYYY-MM format)
     const entryDate = b.date || new Date();
@@ -4029,74 +4039,106 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
     // ✅ If expense is posted (not draft), create journal entry automatically
     if (status === 'posted' && total > 0 && accountCode) {
       try {
-        // Get expense account ID
-        const expenseAccountId = await getAccountIdByNumber(accountCode);
-        
-        // Get payment account ID (cash or bank based on payment_method)
-        let paymentAccountId = null;
-        if (paymentMethod && String(paymentMethod).toLowerCase() === 'bank') {
-          paymentAccountId = await getAccountIdByNumber('1121'); // Default bank account
+        // CRITICAL FIX: Check if journal entry already exists
+        const { rows: existingExpense } = await client.query('SELECT journal_entry_id FROM expenses WHERE id = $1', [expense.id]);
+        if (existingExpense && existingExpense[0] && existingExpense[0].journal_entry_id) {
+          console.log(`[EXPENSES] Expense ${expense.id} already has journal entry ${existingExpense[0].journal_entry_id}`);
+          // Journal entry already exists, skip creation
         } else {
-          paymentAccountId = await getAccountIdByNumber('1111'); // Default cash account
-        }
-        
-        if (expenseAccountId && paymentAccountId) {
-          // ✅ استخدام SEQUENCE للترقيم التلقائي
-          // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
-          const entryDescription = expenseType ? `مصروف #${expense.id} - ${expenseType}` : `مصروف #${expense.id}${description ? ' - ' + description : ''}`;
-          const { rows: entryRows } = await client.query(
-            `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
-            [entryDescription, date, 'expense', expense.id, 'posted', branch]
-          );
+          // Get expense account ID
+          const expenseAccountId = await getAccountIdByNumber(accountCode);
           
-          const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+          // Get payment account ID (cash or bank based on payment_method)
+          let paymentAccountId = null;
+          if (paymentMethod && String(paymentMethod).toLowerCase() === 'bank') {
+            paymentAccountId = await getAccountIdByNumber('1121'); // Default bank account
+          } else {
+            paymentAccountId = await getAccountIdByNumber('1111'); // Default cash account
+          }
           
-          if (entryId) {
-            // Create postings for each item or single posting
+          if (expenseAccountId && paymentAccountId) {
+            // ✅ استخدام SEQUENCE للترقيم التلقائي
+            // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
+            const entryDescription = expenseType ? `مصروف #${expense.id} - ${expenseType}` : `مصروف #${expense.id}${description ? ' - ' + description : ''}`;
+            
+            // CRITICAL FIX: Calculate totals before creating journal entry for balance validation
+            let totalDebit = 0;
+            let totalCredit = total;
+            
             if (items.length > 0) {
-              // Multiple items - create posting for each
+              // Multiple items - calculate total debit
               for (const item of items) {
-                const itemAmount = Number(item.amount || 0);
-                const itemAccountId = await getAccountIdByNumber(item.account_code);
-                if (itemAccountId && itemAmount > 0) {
-                  await client.query(
-                    `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-                     VALUES ($1, $2, $3, $4)`,
-                    [entryId, itemAccountId, itemAmount, 0]
-                  );
-                }
+                totalDebit += Number(item.amount || 0);
               }
-              // Payment posting (credit)
-              await client.query(
-                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-                 VALUES ($1, $2, $3, $4)`,
-                [entryId, paymentAccountId, 0, total]
-              );
             } else {
-              // Single expense - create two postings
-              await client.query(
-                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-                 VALUES ($1, $2, $3, $4)`,
-                [entryId, expenseAccountId, total, 0]
-              );
-              await client.query(
-                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
-                 VALUES ($1, $2, $3, $4)`,
-                [entryId, paymentAccountId, 0, total]
-              );
+              // Single expense
+              totalDebit = total;
             }
             
-            // ✅ ربط المصروف بالقيد
-            await client.query(
-              'UPDATE expenses SET journal_entry_id = $1 WHERE id = $2',
-              [entryId, expense.id]
+            // CRITICAL FIX: Validate balance before creating journal entry
+            if (Math.abs(totalDebit - totalCredit) > 0.01) {
+              console.error('[EXPENSES] Journal entry unbalanced:', { totalDebit, totalCredit, expenseId: expense.id });
+              await client.query('ROLLBACK');
+              return res.status(400).json({ error: "unbalanced_entry", details: "Journal entry is not balanced" });
+            }
+            
+            // Get next entry number (reuses deleted numbers)
+            const entryNumber = await getNextEntryNumber();
+            
+            const { rows: entryRows } = await client.query(
+              `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+              [entryNumber, entryDescription, date, 'expense', expense.id, 'posted', branch]
             );
             
-            console.log(`[EXPENSES] Auto-posted expense ${expense.id}, created journal entry ${entryId}`);
+            const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+            
+            if (entryId) {
+              // Create postings for each item or single posting
+              if (items.length > 0) {
+                // Multiple items - create posting for each
+                for (const item of items) {
+                  const itemAmount = Number(item.amount || 0);
+                  const itemAccountId = await getAccountIdByNumber(item.account_code);
+                  if (itemAccountId && itemAmount > 0) {
+                    await client.query(
+                      `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                       VALUES ($1, $2, $3, $4)`,
+                      [entryId, itemAccountId, itemAmount, 0]
+                    );
+                  }
+                }
+                // Payment posting (credit)
+                await client.query(
+                  `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                   VALUES ($1, $2, $3, $4)`,
+                  [entryId, paymentAccountId, 0, total]
+                );
+              } else {
+                // Single expense - create two postings
+                await client.query(
+                  `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                   VALUES ($1, $2, $3, $4)`,
+                  [entryId, expenseAccountId, total, 0]
+                );
+                await client.query(
+                  `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                   VALUES ($1, $2, $3, $4)`,
+                  [entryId, paymentAccountId, 0, total]
+                );
+              }
+              
+              // ✅ ربط المصروف بالقيد
+              await client.query(
+                'UPDATE expenses SET journal_entry_id = $1 WHERE id = $2',
+                [entryId, expense.id]
+              );
+              
+              console.log(`[EXPENSES] Auto-posted expense ${expense.id}, created journal entry ${entryId}`);
+            }
+          } else {
+            console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
           }
-        } else {
-          console.warn(`[EXPENSES] Could not create journal entry - expenseAccountId=${expenseAccountId}, paymentAccountId=${paymentAccountId}`);
         }
       } catch (journalError) {
         console.error('[EXPENSES] Error creating journal entry:', journalError);
@@ -4167,10 +4209,35 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
           // ✅ استخدام SEQUENCE للترقيم التلقائي
           // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
           const entryDescription = expenseType ? `مصروف #${expense.id} - ${expenseType}` : `مصروف #${expense.id}${description ? ' - ' + description : ''}`;
+          
+          // CRITICAL FIX: Calculate totals before creating journal entry for balance validation
+          let totalDebit = 0;
+          let totalCredit = total;
+          
+          if (items.length > 0) {
+            // Multiple items - calculate total debit
+            for (const item of items) {
+              totalDebit += Number(item.amount || 0);
+            }
+          } else {
+            // Single expense
+            totalDebit = total;
+          }
+          
+          // CRITICAL FIX: Validate balance before creating journal entry
+          if (Math.abs(totalDebit - totalCredit) > 0.01) {
+            console.error('[EXPENSES] Journal entry unbalanced:', { totalDebit, totalCredit, expenseId: expense.id });
+            await client.query('ROLLBACK');
+            return res.status(400).json({ error: "unbalanced_entry", details: "Journal entry is not balanced" });
+          }
+          
+          // Get next entry number (reuses deleted numbers)
+          const entryNumber = await getNextEntryNumber();
+          
           const { rows: entryRows } = await client.query(
-            `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
-             VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
-            [entryDescription, date, 'expense', expense.id, 'posted', branch]
+            `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+            [entryNumber, entryDescription, date, 'expense', expense.id, 'posted', branch]
           );
           
           const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
@@ -4262,24 +4329,142 @@ app.put("/expenses/:id", authenticateToken, authorize("expenses","edit", { branc
     res.json(expense);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
-app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
+app.put("/api/expenses/:id", authenticateToken, authorize("expenses","edit", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id||0);
     const b = req.body || {};
+    
+    // Get current expense to check status change
+    const { rows: currentRows } = await client.query('SELECT status, journal_entry_id FROM expenses WHERE id = $1', [id]);
+    const currentExpense = currentRows && currentRows[0];
+    const oldStatus = currentExpense ? currentExpense.status : null;
+    const hasJournalEntry = currentExpense && currentExpense.journal_entry_id;
+    
     const items = Array.isArray(b.items) ? b.items : [];
     const total = b.total != null ? Number(b.total) : (items.length > 0 ? items.reduce((sum, item) => sum + Number(item.amount || 0), 0) : (b.amount != null ? Number(b.amount) : null));
     const itemsJson = items.length > 0 ? JSON.stringify(items) : null;
-    const { rows } = await pool.query(
+    const newStatus = b.status || oldStatus;
+    const accountCode = b.account_code || null;
+    const paymentMethod = b.payment_method || null;
+    const expenseType = b.type || b.expense_type || null;
+    const description = b.description || null;
+    const date = b.date || null;
+    const branch = b.branch || null;
+    
+    const { rows } = await client.query(
       'UPDATE expenses SET invoice_number=COALESCE($1,invoice_number), type=COALESCE($2,type), amount=COALESCE($3,amount), total=COALESCE($4,total), account_code=COALESCE($5,account_code), partner_id=COALESCE($6,partner_id), description=COALESCE($7,description), status=COALESCE($8,status), branch=COALESCE($9,branch), date=COALESCE($10,date), payment_method=COALESCE($11,payment_method), items=COALESCE($12::jsonb,items), updated_at=NOW() WHERE id=$13 RETURNING id, invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at',
-      [b.invoice_number||null, b.type||b.expense_type||null, (b.amount!=null?Number(b.amount):null), total, b.account_code||null, (b.partner_id!=null?Number(b.partner_id):null), b.description||null, b.status||null, b.branch||null, b.date||null, b.payment_method||null, itemsJson, id]
+      [b.invoice_number||null, expenseType, (b.amount!=null?Number(b.amount):null), total, accountCode, (b.partner_id!=null?Number(b.partner_id):null), description, newStatus, branch, date, paymentMethod, itemsJson, id]
     );
     const expense = rows && rows[0];
     if (expense) {
       expense.invoice_number = expense.invoice_number || `EXP-${expense.id}`;
       expense.total = Number(expense.total || expense.amount || 0);
     }
+    
+    // CRITICAL FIX: Create journal entry if status changed to 'posted' and doesn't have one
+    if (newStatus === 'posted' && oldStatus !== 'posted' && !hasJournalEntry && total > 0 && (accountCode || (items.length > 0 && items[0]?.account_code))) {
+      try {
+        const finalAccountCode = accountCode || (items.length > 0 ? items[0].account_code : null);
+        if (finalAccountCode) {
+          // Get expense account ID
+          const expenseAccountId = await getAccountIdByNumber(finalAccountCode);
+          
+          // Get payment account ID (cash or bank based on payment_method)
+          let paymentAccountId = null;
+          const pm = paymentMethod || expense.payment_method || 'cash';
+          if (pm && String(pm).toLowerCase() === 'bank') {
+            paymentAccountId = await getAccountIdByNumber('1121'); // Default bank account
+          } else {
+            paymentAccountId = await getAccountIdByNumber('1111'); // Default cash account
+          }
+          
+          if (expenseAccountId && paymentAccountId) {
+            // Calculate totals for balance validation
+            let totalDebit = 0;
+            let totalCredit = total;
+            
+            if (items.length > 0) {
+              for (const item of items) {
+                totalDebit += Number(item.amount || 0);
+              }
+            } else {
+              totalDebit = total;
+            }
+            
+            // Validate balance
+            if (Math.abs(totalDebit - totalCredit) > 0.01) {
+              await client.query('ROLLBACK');
+              return res.status(400).json({ error: "unbalanced_entry", details: "Journal entry is not balanced" });
+            }
+            
+            const entryDescription = expenseType ? `مصروف #${expense.id} - ${expenseType}` : `مصروف #${expense.id}${description ? ' - ' + description : ''}`;
+            
+            // Get next entry number (reuses deleted numbers)
+            const entryNumber = await getNextEntryNumber();
+            
+            const { rows: entryRows } = await client.query(
+              `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+               VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+              [entryNumber, entryDescription, date || expense.date || new Date().toISOString().slice(0, 10), 'expense', expense.id, 'posted', branch || expense.branch || 'china_town']
+            );
+            
+            const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+            
+            if (entryId) {
+              // Create postings
+              if (items.length > 0) {
+                for (const item of items) {
+                  const itemAmount = Number(item.amount || 0);
+                  const itemAccountId = await getAccountIdByNumber(item.account_code);
+                  if (itemAccountId && itemAmount > 0) {
+                    await client.query(
+                      `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                       VALUES ($1, $2, $3, $4)`,
+                      [entryId, itemAccountId, itemAmount, 0]
+                    );
+                  }
+                }
+                await client.query(
+                  `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                   VALUES ($1, $2, $3, $4)`,
+                  [entryId, paymentAccountId, 0, total]
+                );
+              } else {
+                await client.query(
+                  `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                   VALUES ($1, $2, $3, $4)`,
+                  [entryId, expenseAccountId, total, 0]
+                );
+                await client.query(
+                  `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                   VALUES ($1, $2, $3, $4)`,
+                  [entryId, paymentAccountId, 0, total]
+                );
+              }
+              
+              // Link expense to journal entry
+              await client.query('UPDATE expenses SET journal_entry_id = $1 WHERE id = $2', [entryId, expense.id]);
+              console.log(`[EXPENSES] Updated expense ${expense.id} to posted, created journal entry ${entryId}`);
+            }
+          }
+        }
+      } catch (journalError) {
+        console.error('[EXPENSES] Error creating journal entry on update:', journalError);
+        // Don't fail update if journal entry fails - just log it
+      }
+    }
+    
+    await client.query('COMMIT');
     res.json(expense);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error updating expense:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
 });
 
 // POST /expenses/:id/post - Post expense and create journal entry
@@ -4328,14 +4513,15 @@ app.post("/expenses/:id/post", authenticateToken, authorize("expenses","edit"), 
     }
     
     if (expenseAccountId && paymentAccountId) {
-      // ✅ المرحلة 2: استخدام SEQUENCE للترقيم التلقائي
-      // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
+      // ✅ Get next entry number (reuses deleted numbers)
+      const entryNumber = await getNextEntryNumber();
+      
       // ✅ نسخ جميع الحقول الضرورية من expense إلى journal_entry
       const description = expense.type ? `مصروف #${expense.id} - ${expense.type}` : `مصروف #${expense.id}${expense.description ? ' - ' + expense.description : ''}`;
       const { rows: entryRows } = await client.query(
-        `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
-        [description, expense.date, 'expense', expense.id, 'posted', expense.branch || null]
+        `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+        [entryNumber, description, expense.date, 'expense', expense.id, 'posted', expense.branch || null]
       );
       
       const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
@@ -4428,14 +4614,15 @@ app.post("/api/expenses/:id/post", authenticateToken, authorize("expenses","edit
     }
     
     if (expenseAccountId && paymentAccountId) {
-      // ✅ المرحلة 2: استخدام SEQUENCE للترقيم التلقائي
-      // Create journal entry (entry_number سيتم ملؤه تلقائياً من SEQUENCE)
+      // ✅ Get next entry number (reuses deleted numbers)
+      const entryNumber = await getNextEntryNumber();
+      
       // ✅ نسخ جميع الحقول الضرورية من expense إلى journal_entry
       const description = expense.type ? `مصروف #${expense.id} - ${expense.type}` : `مصروف #${expense.id}${expense.description ? ' - ' + expense.description : ''}`;
       const { rows: entryRows } = await client.query(
-        `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
-        [description, expense.date, 'expense', expense.id, 'posted', expense.branch || null]
+        `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+        [entryNumber, description, expense.date, 'expense', expense.id, 'posted', expense.branch || null]
       );
       
       const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
@@ -4496,15 +4683,66 @@ async function handleGetSupplierInvoices(req, res) {
 }
 app.get("/supplier-invoices", authenticateToken, authorize("purchases","view", { branchFrom: r => (r.query.branch || null) }), handleGetSupplierInvoices);
 app.get("/api/supplier-invoices", authenticateToken, authorize("purchases","view", { branchFrom: r => (r.query.branch || null) }), handleGetSupplierInvoices);
+// Helper function to get next supplier invoice number (reuses deleted numbers)
+async function getNextSupplierInvoiceNumber() {
+  try {
+    const year = (new Date()).getFullYear();
+    const pattern = /PI\/(\d{4})\/(\d+)/;
+    
+    // Get all supplier invoice numbers for current year, sorted
+    const { rows } = await pool.query(
+      `SELECT number FROM supplier_invoices 
+       WHERE number ~ $1 
+       ORDER BY number ASC`,
+      [`^PI/${year}/\\d+$`]
+    );
+    
+    // Extract numbers and find gaps
+    const usedNumbers = (rows || [])
+      .map(r => {
+        const m = pattern.exec(String(r.number || ''));
+        return m && Number(m[1]) === year ? Number(m[2] || 0) : null;
+      })
+      .filter(n => n !== null && n > 0)
+      .sort((a, b) => a - b);
+    
+    // Find first gap or use next sequential number
+    let nextN = 1;
+    for (const num of usedNumbers) {
+      if (num === nextN) {
+        nextN++;
+      } else if (num > nextN) {
+        // Found a gap - reuse it
+        return `PI/${year}/${String(nextN).padStart(10, '0')}`;
+      }
+    }
+    
+    // No gaps found, use next sequential number
+    return `PI/${year}/${String(nextN).padStart(10, '0')}`;
+  } catch (e) {
+    console.error('[SUPPLIER INVOICES] Error getting next number:', e);
+    // Fallback: use max + 1
+    try {
+      const { rows } = await pool.query('SELECT number FROM supplier_invoices ORDER BY id DESC LIMIT 1');
+      const last = rows && rows[0] ? String(rows[0].number || '') : '';
+      const year = (new Date()).getFullYear();
+      const m = /PI\/(\d{4})\/(\d+)/.exec(last);
+      const nextN = m && Number(m[1]) === year ? Number(m[2] || 0) + 1 : 1;
+      return `PI/${year}/${String(nextN).padStart(10, '0')}`;
+    } catch (e2) {
+      const year = (new Date()).getFullYear();
+      return `PI/${year}/0000000001`;
+    }
+  }
+}
+
 async function handleGetSupplierInvoiceNextNumber(req, res) {
   try {
-    const { rows } = await pool.query('SELECT number FROM supplier_invoices ORDER BY id DESC LIMIT 1');
-    const last = rows && rows[0] ? String(rows[0].number||'') : '';
-    const seq = (function(){ const m = /PI\/(\d{4})\/(\d+)/.exec(last); const year = (new Date()).getFullYear(); const nextN = m && Number(m[1])===year ? Number(m[2]||0)+1 : 1; return `PI/${year}/${String(nextN).padStart(10,'0')}` })();
-    res.json({ next: seq });
-  } catch (e) { 
+    const next = await getNextSupplierInvoiceNumber();
+    res.json({ next });
+  } catch (e) {
     console.error('[SUPPLIER INVOICES] Error getting next number:', e);
-    res.json({ next: null }); 
+    res.json({ next: null });
   }
 }
 app.get("/supplier-invoices/next-number", authenticateToken, authorize("purchases","create"), handleGetSupplierInvoiceNextNumber);
@@ -5188,11 +5426,88 @@ async function getOrCreatePartnerAccount(partnerId, partnerType) {
 /**
  * Create journal entry for invoice
  */
+// Helper function to get next entry number (reuses deleted numbers)
+async function getNextEntryNumber() {
+  try {
+    // Get all used entry numbers, sorted
+    const { rows: usedNumbers } = await pool.query(
+      'SELECT entry_number FROM journal_entries ORDER BY entry_number ASC'
+    );
+    
+    const usedSet = new Set((usedNumbers || []).map(r => Number(r.entry_number || 0)));
+    
+    // Find first gap (deleted number) or use next sequential number
+    let nextNumber = 1;
+    for (const num of usedSet) {
+      if (num === nextNumber) {
+        nextNumber++;
+      } else if (num > nextNumber) {
+        // Found a gap - reuse it
+        return nextNumber;
+      }
+    }
+    
+    // No gaps found, use next sequential number
+    return nextNumber;
+  } catch (e) {
+    console.error('[ACCOUNTING] Error getting next entry number:', e);
+    // Fallback: use max + 1
+    try {
+      const { rows: lastEntry } = await pool.query('SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1');
+      return lastEntry && lastEntry[0] ? Number(lastEntry[0].entry_number || 0) + 1 : 1;
+    } catch (e2) {
+      return 1;
+    }
+  }
+}
+
+// Helper function to get next invoice number (reuses deleted numbers)
+async function getNextInvoiceNumber() {
+  try {
+    // Get all used invoice numbers (numeric only), sorted
+    const { rows: usedNumbers } = await pool.query(
+      `SELECT number FROM invoices 
+       WHERE number IS NOT NULL 
+       AND number ~ '^[0-9]+$'
+       ORDER BY number::integer ASC`
+    );
+    
+    const usedSet = new Set((usedNumbers || []).map(r => Number(r.number || 0)));
+    
+    // Find first gap (deleted number) or use next sequential number
+    let nextNumber = 1;
+    for (const num of usedSet) {
+      if (num === nextNumber) {
+        nextNumber++;
+      } else if (num > nextNumber) {
+        // Found a gap - reuse it
+        return String(nextNumber);
+      }
+    }
+    
+    // No gaps found, use next sequential number
+    return String(nextNumber);
+  } catch (e) {
+    console.error('[ACCOUNTING] Error getting next invoice number:', e);
+    // Fallback: use max + 1
+    try {
+      const { rows: lastInvoice } = await pool.query(
+        `SELECT number FROM invoices 
+         WHERE number IS NOT NULL 
+         AND number ~ '^[0-9]+$'
+         ORDER BY number::integer DESC LIMIT 1`
+      );
+      return lastInvoice && lastInvoice[0] ? String(Number(lastInvoice[0].number || 0) + 1) : '1';
+    } catch (e2) {
+      return '1';
+    }
+  }
+}
+
 async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discount, tax, total, paymentMethod, branch) {
   try {
-    // Get next entry number
-    const { rows: lastEntry } = await pool.query('SELECT entry_number FROM journal_entries ORDER BY entry_number DESC LIMIT 1');
-    const entryNumber = lastEntry && lastEntry[0] ? lastEntry[0].entry_number + 1 : 1;
+    // Get next entry number (reuses deleted numbers)
+    const entryNumber = await getNextEntryNumber();
 
     const postings = [];
     
@@ -5250,9 +5565,10 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
     const period = entryDate.toISOString().slice(0, 7); // YYYY-MM
     
     // Create journal entry with period
+    // CRITICAL FIX: Set status='posted' when creating journal entry
     const { rows: entryRows } = await pool.query(
-      'INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
-      [entryNumber, `فاتورة مبيعات #${invoiceId}`, entryDate, period, 'invoice', invoiceId]
+      'INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+      [entryNumber, `فاتورة مبيعات #${invoiceId}`, entryDate, period, 'invoice', invoiceId, 'posted', branch || 'china_town']
     );
 
     const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
@@ -5885,21 +6201,39 @@ app.get("/api/reports/trial-balance", authenticateToken, authorize("reports","vi
   try {
     const { from, to, period } = req.query || {};
     
+    // Convert empty strings to null - CRITICAL for PostgreSQL type resolution
+    const fromDate = from?.trim() || null;
+    const toDate = to?.trim() || null;
+    
+    // Validate dates if provided
+    if (fromDate && isNaN(Date.parse(fromDate))) {
+      return res.status(400).json({ error: "invalid_date", details: "Invalid from date format" });
+    }
+    if (toDate && isNaN(Date.parse(toDate))) {
+      return res.status(400).json({ error: "invalid_date", details: "Invalid to date format" });
+    }
+    
+    // Use a very early date as default for beginning balance calculation if fromDate is null
+    const effectiveFromDate = fromDate || '1970-01-01';
+    
     let query = `
       SELECT 
         a.id as account_id,
         a.account_number,
-        a.name as account_name,
-        COALESCE(SUM(CASE WHEN je.date < $1 THEN jp.debit - jp.credit ELSE 0 END), 0) as beginning,
-        COALESCE(SUM(CASE WHEN je.date >= $1 AND ($2 IS NULL OR je.date <= $2) THEN jp.debit ELSE 0 END), 0) as debit,
-        COALESCE(SUM(CASE WHEN je.date >= $1 AND ($2 IS NULL OR je.date <= $2) THEN jp.credit ELSE 0 END), 0) as credit,
-        COALESCE(SUM(CASE WHEN $2 IS NULL OR je.date <= $2 THEN jp.debit - jp.credit ELSE 0 END), 0) as ending
+        a.account_code,
+        COALESCE(a.name, a.name_en, '') as account_name,
+        COALESCE(a.name_en, a.name, '') as account_name_en,
+        a.type as account_type,
+        COALESCE(SUM(CASE WHEN je.date < $1::date THEN jp.debit - jp.credit ELSE 0 END), 0) as beginning,
+        COALESCE(SUM(CASE WHEN je.date >= $1::date AND ($2::date IS NULL OR je.date <= $2::date) THEN jp.debit ELSE 0 END), 0) as debit,
+        COALESCE(SUM(CASE WHEN je.date >= $1::date AND ($2::date IS NULL OR je.date <= $2::date) THEN jp.credit ELSE 0 END), 0) as credit,
+        COALESCE(SUM(CASE WHEN $2::date IS NULL OR je.date <= $2::date THEN jp.debit - jp.credit ELSE 0 END), 0) as ending
       FROM accounts a
       LEFT JOIN journal_postings jp ON jp.account_id = a.id
       LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id AND je.status = 'posted'
       WHERE 1=1
     `;
-    const params = [from || '1970-01-01', to || null];
+    const params = [effectiveFromDate, toDate];
     
     query += ` GROUP BY a.id, a.account_number, a.name
                HAVING COALESCE(SUM(jp.debit), 0) + COALESCE(SUM(jp.credit), 0) > 0
@@ -5931,145 +6265,80 @@ app.get("/api/reports/trial-balance", authenticateToken, authorize("reports","vi
   }
 });
 
-// GET /api/reports/sales-vs-expenses - Get sales vs expenses report
+// GET /reports/sales-vs-expenses - Get sales vs expenses report (legacy endpoint - redirects to /api version)
 app.get("/reports/sales-vs-expenses", authenticateToken, authorize("reports","view"), async (req, res) => {
-  try {
-    const { from, to, period, branch } = req.query || {};
-    
-    let salesWhere = ['status = \'paid\''];
-    let expensesWhere = ['status = \'posted\''];
-    const params = [];
-    let paramIndex = 1;
-    
-    if (from) {
-      salesWhere.push(`date >= $${paramIndex}`);
-      expensesWhere.push(`date >= $${paramIndex}`);
-      params.push(from);
-      paramIndex++;
-    }
-    if (to) {
-      salesWhere.push(`date <= $${paramIndex}`);
-      expensesWhere.push(`date <= $${paramIndex}`);
-      params.push(to);
-      paramIndex++;
-    }
-    if (branch && branch !== 'كل الفروع') {
-      salesWhere.push(`branch = $${paramIndex}`);
-      expensesWhere.push(`branch = $${paramIndex}`);
-      params.push(branch);
-      paramIndex++;
-    }
-    
-    // Get sales by date
-    const salesQuery = `
-      SELECT DATE(date) as date, COALESCE(SUM(total), 0) as total
-      FROM invoices
-      WHERE ${salesWhere.join(' AND ')}
-      GROUP BY DATE(date)
-      ORDER BY DATE(date)
-    `;
-    
-    // Get expenses by date
-    const expensesQuery = `
-      SELECT DATE(date) as date, COALESCE(SUM(amount), 0) as total
-      FROM expenses
-      WHERE ${expensesWhere.join(' AND ')}
-      GROUP BY DATE(date)
-      ORDER BY DATE(date)
-    `;
-    
-    const [salesResult, expensesResult] = await Promise.all([
-      pool.query(salesQuery, params),
-      pool.query(expensesQuery, params)
-    ]);
-    
-    // Combine sales and expenses by date
-    const dateMap = new Map();
-    
-    (salesResult.rows || []).forEach(row => {
-      const date = row.date;
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { date, sales: 0, expenses: 0 });
-      }
-      dateMap.get(date).sales = Number(row.total || 0);
-    });
-    
-    (expensesResult.rows || []).forEach(row => {
-      const date = row.date;
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { date, sales: 0, expenses: 0 });
-      }
-      dateMap.get(date).expenses = Number(row.total || 0);
-    });
-    
-    const items = Array.from(dateMap.values()).map(item => ({
-      date: item.date,
-      sales: item.sales,
-      expenses: item.expenses,
-      net: item.sales - item.expenses
-    })).sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    const totals = items.reduce((acc, item) => ({
-      sales: acc.sales + item.sales,
-      expenses: acc.expenses + item.expenses,
-      net: acc.net + item.net
-    }), { sales: 0, expenses: 0, net: 0 });
-    
-    res.json({ items, totals });
-  } catch (e) {
-    console.error('[REPORTS] Error getting sales vs expenses:', e);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
+  // Redirect to /api version which uses journal entries
+  return res.redirect(307, `/api/reports/sales-vs-expenses?${new URLSearchParams(req.query).toString()}`);
 });
 app.get("/api/reports/sales-vs-expenses", authenticateToken, authorize("reports","view"), async (req, res) => {
   try {
     const { from, to, period, branch } = req.query || {};
     
-    let salesWhere = ['status = \'paid\''];
-    let expensesWhere = ['status = \'posted\''];
-    const params = [];
-    let paramIndex = 1;
+    // CRITICAL: Use journal entries (posted) instead of invoices/expenses directly
+    // Sales revenue account codes: 4111, 4112 (china_town), 4121, 4122 (place_india)
+    const salesAccountCodes = ['4111', '4112', '4121', '4122'];
+    
+    // Get account IDs
+    const { rows: salesAccountRows } = await pool.query(
+      `SELECT id FROM accounts WHERE account_code = ANY($1) OR account_number = ANY($1)`,
+      [salesAccountCodes]
+    );
+    const salesAccountIds = salesAccountRows.map(r => r.id);
+    
+    const { rows: expenseAccountRows } = await pool.query(
+      `SELECT id FROM accounts WHERE type = 'expense' OR account_code LIKE '5%' OR account_number LIKE '5%'`
+    );
+    const expenseAccountIds = expenseAccountRows.map(r => r.id);
+    
+    let salesWhere = [`je.status = 'posted'`, `jp.account_id = ANY($1::int[])`];
+    let expensesWhere = [`je.status = 'posted'`, `jp.account_id = ANY($1::int[])`];
+    const salesParams = [salesAccountIds];
+    const expensesParams = [expenseAccountIds];
+    let salesParamIndex = 2;
+    let expensesParamIndex = 2;
     
     if (from) {
-      salesWhere.push(`date >= $${paramIndex}`);
-      expensesWhere.push(`date >= $${paramIndex}`);
-      params.push(from);
-      paramIndex++;
+      salesWhere.push(`je.date >= $${salesParamIndex++}::date`);
+      expensesWhere.push(`je.date >= $${expensesParamIndex++}::date`);
+      salesParams.push(from);
+      expensesParams.push(from);
     }
     if (to) {
-      salesWhere.push(`date <= $${paramIndex}`);
-      expensesWhere.push(`date <= $${paramIndex}`);
-      params.push(to);
-      paramIndex++;
+      salesWhere.push(`je.date <= $${salesParamIndex++}::date`);
+      expensesWhere.push(`je.date <= $${expensesParamIndex++}::date`);
+      salesParams.push(to);
+      expensesParams.push(to);
     }
     if (branch && branch !== 'كل الفروع') {
-      salesWhere.push(`branch = $${paramIndex}`);
-      expensesWhere.push(`branch = $${paramIndex}`);
-      params.push(branch);
-      paramIndex++;
+      salesWhere.push(`je.branch = $${salesParamIndex++}`);
+      expensesWhere.push(`je.branch = $${expensesParamIndex++}`);
+      salesParams.push(branch);
+      expensesParams.push(branch);
     }
     
-    // Get sales by date
+    // Get sales by date from journal entries (credit side)
     const salesQuery = `
-      SELECT DATE(date) as date, COALESCE(SUM(total), 0) as total
-      FROM invoices
+      SELECT DATE(je.date) as date, COALESCE(SUM(jp.credit), 0) as total
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
       WHERE ${salesWhere.join(' AND ')}
-      GROUP BY DATE(date)
-      ORDER BY DATE(date)
+      GROUP BY DATE(je.date)
+      ORDER BY DATE(je.date)
     `;
     
-    // Get expenses by date
+    // Get expenses by date from journal entries (debit side)
     const expensesQuery = `
-      SELECT DATE(date) as date, COALESCE(SUM(amount), 0) as total
-      FROM expenses
+      SELECT DATE(je.date) as date, COALESCE(SUM(jp.debit), 0) as total
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
       WHERE ${expensesWhere.join(' AND ')}
-      GROUP BY DATE(date)
-      ORDER BY DATE(date)
+      GROUP BY DATE(je.date)
+      ORDER BY DATE(je.date)
     `;
     
     const [salesResult, expensesResult] = await Promise.all([
-      pool.query(salesQuery, params),
-      pool.query(expensesQuery, params)
+      pool.query(salesQuery, salesParams),
+      pool.query(expensesQuery, expensesParams)
     ]);
     
     // Combine sales and expenses by date
@@ -6168,47 +6437,79 @@ app.get("/api/reports/sales-by-branch", authenticateToken, authorize("reports","
   try {
     const { from, to, period, branch } = req.query || {};
     
+    // CRITICAL: Use journal entries (posted) instead of invoices directly
+    // Sales revenue account codes: 4111, 4112 (china_town), 4121, 4122 (place_india)
+    const salesAccountCodes = ['4111', '4112', '4121', '4122'];
+    
     let whereConditions = [];
     const params = [];
     let paramIndex = 1;
     
-    whereConditions.push(`status = 'paid'`);
+    // Get account IDs for sales accounts
+    const { rows: accountRows } = await pool.query(
+      `SELECT id, account_code, account_number FROM accounts WHERE account_code = ANY($1) OR account_number = ANY($1)`,
+      [salesAccountCodes]
+    );
+    const salesAccountIds = accountRows.map(r => r.id);
+    
+    if (salesAccountIds.length === 0) {
+      return res.json({ items: [], totals: { invoice_count: 0, total_sales: 0, gross_total: 0, net_total: 0, tax_total: 0, discount_total: 0 } });
+    }
+    
+    // Build query using journal entries (posted only)
+    whereConditions.push(`je.status = 'posted'`);
+    whereConditions.push(`jp.account_id = ANY($${paramIndex++}::int[])`);
+    params.push(salesAccountIds);
+    
     if (from) {
-      whereConditions.push(`date >= $${paramIndex++}`);
+      whereConditions.push(`je.date >= $${paramIndex++}::date`);
       params.push(from);
     }
     if (to) {
-      whereConditions.push(`date <= $${paramIndex++}`);
+      whereConditions.push(`je.date <= $${paramIndex++}::date`);
       params.push(to);
     }
     if (branch && branch !== 'كل الفروع') {
-      whereConditions.push(`branch = $${paramIndex++}`);
+      whereConditions.push(`je.branch = $${paramIndex++}`);
       params.push(branch);
     }
     
+    // Get sales from journal entries - credit side of sales accounts
     const query = `
       SELECT 
-        branch,
-        COUNT(*) as invoice_count,
-        COALESCE(SUM(total), 0) as total_sales
-      FROM invoices
+        COALESCE(je.branch, 'unknown') as branch,
+        COUNT(DISTINCT je.id) as invoice_count,
+        COALESCE(SUM(jp.credit), 0) as net_total,
+        COALESCE(SUM(jp.credit), 0) as gross_total,
+        0 as tax_total,
+        0 as discount_total
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
       WHERE ${whereConditions.join(' AND ')}
-      GROUP BY branch
-      ORDER BY branch
+      GROUP BY je.branch
+      ORDER BY je.branch
     `;
     
     const { rows } = await pool.query(query, params);
     
     const items = (rows || []).map(row => ({
-      branch: row.branch,
+      branch: row.branch || 'unknown',
       invoice_count: Number(row.invoice_count || 0),
-      total_sales: Number(row.total_sales || 0)
+      gross_total: Number(row.gross_total || 0),
+      net_total: Number(row.net_total || 0),
+      tax_total: Number(row.tax_total || 0),
+      discount_total: Number(row.discount_total || 0),
+      total_sales: Number(row.gross_total || 0) // For backward compatibility
     }));
     
     const totals = items.reduce((acc, item) => ({
       invoice_count: acc.invoice_count + item.invoice_count,
-      total_sales: acc.total_sales + item.total_sales
-    }), { invoice_count: 0, total_sales: 0 });
+      total_sales: acc.total_sales + item.total_sales,
+      gross_total: acc.gross_total + (item.gross_total || 0),
+      net_total: acc.net_total + (item.net_total || 0),
+      tax_total: acc.tax_total + (item.tax_total || 0),
+      discount_total: acc.discount_total + (item.discount_total || 0)
+    }), { invoice_count: 0, total_sales: 0, gross_total: 0, net_total: 0, tax_total: 0, discount_total: 0 });
     
     res.json({ items, totals });
   } catch (e) {
@@ -6217,106 +6518,81 @@ app.get("/api/reports/sales-by-branch", authenticateToken, authorize("reports","
   }
 });
 
-// GET /api/reports/expenses-by-branch - Get expenses by branch report
+// GET /reports/expenses-by-branch - Get expenses by branch report (legacy endpoint - redirects to /api version)
 app.get("/reports/expenses-by-branch", authenticateToken, authorize("reports","view"), async (req, res) => {
-  try {
-    const { from, to, period, branch } = req.query || {};
-    
-    let whereConditions = [];
-    const params = [];
-    let paramIndex = 1;
-    
-    whereConditions.push(`status = 'posted'`);
-    if (from) {
-      whereConditions.push(`date >= $${paramIndex++}`);
-      params.push(from);
-    }
-    if (to) {
-      whereConditions.push(`date <= $${paramIndex++}`);
-      params.push(to);
-    }
-    if (branch && branch !== 'كل الفروع') {
-      whereConditions.push(`branch = $${paramIndex++}`);
-      params.push(branch);
-    }
-    
-    const query = `
-      SELECT 
-        branch,
-        COUNT(*) as expense_count,
-        COALESCE(SUM(amount), 0) as total_expenses
-      FROM expenses
-      WHERE ${whereConditions.join(' AND ')}
-      GROUP BY branch
-      ORDER BY branch
-    `;
-    
-    const { rows } = await pool.query(query, params);
-    
-    const items = (rows || []).map(row => ({
-      branch: row.branch,
-      expense_count: Number(row.expense_count || 0),
-      total_expenses: Number(row.total_expenses || 0)
-    }));
-    
-    const totals = items.reduce((acc, item) => ({
-      expense_count: acc.expense_count + item.expense_count,
-      total_expenses: acc.total_expenses + item.total_expenses
-    }), { expense_count: 0, total_expenses: 0 });
-    
-    res.json({ items, totals });
-  } catch (e) {
-    console.error('[REPORTS] Error getting expenses by branch:', e);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
+  // Redirect to /api version which uses journal entries
+  return res.redirect(307, `/api/reports/expenses-by-branch?${new URLSearchParams(req.query).toString()}`);
 });
 app.get("/api/reports/expenses-by-branch", authenticateToken, authorize("reports","view"), async (req, res) => {
   try {
     const { from, to, period, branch } = req.query || {};
     
+    // CRITICAL: Use journal entries (posted) instead of expenses directly
+    // Expense account codes typically start with 5xxx
+    const expenseAccountCodes = ['5110', '5210', '5220', '5230', '5240', '5250'];
+    
     let whereConditions = [];
     const params = [];
     let paramIndex = 1;
     
-    whereConditions.push(`status = 'posted'`);
+    // Get account IDs for expense accounts (accounts with type='expense' or codes starting with 5)
+    const { rows: accountRows } = await pool.query(
+      `SELECT id, account_code, account_number FROM accounts 
+       WHERE type = 'expense' OR account_code LIKE '5%' OR account_number LIKE '5%'`
+    );
+    const expenseAccountIds = accountRows.map(r => r.id);
+    
+    if (expenseAccountIds.length === 0) {
+      return res.json({ items: [], total: 0 });
+    }
+    
+    // Build query using journal entries (posted only)
+    whereConditions.push(`je.status = 'posted'`);
+    whereConditions.push(`jp.account_id = ANY($${paramIndex++}::int[])`);
+    params.push(expenseAccountIds);
+    
     if (from) {
-      whereConditions.push(`date >= $${paramIndex++}`);
+      whereConditions.push(`je.date >= $${paramIndex++}::date`);
       params.push(from);
     }
     if (to) {
-      whereConditions.push(`date <= $${paramIndex++}`);
+      whereConditions.push(`je.date <= $${paramIndex++}::date`);
       params.push(to);
     }
     if (branch && branch !== 'كل الفروع') {
-      whereConditions.push(`branch = $${paramIndex++}`);
+      whereConditions.push(`je.branch = $${paramIndex++}`);
       params.push(branch);
     }
     
+    // Get expenses from journal entries - debit side of expense accounts
     const query = `
       SELECT 
-        branch,
-        COUNT(*) as expense_count,
-        COALESCE(SUM(amount), 0) as total_expenses
-      FROM expenses
+        COALESCE(je.branch, 'unknown') as branch,
+        COUNT(DISTINCT je.id) as expense_count,
+        COALESCE(SUM(jp.debit), 0) as total
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
       WHERE ${whereConditions.join(' AND ')}
-      GROUP BY branch
-      ORDER BY branch
+      GROUP BY je.branch
+      ORDER BY je.branch
     `;
     
     const { rows } = await pool.query(query, params);
     
     const items = (rows || []).map(row => ({
-      branch: row.branch,
+      branch: row.branch || 'unknown',
       expense_count: Number(row.expense_count || 0),
-      total_expenses: Number(row.total_expenses || 0)
+      total: Number(row.total || 0)
     }));
     
-    const totals = items.reduce((acc, item) => ({
-      expense_count: acc.expense_count + item.expense_count,
-      total_expenses: acc.total_expenses + item.total_expenses
-    }), { expense_count: 0, total_expenses: 0 });
+    const total = items.reduce((acc, item) => acc + (item.total || 0), 0);
     
-    res.json({ items, totals });
+    const totals = {
+      expense_count: items.reduce((acc, item) => acc + (item.expense_count || 0), 0),
+      total_expenses: total
+    };
+    
+    res.json({ items, totals, total });
   } catch (e) {
     console.error('[REPORTS] Error getting expenses by branch:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
