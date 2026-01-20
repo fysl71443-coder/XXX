@@ -374,7 +374,69 @@ export default function Products() {
                   )}
                 </div>
               ))}
-              {categories.length===0 && (<div className="text-sm text-gray-500">{lang==='ar'?'لا توجد أقسام':'No categories'}</div>)}
+              {categories.length===0 && viewItems.length > 0 && (
+                <div className="border rounded-xl bg-white overflow-hidden" style={{ fontFamily: 'Cairo, sans-serif' }}>
+                  <div className="px-4 py-3 bg-gray-50 border-b">
+                    <div className="text-right font-semibold text-gray-800">{lang==='ar'?'منتجات بدون فئة':'Products without category'}</div>
+                  </div>
+                  <div className="px-4 pb-4">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      {viewItems.map(p => (
+                        <div key={p.id} className="border rounded-lg p-3 bg-white">
+                          <div className="flex items-center justify-between">
+                            {(() => {
+                              const nm = String(p.name||'')
+                              function split(lbl){ const v=String(lbl||''); if (v.includes(' - ')) { const [en, ar] = v.split(' - '); return { en: en.trim(), ar: ar.trim() } } if (v.includes(' / ')) { const [en, ar] = v.split(' / '); return { en: en.trim(), ar: ar.trim() } } return { en: v, ar: '' } }
+                              const parts = split(nm)
+                              const arClean = parts.ar.replace(/\?/g,'').trim()
+                              const arFinal = arClean ? parts.ar : ''
+                              return (
+                                <div className="text-right">
+                                  <div className="font-semibold text-gray-800 whitespace-normal break-words leading-tight">{parts.en}</div>
+                                  {arFinal ? (<div className="text-sm text-gray-600 whitespace-normal break-words leading-tight">{arFinal}</div>) : null}
+                                </div>
+                              )
+                            })()}
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">{p.is_service ? (lang==='ar'?'خدمة':'Service') : (lang==='ar'?'استهلاك':'Consumable')}</span>
+                              {disabledIds.includes(Number(p.id)) ? (
+                                <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-500">{lang==='ar'?'غير متاح':'Disabled'}</span>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="mt-2 text-sm text-gray-700">{lang==='ar'?'السعر':'Price'}: {(parseFloat(p.sale_price||p.price||0)).toFixed(4)}</div>
+                          {!p.is_service ? (<div className="text-sm text-gray-700">{lang==='ar'?'الكمية':'Qty'}: {(parseFloat(p.stock_quantity||0)).toFixed(4)}</div>) : null}
+                          <div className="text-sm text-gray-700">{lang==='ar'?'التكلفة':'Cost'}: {(parseFloat(p.cost_price||p.cost||0)).toFixed(4)}</div>
+                          <div className="mt-2 flex gap-2">
+                            {(()=>{ const canWrite = can('products:write'); return (
+                              <button className={`px-2 py-1 ${canWrite?'bg-amber-100 text-amber-800':'bg-gray-200 text-gray-500 cursor-not-allowed'} rounded`} onClick={()=>{ if (!canWrite) return; setEditing(p); setForm({
+                                name: p.name||'', category: p.category||'', sale_price: String(p.sale_price||p.price||''), cost_price: String(p.cost_price||p.cost||''), stock_quantity: String(p.stock_quantity||''),
+                                section: p.is_service?'service':'consumable', uom: p.uom|| (p.is_service?'Hours':'Units'), purchase_uom: p.purchase_uom|| (p.is_service?'Hours':'Units'),
+                                can_be_sold: true, can_be_purchased: true, can_be_expensed: false,
+                                customer_taxes: '', internal_ref: '', barcode: '', tags: [], property1: '', internal_notes: '', images: [], documents: [], binary_file: null
+                              }); setModalOpen(true) }} disabled={!canWrite}>{lang==='ar'?'تعديل':'Edit'}</button>) })()}
+                            {(()=>{ const canDelete = can('products:delete'); return (
+                              <button className={`px-2 py-1 ${canDelete?'bg-red-100 text-red-700':'bg-gray-200 text-gray-500 cursor-not-allowed'} rounded`} onClick={()=>{ if (!canDelete) return; remove(p.id) }} disabled={!canDelete}>{lang==='ar'?'حذف':'Delete'}</button>) })()}
+                            {(()=>{ const canWrite = can('products:write'); const isDisabled = disabledIds.includes(Number(p.id)); return (
+                              isDisabled ? (
+                                <button className={`px-2 py-1 ${canWrite?'bg-green-100 text-green-700':'bg-gray-200 text-gray-500 cursor-not-allowed'} rounded`} onClick={()=>{ if (!canWrite) return; enable(p.id) }} disabled={!canWrite}>{lang==='ar'?'تمكين':'Enable'}</button>
+                              ) : (
+                                <button className={`px-2 py-1 ${canWrite?'bg-gray-100 text-gray-700':'bg-gray-200 text-gray-500 cursor-not-allowed'} rounded`} onClick={()=>{ if (!canWrite) return; disable(p.id) }} disabled={!canWrite}>{lang==='ar'?'تعطيل':'Disable'}</button>
+                              )
+                            ) })()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              {categories.length===0 && viewItems.length === 0 && items.length === 0 && (
+                <div className="text-center py-8">
+                  <div className="text-gray-500 mb-2">{lang==='ar'?'لا توجد منتجات في قاعدة البيانات':'No products in database'}</div>
+                  <div className="text-sm text-gray-400">{lang==='ar'?'استخدم زر "إضافة منتج" لإضافة منتجات جديدة':'Use "Add Product" button to add new products'}</div>
+                </div>
+              )}
             </div>
           )}
         </section>
