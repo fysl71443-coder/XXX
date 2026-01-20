@@ -2196,10 +2196,10 @@ export default function POSInvoice(){
                 return (
                   <table className="w-full text-right border-collapse">
                   <thead>
-                    <tr className="border-b bg-emerald-700 text-white">
-                      <th className="p-2">{t('labels.item', lang)}</th>
-                      <th className="p-2">{t('labels.qty', lang)}</th>
-                      <th className="p-2">{lang === 'ar' ? 'المبلغ' : 'Amount'}</th>
+                    <tr className="border-b-2 bg-emerald-700 text-white">
+                      <th className="p-3 font-bold">{t('labels.item', lang)}</th>
+                      <th className="p-3 font-bold text-center">{t('labels.qty', lang)}</th>
+                      <th className="p-3 font-bold">{lang === 'ar' ? 'المبلغ' : 'Amount'}</th>
                     </tr>
                   </thead>
                   <tbody data-testid="receipt-items" data-ready={safeItems.length > 0 ? 'true' : 'false'}>
@@ -2211,22 +2211,26 @@ export default function POSInvoice(){
                       const nm = splitBilingual(itemNameAr, itemNameEn)
                       
                       return (
-                      <tr data-testid="invoice-row" key={i} className="border-b hover:bg-gray-50 transition-colors">
-                        <td className="p-2 text-right">
-                          <div className="flex flex-col gap-0.5">
-                            <div className="font-semibold text-gray-800">{nm.en || itemNameAr}</div>
-                            {nm.ar && nm.ar !== nm.en ? (<div className="text-sm text-gray-600">{nm.ar}</div>) : null}
+                      <tr data-testid="invoice-row" key={i} className="border-b hover:bg-emerald-50 transition-colors">
+                        <td className="p-3 text-right">
+                          <div className="flex flex-col gap-1">
+                            <div className="font-bold text-gray-900 text-base leading-tight">{nm.en || itemNameAr}</div>
+                            {nm.ar && nm.ar !== nm.en ? (
+                              <div className="text-sm text-gray-700 leading-tight font-medium">{nm.ar}</div>
+                            ) : null}
                           </div>
                         </td>
-                        <td className="p-2 text-center">
+                        <td className="p-3 text-center">
                           <div className="inline-flex items-center gap-2">
-                            <button className="h-6 w-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center" onClick={()=>{ const q = Number(it.qty||0); if (q<=1) removeItem(i); else updateItem(i, o=> ({ qty: q-1 })) }} aria-label="decrease">−</button>
-                            <span className="min-w-[2ch] text-center font-semibold">{Number(it.qty||0)}</span>
-                            <button className="h-6 w-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center" onClick={()=> updateItem(i, o=> ({ qty: Number(o.qty||0)+1 }))} aria-label="increase">+</button>
+                            <button className="h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-300 text-gray-700 flex items-center justify-center font-bold transition-colors" onClick={()=>{ const q = Number(it.qty||0); if (q<=1) removeItem(i); else updateItem(i, o=> ({ qty: q-1 })) }} aria-label="decrease">−</button>
+                            <span className="min-w-[3ch] text-center font-bold text-lg text-gray-900">{Number(it.qty||0)}</span>
+                            <button className="h-7 w-7 rounded-full bg-gray-100 hover:bg-gray-300 text-gray-700 flex items-center justify-center font-bold transition-colors" onClick={()=> updateItem(i, o=> ({ qty: Number(o.qty||0)+1 }))} aria-label="increase">+</button>
                           </div>
                         </td>
-                        <td className="p-2 text-right">
-                          <Money value={Number(it.qty||0) * Number(it.price||0)} />
+                        <td className="p-3 text-right">
+                          <div className="font-semibold text-gray-900">
+                            <Money value={Number(it.qty||0) * Number(it.price||0)} />
+                          </div>
                         </td>
                       </tr>
                     )})}
