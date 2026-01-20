@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { products, partners } from '../services/api'
 import { FaPlus, FaBox, FaClock, FaCubes } from 'react-icons/fa'
@@ -189,23 +189,38 @@ export default function Products() {
     } finally { setExportingExcel(false) }
   }
 
-  const viewItems = (function(){
+  const viewItems = useMemo(() => {
     const q = String(prodFilters.search||'').trim().toLowerCase()
-    const cat = String(prodFilters.category||'')
+    const cat = String(prodFilters.category||'').trim()
     const avail = Array.isArray(prodFilters.availability) ? prodFilters.availability : []
+    
     return (items||[]).filter(x => {
-      if (q && !String(x.name||'').toLowerCase().includes(q)) return false
-      if (cat && String(x.category||'') !== cat) return false
+      // Search filter
+      if (q) {
+        const nameMatch = String(x.name||'').toLowerCase().includes(q)
+        const nameEnMatch = String(x.name_en||'').toLowerCase().includes(q)
+        const categoryMatch = String(x.category||'').toLowerCase().includes(q)
+        if (!nameMatch && !nameEnMatch && !categoryMatch) return false
+      }
+      
+      // Category filter
+      if (cat && String(x.category||'').trim() !== cat) return false
+      
+      // Section filter
       if (sectionFilter==='service' && !x.is_service) return false
       if (sectionFilter==='consumable' && !!x.is_service) return false
+      
+      // Disabled filter
       if (!showDisabled && disabledIds.includes(Number(x.id))) return false
       
+      // Availability filters
       if (avail.includes('sold') && x.can_be_sold === false) return false
       if (avail.includes('purchased') && x.can_be_purchased === false) return false
       if (avail.includes('expensed') && x.can_be_expensed === false) return false
+      
       return true
     })
-  })()
+  }, [items, prodFilters, sectionFilter, showDisabled, disabledIds])
 
   function onChangeNum(field){
     return e => setForm(f => ({ ...f, [field]: sanitizeDecimal(e.target.value) }))

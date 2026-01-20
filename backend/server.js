@@ -2511,8 +2511,35 @@ app.use("/api/partners", authenticateToken, async (req, res, next) => {
 // ==================== PRODUCTS API ====================
 app.get("/products", authenticateToken, authorize("products", "view"), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT * FROM products ORDER BY id DESC');
-    res.json(rows || []);
+    const includeDisabled = req.query.include_disabled === '1' || req.query.include_disabled === 1;
+    
+    let query = `
+      SELECT 
+        id, name, name_en, sku, barcode, category, unit, 
+        COALESCE(sale_price, price, 0) as sale_price,
+        price, cost, tax_rate, stock_quantity, min_stock, 
+        description, is_active, is_service, can_be_sold, 
+        can_be_purchased, can_be_expensed, created_at, updated_at
+      FROM products 
+    `;
+    
+    if (!includeDisabled) {
+      query += ` WHERE is_active = true OR is_active IS NULL `;
+    }
+    
+    query += ` ORDER BY category ASC, name ASC `;
+    
+    const { rows } = await pool.query(query);
+    
+    // Separate active and disabled products
+    const activeProducts = rows.filter(p => p.is_active !== false);
+    const disabledProducts = rows.filter(p => p.is_active === false);
+    const disabledIds = disabledProducts.map(p => p.id);
+    
+    res.json({
+      items: activeProducts,
+      disabled_ids: disabledIds
+    });
   } catch (e) {
     console.error('[PRODUCTS] Error listing products:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
