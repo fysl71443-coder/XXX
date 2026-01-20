@@ -1077,14 +1077,19 @@ export default function POSInvoice(){
     const totalVal = subtotalVal - discountVal + taxVal
     
     // Build lines array in the format expected by backend
-    const lines = safeItems.map(it => ({
-      type: 'item',
-      product_id: it.product_id || it.id,
-      name: it.name || '',
-      qty: Number(it.qty||it.quantity||0),
-      price: Number(it.price||0),
-      discount: Number(it.discount||0)
-    }))
+    const lines = safeItems.map(it => {
+      // Get product from products list to get name_en if not in item
+      const product = products.find(p => String(p.id) === String(it.product_id || it.id))
+      return {
+        type: 'item',
+        product_id: it.product_id || it.id,
+        name: it.name || '',
+        name_en: it.name_en || product?.name_en || '',
+        qty: Number(it.qty||it.quantity||0),
+        price: Number(it.price||0),
+        discount: Number(it.discount||0)
+      }
+    })
     
     // CRITICAL: Ensure order_id is always provided - get from multiple sources
     // Must be a valid number > 0, not 0, null, undefined, or empty string
