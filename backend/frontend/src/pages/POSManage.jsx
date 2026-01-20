@@ -19,7 +19,45 @@ export default function POSManage(){
   const [helpOpen, setHelpOpen] = useState(false)
   const [periodStatus, setPeriodStatus] = useState('open')
   useEffect(()=>{ (async()=>{ try{ const c = await apiSettings.get('settings_company'); const key = String(branch||'')==='palace_india' ? 'settings_branch_place_india' : `settings_branch_${branch}`; const b = await apiSettings.get(key); setBranding({ logo: String(b?.logo_base64||b?.logo||''), companyName: (c?.name_en || c?.name_ar || '') }); try { if (b?.logo_base64) localStorage.setItem(`branch_logo_${branch}`, String(b.logo_base64)) } catch {} } catch{} })() },[branch])
-  useEffect(()=>{ setLoading(true); pos.tablesLayout.get(branch).then(d=>{ if (Array.isArray(d?.sections)) setSections(d.sections); else setSections([{ name:'Main Hall', rows: (Array.isArray(d?.rows)?d.rows.map((r,i)=>({ name: r.name||`row_${i+1}`, numbers: Array.from({ length: Math.max(0, Number(r.tables||0)) }).map((_,k)=> k+1) })):[]) }]) }).catch(()=> setSections([{ name:'Main Hall', rows: [] }])).finally(()=> setLoading(false)) },[branch])
+  useEffect(()=>{ 
+    setLoading(true); 
+    pos.tablesLayout.get(branch).then(d=>{ 
+      if (Array.isArray(d?.sections)) {
+        // Ensure all rows have tables array (not numbers)
+        const normalizedSections = d.sections.map(sec => ({
+          ...sec,
+          rows: (sec.rows || []).map(r => ({
+            ...r,
+            tables: Array.isArray(r.tables) ? r.tables : 
+                   (Array.isArray(r.numbers) ? r.numbers.map((n, idx) => ({ 
+                     id: `tbl_${Date.now()}_${idx}`, 
+                     name: String(n || ''), 
+                     status: 'available' 
+                   })) : 
+                   (r.tables ? Array.from({ length: Math.max(0, Number(r.tables)) }).map((_,k) => ({ 
+                     id: `tbl_${Date.now()}_${k}`, 
+                     name: String(k+1), 
+                     status: 'available' 
+                   })) : []))
+          }))
+        }));
+        setSections(normalizedSections);
+      } else {
+        // Legacy format: convert rows with tables count to tables array
+        setSections([{ 
+          name:'Main Hall', 
+          rows: (Array.isArray(d?.rows) ? d.rows.map((r,i) => ({ 
+            name: r.name || `row_${i+1}`, 
+            tables: Array.from({ length: Math.max(0, Number(r.tables||0)) }).map((_,k) => ({ 
+              id: `tbl_${Date.now()}_${k}`, 
+              name: String(k+1), 
+              status: 'available' 
+            }))
+          })) : []) 
+        }]);
+      }
+    }).catch(()=> setSections([{ name:'Main Hall', rows: [] }])).finally(()=> setLoading(false)) 
+  },[branch])
   useEffect(()=>{ (async()=>{ try { const d = new Date(); const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; const s = await periods.get(per); setPeriodStatus(String(s?.status||'open')) } catch {} })() },[])
   useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage) },[])
   async function reload(){
@@ -36,7 +74,7 @@ export default function POSManage(){
   }
   function addSection(){ setSections(prev=> [...prev, { name: `Section ${prev.length+1}`, rows: [] }]) }
   function updateSection(si, patch){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, ...(typeof patch==='function'?patch(s):patch) } : s )) }
-  function addRow(si){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: [...(s.rows||[]), { name: `row_${(s.rows||[]).length+1}`, numbers: [] }] } : s )) }
+  function addRow(si){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: [...(s.rows||[]), { name: `row_${(s.rows||[]).length+1}`, tables: [] }] } : s )) }
   function updateRow(si, ri, patch){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).map((r,j)=> j===ri ? { ...r, ...(typeof patch==='function'?patch(r):patch) } : r ) } : s )) }
   function removeRow(si, ri){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).filter((_,j)=> j!==ri) } : s )) }
   function addTable(si, ri){ setSections(prev=> prev.map((s,i)=> i===si ? { ...s, rows: (Array.isArray(s.rows)?s.rows:[]).map((r,j)=> j===ri ? { ...r, tables: [...(r.tables||[]), { id: `tbl_${Date.now()}`, name: '', status: 'available' }] } : r ) } : s )) }
@@ -45,17 +83,48 @@ export default function POSManage(){
   function onDragOver(e){ e.preventDefault() }
   async function save(){
     try {
+      setLoading(true)
       const hasRows = (sections||[]).some(sec => Array.isArray(sec.rows) && sec.rows.length>0)
       const hasTables = (sections||[]).some(sec => (sec.rows||[]).some(r => Array.isArray(r.tables) && r.tables.length>0))
-      if (!hasRows || !hasTables){ setToast('أدخل صفًا واحدًا على الأقل مع طاولات'); return }
-      const cleaned = (sections||[]).map(sec => ({ name: String(sec.name||''), rows: (sec.rows||[]).map(r => ({ name: String(r.name||''), tables: (r.tables||[]).map(t => ({ id: String(t.id||''), name: String(t.name||''), status: String(t.status||'available') })) })) }))
-      await pos.tablesLayout.save(branch, { sections: cleaned })
-      setToast('تم حفظ التغييرات')
-      navigate(`/pos/${branch}/tables`)
+      if (!hasRows || !hasTables){ 
+        setToast(lang==='ar' ? 'أدخل صفًا واحدًا على الأقل مع طاولات' : 'Add at least one row with tables'); 
+        setLoading(false)
+        return 
+      }
+      // Normalize branch name before saving
+      const normalizeBranch = (b) => {
+        const s = String(b || '').trim().toLowerCase().replace(/\s+/g, '_');
+        if (s === 'palace_india' || s === 'palce_india') return 'place_india';
+        return s;
+      };
+      const normalizedBranch = normalizeBranch(branch);
+      
+      const cleaned = (sections||[]).map(sec => ({ 
+        name: String(sec.name||''), 
+        rows: (sec.rows||[]).map(r => ({ 
+          name: String(r.name||''), 
+          tables: (Array.isArray(r.tables) ? r.tables : []).map(t => ({ 
+            id: String(t.id||`tbl_${Date.now()}_${Math.random()}`), 
+            name: String(t.name||''), 
+            status: String(t.status||'available') 
+          })) 
+        })) 
+      }))
+      await pos.tablesLayout.save(normalizedBranch, { sections: cleaned })
+      setToast(lang==='ar' ? 'تم حفظ التغييرات' : 'Changes saved successfully')
+      setTimeout(() => {
+        navigate(`/pos/${branch}/tables`)
+      }, 1000)
     } catch (e) {
+      console.error('[POSManage] Save error:', e)
       const code = e?.code || e?.status || 'failed'
-      if (code==='rows_required') setToast('أدخل صفًا واحدًا على الأقل مع أرقام الطاولات')
-      else setToast('فشل حفظ التغييرات (400)')
+      if (code==='rows_required') {
+        setToast(lang==='ar' ? 'أدخل صفًا واحدًا على الأقل مع أرقام الطاولات' : 'Add at least one row with table numbers')
+      } else {
+        setToast(lang==='ar' ? `فشل حفظ التغييرات (${code})` : `Failed to save changes (${code})`)
+      }
+    } finally {
+      setLoading(false)
     }
   }
   // شعار الفرع يُدار من شاشة الإعدادات فقط
