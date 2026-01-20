@@ -231,7 +231,14 @@ export default function Products() {
 
   const services = viewItems.filter(x => !!x.is_service)
   const consumables = viewItems.filter(x => !x.is_service)
-  const categories = Array.from(new Set(viewItems.map(p => (p.category || 'عام'))))
+  // Get categories from viewItems, but ensure we show products even if they have no category
+  const categories = Array.from(new Set(viewItems.map(p => {
+    const cat = String(p.category || '').trim()
+    return cat || 'عام' // Default to 'عام' if category is empty
+  }))).filter(cat => {
+    // Only include categories that have products
+    return viewItems.some(p => (String(p.category || '').trim() || 'عام') === cat)
+  })
 
   const headerActions = [
     (function(){ const canExport = can('reports:export'); return (<button key="excel" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=>{ if (!canExport || exportingExcel) return; exportExcel() }} disabled={!canExport || exportingExcel}>{exportingExcel ? (lang==='ar'?'جارٍ التصدير...':'Exporting...') : 'Excel'}</button>) })(),
@@ -315,12 +322,12 @@ export default function Products() {
                         </div>
                       )
                     })()}
-                    <span className="text-xs text-gray-600">{viewItems.filter(p => (p.category||'عام')===cat).length} {lang==='ar'?'عنصر':'items'}</span>
+                    <span className="text-xs text-gray-600">{viewItems.filter(p => (String(p.category||'').trim()||'عام')===cat).length} {lang==='ar'?'عنصر':'items'}</span>
                   </button>
                   {openCategory===cat && (
                     <div className="px-4 pb-4">
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {viewItems.filter(p => (p.category||'عام')===cat).map(p => (
+                        {viewItems.filter(p => (String(p.category||'').trim()||'عام')===cat).map(p => (
                           <div key={p.id} className="border rounded-lg p-3 bg-white">
                             <div className="flex items-center justify-between">
                               {(() => {
@@ -366,7 +373,7 @@ export default function Products() {
                             </div>
                           </div>
                         ))}
-                        {viewItems.filter(p => (p.category||'عام')===cat).length===0 && (
+                        {viewItems.filter(p => (String(p.category||'').trim()||'عام')===cat).length===0 && (
                           <div className="text-sm text-gray-500">{lang==='ar'?'لا توجد منتجات':'No products'}</div>
                         )}
                       </div>
