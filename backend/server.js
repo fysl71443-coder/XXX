@@ -2311,47 +2311,239 @@ app.post("/api/journal/:id/post", authenticateToken, authorize("journal", "post"
 
 // Return to draft
 app.post("/journal/:id/return-to-draft", authenticateToken, authorize("journal", "edit"), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id || 0);
-    await pool.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['draft', id]);
+    
+    // Get journal entry with reference info
+    const { rows: entryRows } = await client.query(
+      'SELECT id, status, reference_type, reference_id FROM journal_entries WHERE id = $1',
+      [id]
+    );
+    
+    if (!entryRows || entryRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Journal entry not found" });
+    }
+    
+    const entry = entryRows[0];
+    
+    // Only allow returning posted entries to draft
+    if (entry.status !== 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_status", details: "Only posted entries can be returned to draft" });
+    }
+    
+    // Update journal entry status to draft
+    await client.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['draft', id]);
+    
+    // CRITICAL: Update related reference (expense/invoice) to draft
+    if (entry.reference_type && entry.reference_id) {
+      if (entry.reference_type === 'expense') {
+        // Update expense status to draft
+        await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated expense ${entry.reference_id} to draft`);
+      } else if (entry.reference_type === 'invoice') {
+        // Update invoice status to draft
+        await client.query('UPDATE invoices SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated invoice ${entry.reference_id} to draft`);
+      }
+    }
+    
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[JOURNAL] Error returning to draft:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
   }
 });
 
 app.post("/api/journal/:id/return-to-draft", authenticateToken, authorize("journal", "edit"), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id || 0);
-    await pool.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['draft', id]);
+    
+    // Get journal entry with reference info
+    const { rows: entryRows } = await client.query(
+      'SELECT id, status, reference_type, reference_id FROM journal_entries WHERE id = $1',
+      [id]
+    );
+    
+    if (!entryRows || entryRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Journal entry not found" });
+    }
+    
+    const entry = entryRows[0];
+    
+    // Only allow returning posted entries to draft
+    if (entry.status !== 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_status", details: "Only posted entries can be returned to draft" });
+    }
+    
+    // Update journal entry status to draft
+    await client.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['draft', id]);
+    
+    // CRITICAL: Update related reference (expense/invoice) to draft
+    if (entry.reference_type && entry.reference_id) {
+      if (entry.reference_type === 'expense') {
+        // Update expense status to draft
+        await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated expense ${entry.reference_id} to draft`);
+      } else if (entry.reference_type === 'invoice') {
+        // Update invoice status to draft
+        await client.query('UPDATE invoices SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated invoice ${entry.reference_id} to draft`);
+      }
+    }
+    
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[JOURNAL] Error returning to draft:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
   }
 });
 
 // Delete journal entry
 app.delete("/journal/:id", authenticateToken, authorize("journal", "delete"), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id || 0);
-    await pool.query('DELETE FROM journal_entries WHERE id = $1', [id]);
-    res.json({ ok: true });
+    
+    // Get journal entry with reference info and status
+    const { rows: entryRows } = await client.query(
+      'SELECT id, status, reference_type, reference_id, entry_number FROM journal_entries WHERE id = $1',
+      [id]
+    );
+    
+    if (!entryRows || entryRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Journal entry not found" });
+    }
+    
+    const entry = entryRows[0];
+    
+    // CRITICAL: Only allow deleting draft entries directly
+    // Posted entries must be returned to draft first
+    if (entry.status === 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: "cannot_delete_posted", 
+        details: "Cannot delete posted entry. Return to draft first, then delete." 
+      });
+    }
+    
+    // CRITICAL: Delete related reference (expense/invoice) if exists
+    // This ensures single source of truth - journal entries are the source
+    if (entry.reference_type && entry.reference_id) {
+      if (entry.reference_type === 'expense') {
+        // Delete expense and clear journal_entry_id reference
+        await client.query('UPDATE expenses SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM expenses WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted expense ${entry.reference_id}`);
+      } else if (entry.reference_type === 'invoice') {
+        // Delete invoice and clear journal_entry_id reference
+        await client.query('UPDATE invoices SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM invoices WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted invoice ${entry.reference_id}`);
+      }
+    }
+    
+    // Delete journal postings first (foreign key constraint)
+    await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [id]);
+    
+    // Delete journal entry
+    await client.query('DELETE FROM journal_entries WHERE id = $1', [id]);
+    
+    // Note: entry_number will be reused automatically by getNextEntryNumber() function
+    // which finds the lowest unused entry_number
+    
+    await client.query('COMMIT');
+    console.log(`[JOURNAL] Deleted journal entry ${id} (entry_number: ${entry.entry_number})`);
+    res.json({ ok: true, entry_number: entry.entry_number });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[JOURNAL] Error deleting entry:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
   }
 });
 
 app.delete("/api/journal/:id", authenticateToken, authorize("journal", "delete"), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id || 0);
-    await pool.query('DELETE FROM journal_entries WHERE id = $1', [id]);
-    res.json({ ok: true });
+    
+    // Get journal entry with reference info and status
+    const { rows: entryRows } = await client.query(
+      'SELECT id, status, reference_type, reference_id, entry_number FROM journal_entries WHERE id = $1',
+      [id]
+    );
+    
+    if (!entryRows || entryRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Journal entry not found" });
+    }
+    
+    const entry = entryRows[0];
+    
+    // CRITICAL: Only allow deleting draft entries directly
+    // Posted entries must be returned to draft first
+    if (entry.status === 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: "cannot_delete_posted", 
+        details: "Cannot delete posted entry. Return to draft first, then delete." 
+      });
+    }
+    
+    // CRITICAL: Delete related reference (expense/invoice) if exists
+    // This ensures single source of truth - journal entries are the source
+    if (entry.reference_type && entry.reference_id) {
+      if (entry.reference_type === 'expense') {
+        // Delete expense and clear journal_entry_id reference
+        await client.query('UPDATE expenses SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM expenses WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted expense ${entry.reference_id}`);
+      } else if (entry.reference_type === 'invoice') {
+        // Delete invoice and clear journal_entry_id reference
+        await client.query('UPDATE invoices SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM invoices WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted invoice ${entry.reference_id}`);
+      }
+    }
+    
+    // Delete journal postings first (foreign key constraint)
+    await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [id]);
+    
+    // Delete journal entry
+    await client.query('DELETE FROM journal_entries WHERE id = $1', [id]);
+    
+    // Note: entry_number will be reused automatically by getNextEntryNumber() function
+    // which finds the lowest unused entry_number
+    
+    await client.query('COMMIT');
+    console.log(`[JOURNAL] Deleted journal entry ${id} (entry_number: ${entry.entry_number})`);
+    res.json({ ok: true, entry_number: entry.entry_number });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[JOURNAL] Error deleting entry:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
   }
 });
 app.use("/ledger", authenticateToken, async (req, res, next) => {
@@ -6357,7 +6549,7 @@ app.get("/journal/account/:id", authenticateToken, authorize("journal","view"), 
       FROM journal_postings jp
       JOIN journal_entries je ON je.id = jp.journal_entry_id
       LEFT JOIN accounts a ON a.id = jp.account_id
-      WHERE jp.account_id = $1
+      WHERE jp.account_id = $1 AND je.status = 'posted'
     `;
     const params = [accountId];
     let paramIndex = 2;
@@ -6410,7 +6602,7 @@ app.get("/api/journal/account/:id", authenticateToken, authorize("journal","view
       FROM journal_postings jp
       JOIN journal_entries je ON je.id = jp.journal_entry_id
       LEFT JOIN accounts a ON a.id = jp.account_id
-      WHERE jp.account_id = $1
+      WHERE jp.account_id = $1 AND je.status = 'posted'
     `;
     const params = [accountId];
     let paramIndex = 2;
