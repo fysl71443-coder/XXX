@@ -6016,6 +6016,7 @@ app.post("/api/pos/verify-cancel", authenticateToken, handleVerifyCancel);
 // Legacy saveDraft - kept for compatibility
 // Legacy /pos/saveDraft endpoint - delegate to handleSaveDraft for consistency
 app.post("/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
+app.post("/pos/save-draft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
 // ============================================================================
 // ACCOUNTING HELPER FUNCTIONS
 // ============================================================================
@@ -7580,6 +7581,7 @@ async function handleSaveDraft(req, res) {
   }
 }
 app.post("/api/pos/saveDraft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
+app.post("/api/pos/save-draft", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), handleSaveDraft);
 // NOTE: SPA fallback is already handled above (line 71-92)
 // These routes are redundant but kept for clarity
 // The SPA fallback middleware will catch all non-API routes before they reach here
