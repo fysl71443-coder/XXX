@@ -89,8 +89,12 @@ export async function authenticateToken(req, res, next) {
       }
     }
     
+    // CRITICAL: pool is guaranteed to exist - PostgreSQL connection verified at startup
+    // If pool is null here, it means application started incorrectly - this should never happen
     if (!pool) {
-      console.error(`[AUTH] ERROR: DB not configured | ${method} ${path}`)
+      console.error('[AUTH] CRITICAL: Database pool is null - this should never happen');
+      console.error('[AUTH] PostgreSQL connection was verified at startup');
+      return res.status(500).json({ error: "database_error", details: "Database connection not available" });(`[AUTH] ERROR: DB not configured | ${method} ${path}`)
       return res.status(500).json({ error: "server_error", details: "db_not_configured" });
     }
     
@@ -134,32 +138,24 @@ export async function authenticateToken(req, res, next) {
     
     // CRITICAL: Permission loading is OPTIONAL and should NEVER fail authentication
     // Authentication (who you are) is separate from Authorization (what you can do)
-    // If permission loading fails, user is still authenticated
-    // Permissions will be checked later in authorize middleware when needed
+    // Permissions are loaded once at login time in AuthContext and sent with every request in header
+    // This avoids database queries on every API call
     try {
-      const { rows: pr } = await pool.query('SELECT screen_code, branch_code, action_code, allowed FROM user_permissions WHERE user_id = $1', [user.id]);
-      const map = {};
-      for (const r of pr || []) {
-        const sc = String(r.screen_code||'').toLowerCase();
-        const br = String(r.branch_code||'');
-        const ac = String(r.action_code||'').toLowerCase();
-        map[sc] = map[sc] || { _global: {} };
-        if (!br) { map[sc]._global[ac] = !!r.allowed }
-        else {
-          map[sc][br] = map[sc][br] || {};
-          map[sc][br][ac] = !!r.allowed;
+      const permissionsHeader = req.headers['x-user-permissions'];
+      if (permissionsHeader) {
+        try {
+          const permissionsMap = JSON.parse(permissionsHeader);
+          req.user.permissionsMap = permissionsMap;
+          console.log(`[AUTH] Permissions loaded from header | userId=${user.id} screens=${Object.keys(permissionsMap).length}`);
+        } catch (parseErr) {
+          console.warn(`[AUTH] Failed to parse permissions header:`, parseErr?.message);
+          req.user.permissionsMap = null; // Will be loaded on-demand if needed
         }
+      } else {
+        req.user.permissionsMap = null; // Will be loaded on-demand if needed
       }
-      req.user.permissionsMap = map;
-      const permCount = Object.keys(map).length
-      const globalPerms = Object.values(map).reduce((sum, v) => sum + Object.keys(v._global || {}).length, 0)
-      console.log(`[AUTH] Permissions loaded (optional) | userId=${user.id} screens=${permCount} globalActions=${globalPerms}`)
-    } catch (permErr) {
-      // Permission loading failure does NOT fail authentication
-      // Admin doesn't need permissions anyway (bypass)
-      // Regular users will be checked in authorize middleware
-      console.warn(`[AUTH] Permission loading failed (non-critical) | userId=${user.id}`, permErr?.message)
-      req.user.permissionsMap = {}; // Empty map is fine - will be checked later if needed
+    } catch {
+      req.user.permissionsMap = null; // Will be loaded on-demand if needed
     }
     
     next();

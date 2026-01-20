@@ -31,9 +31,29 @@ export const partners = {
     const query = new URLSearchParams(params).toString()
     return safeList(() => request(`/partners${query ? `?${query}` : ''}`))
   },
+  get: (id) => request(`/partners/${id}`),
   create: (data) => request('/partners', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/partners/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id) => request(`/partners/${id}`, { method: 'DELETE' }),
+  balance: (id, params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request(`/partners/${id}/balance${query ? `?${query}` : ''}`)
+  },
+  statement: (id, params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request(`/partners/${id}/statement${query ? `?${query}` : ''}`)
+  },
+}
+
+export const customers = {
+  list: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return safeList(() => request(`/customers${query ? `?${query}` : ''}`))
+  },
+  aging: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request(`/customers/aging${query ? `?${query}` : ''}`)
+  },
 }
 
 export const products = {
@@ -55,12 +75,29 @@ export const invoices = {
     // Handle both { items: [] } and [] formats
     return { items: normalizeArray(result?.items || result) }
   },
+  // ⚠️ NOTE: This returns invoice object with lines array
+  // ⚠️ Use invoice.lines to access items - DO NOT call invoices.items()
   get: (id) => request(`/invoices/${id}`),
   nextNumber: (params = {}) => {
     const query = new URLSearchParams(params).toString()
     return request(`/invoices/next-number${query ? `?${query}` : ''}`)
   },
-  items: (id) => request(`/invoice_items/${id}`),
+  // ⚠️ REMOVED: items() function completely - DO NOT USE
+  // ⚠️ Use invoice.lines directly from invoices.get(id) response instead
+  // ⚠️ This prevents any calls to /invoice_items/:id endpoint which causes 404 errors
+  // ⚠️ In POS: After issueInvoice, use response.lines directly - DO NOT call this function
+  items: (id) => {
+    // 🚫🚫🚫 FORBIDDEN: This function is blocked to prevent /api/invoice_items/:id calls
+    // 🚫 Use invoice.lines directly from invoices.get(id) or issueInvoice response
+    const error = new Error(
+      `🚫 ممنوع استدعاء invoice_items في المبيعات. استخدم invoice.lines من response بدلاً من ذلك.\n` +
+      `❌ DO NOT call invoices.items(${id}). Use invoice.lines from invoices.get(id) or issueInvoice response.\n` +
+      `✅ Example: const invoice = await invoices.get(id); const items = invoice.lines.filter(l => l.type === 'item');`
+    );
+    error.stack = error.stack + '\n\n📍 Call stack showing where this was called:';
+    console.error('[API] 🚫 BLOCKED invoices.items() call:', error);
+    throw error; // Throw immediately to show full stack trace
+  },
   create: (data) => request('/invoices', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/invoices/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
   remove: (id) => request(`/invoices/${id}`, { method: 'DELETE' }),
@@ -137,7 +174,10 @@ export const journal = {
   byAccount: async (id, params = {}) => {
     const query = new URLSearchParams(params).toString()
     const result = await request(`/journal/account/${id}${query ? `?${query}` : ''}`)
-    return normalizeArray(result)
+    // Handle both array response and object with items property
+    if (Array.isArray(result)) return result
+    if (Array.isArray(result?.items)) return result.items
+    return []
   },
   findByRelated: (params = {}) => {
     const query = new URLSearchParams(params).toString()
@@ -198,8 +238,14 @@ export const reports = {
     return request(`/reports/inventory-profit${query ? `?${query}` : ''}`)
   },
   businessDaySales: (params = {}) => {
-    const query = new URLSearchParams(params).toString()
-    return request(`/reports/business-day-sales${query ? `?${query}` : ''}`)
+    // API Contract: /api/reports/business-day-sales?branch=string&date=YYYY-MM-DD
+    // branch can be 'all', 'china_town', 'place_india', or omitted (defaults to 'all')
+    const { branch = 'all', date } = params;
+    if (!date) {
+      return Promise.reject(new Error('Missing required param: date'));
+    }
+    const query = new URLSearchParams({ branch, date }).toString();
+    return request(`/api/reports/business-day-sales${query ? `?${query}` : ''}`)
   },
   sendBusinessDaySales: (data = {}) => request('/reports/send-business-day-sales', { method: 'POST', body: JSON.stringify(data) }),
   trialBalance: (params = {}) => {
@@ -234,8 +280,8 @@ export const pos = {
     save: (branch, data) => request(`/pos/tables-layout${branch ? `?branch=${encodeURIComponent(branch)}` : ''}` , { method: 'PUT', body: JSON.stringify(data) }),
   },
   verifyCancel: (branch, password) => request('/pos/verify-cancel', { method: 'POST', body: JSON.stringify({ branch, password }) }),
-  saveDraft: (payload) => request('/pos/saveDraft', { method: 'POST', body: JSON.stringify(payload) }),
-  issueInvoice: (payload) => request('/pos/issueInvoice', { method: 'POST', body: JSON.stringify(payload) }),
+  saveDraft: (payload) => request('/pos/save-draft', { method: 'POST', body: JSON.stringify(payload) }),
+  issueInvoice: (payload) => request('/pos/issue-invoice', { method: 'POST', body: JSON.stringify(payload) }),
   tableState: (branch) => request(`/pos/table-state${branch ? `?branch=${encodeURIComponent(branch)}` : ''}`),
 }
 
@@ -292,6 +338,17 @@ export const branches = {
 }
 
 export { employees, payroll };
+
+export const suppliers = {
+  list: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return safeList(() => request(`/partners${query ? `?${query}&type=supplier` : '?type=supplier'}`))
+  },
+  aging: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request(`/suppliers/aging${query ? `?${query}` : ''}`)
+  },
+}
 
 export default api;
 

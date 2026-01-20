@@ -46,6 +46,7 @@
 <table id="tbl">
   <thead>
     <tr>
+      <th>الكود</th>
       <th>الحساب</th>
       <th>مدين</th>
       <th>دائن</th>
@@ -55,6 +56,7 @@
   <tbody></tbody>
   <tfoot>
     <tr>
+      <td></td>
       <td class="summary">الإجمالي</td>
       <td id="sumDebit"></td>
       <td id="sumCredit"></td>
@@ -80,25 +82,87 @@
     document.getElementById('meta').textContent = meta.join(' • ')
     const params = new URLSearchParams(); if (from) params.set('from', from); if (to) params.set('to', to)
     const tb = await authFetch(`${API_BASE}/reports/trial-balance${params.toString()?`?${params.toString()}`:''}`)
-    const rows = Array.isArray(tb.items)?tb.items:(tb.rows||[])
-    const tbody = document.querySelector('#tbl tbody'); tbody.innerHTML = ''
-    let sumD=0, sumC=0, sumB=0
-    rows.filter(r=>{ const debit = Number(r.debit||0); const credit = Number(r.credit||0); const balance = Number(r.balance||debit-credit); return Math.abs(debit) + Math.abs(credit) + Math.abs(balance) > 1e-9 }).forEach(r=>{
-      const name = r.account||r.name||''
-      const debit = Number(r.debit||0)
-      const credit = Number(r.credit||0)
-      const balance = Number(r.balance||debit-credit)
+    const rows = Array.isArray(tb.items) ? tb.items : (Array.isArray(tb.rows) ? tb.rows : [])
+    
+    // Fetch account names from accounts API if missing
+    const accountMap = new Map()
+    try {
+      const accountsTree = await authFetch(`${API_BASE}/accounts`)
+      const flatAccounts = []
+      function flattenAccounts(arr) {
+        if (!Array.isArray(arr)) return
+        for (const a of arr) {
+          if (a && a.id) {
+            flatAccounts.push(a)
+            if (Array.isArray(a.children)) flattenAccounts(a.children)
+          }
+        }
+      }
+      flattenAccounts(accountsTree)
+      
+      for (const acc of flatAccounts) {
+        const accId = Number(acc.id || 0)
+        const accCode = String(acc.account_code || acc.account_number || '').trim()
+        if (accId) accountMap.set(accId, acc)
+        if (accCode) accountMap.set(accCode, acc)
+      }
+      
+      // Enrich rows with account names
+      for (const r of rows) {
+        const accId = Number(r.account_id || r.id || 0)
+        const accCode = String(r.account_code || r.code || r.account_number || '').trim()
+        const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || r.account || '').trim()
+        
+        if (!name && (accId || accCode)) {
+          const acc = accountMap.get(accId) || accountMap.get(accCode)
+          if (acc) {
+            r.name = acc.name || acc.name_en || acc.name_ar || ''
+            r.name_en = acc.name_en || acc.name || acc.name_ar || ''
+            r.name_ar = acc.name || acc.name_en || acc.name_ar || ''
+            r.account_name = acc.name || acc.name_en || acc.name_ar || ''
+            r.account_name_en = acc.name_en || acc.name || acc.name_ar || ''
+            r.account = acc.name || acc.name_en || acc.name_ar || ''
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[BALANCE SHEET] Failed to fetch account names:', e)
+    }
+    
+    const tbody = document.querySelector('#tbl tbody')
+    tbody.innerHTML = ''
+    let sumD = 0, sumC = 0, sumB = 0
+    rows.filter(r => {
+      const debit = Number(r.debit || r.debit_total || 0)
+      const credit = Number(r.credit || r.credit_total || 0)
+      const balance = Number(r.balance || debit - credit)
+      return Math.abs(debit) + Math.abs(credit) + Math.abs(balance) > 1e-9
+    }).forEach(r => {
+      const code = String(r.account_code || r.code || r.account_number || '').trim()
+      const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || r.account || '').trim()
+      const debit = Number(r.debit || r.debit_total || 0)
+      const credit = Number(r.credit || r.credit_total || 0)
+      const balance = Number(r.balance || debit - credit)
       const tr = document.createElement('tr')
-      ;[name, fmt(debit), fmt(credit), fmt(balance)].forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) })
+      ;[code || '', name || '', fmt(debit), fmt(credit), fmt(balance)].forEach(v => {
+        const td = document.createElement('td')
+        td.textContent = String(v)
+        tr.appendChild(td)
+      })
       tbody.appendChild(tr)
-      sumD += debit; sumC += credit; sumB += balance
+      sumD += debit
+      sumC += credit
+      sumB += balance
     })
     document.getElementById('sumDebit').textContent = fmt(sumD)
     document.getElementById('sumCredit').textContent = fmt(sumC)
     document.getElementById('sumBalance').textContent = fmt(sumB)
-    setTimeout(()=>window.print(), 200)
+    setTimeout(() => window.print(), 200)
   }
-  load().catch(()=>{ alert('فشل الطباعة. يرجى المحاولة مرة أخرى.') })
+  load().catch((err) => {
+    console.error('[BALANCE SHEET] Load error:', err)
+    alert('فشل الطباعة. يرجى المحاولة مرة أخرى.\n' + (err?.message || ''))
+  })
 </script>
 </body>
 </html>

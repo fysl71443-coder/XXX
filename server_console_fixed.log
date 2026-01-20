@@ -1,0 +1,33 @@
+
+> backend@1.0.0 start
+> node server.js
+
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ΓÜÖ∩╕Å  override existing env vars with { override: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+[SERVER] Started on port 4000 | NODE_ENV=development
+[SERVER] Build path: C:\Users\DELL\Documents\augment-projects\XXX\backend\frontend\build
+[SERVER] JWT_SECRET: configured
+[SERVER] Database: connected
+[SCHEMA] ERROR: Failed to ensure schema getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a Error: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a
+    at C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async ensureSchema (file:///C:/Users/DELL/Documents/augment-projects/XXX/backend/server.js:198:5)
+[SCHEMA] Error adding columns to expenses: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a
+[REQUEST] 2026-01-17T11:25:16.034Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a Error: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a
+    at C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleLogin (file:///C:/Users/DELL/Documents/augment-projects/XXX/backend/server.js:536:22)
+[REQUEST] 2026-01-17T11:25:39.492Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a Error: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a
+    at C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleLogin (file:///C:/Users/DELL/Documents/augment-projects/XXX/backend/server.js:536:22)
+[REQUEST] 2026-01-17T11:25:41.266Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a Error: getaddrinfo ENOTFOUND dpg-d5hsjmali9vc73am1v60-a
+    at C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\pg-pool\index.js:45:11
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async handleLogin (file:///C:/Users/DELL/Documents/augment-projects/XXX/backend/server.js:536:22)

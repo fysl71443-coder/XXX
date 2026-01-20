@@ -1,0 +1,3883 @@
+{
+  "totalScreens": 11,
+  "totalIssues": 39,
+  "highSeverityIssues": 25,
+  "mediumSeverityIssues": 14,
+  "warnings": 0,
+  "screens": {
+    "accounting": {
+      "screen": "accounting",
+      "description": "المحاسبة - ميزان المراجعة، دفتر الأستاذ، كشف الحساب، إقرار ضريبة القيمة المضافة",
+      "files": [
+        {
+          "file": "screens/AccountsScreen.jsx",
+          "apiCalls": 4,
+          "sqlQueries": 0
+        },
+        {
+          "file": "components/TrialBalance.jsx",
+          "apiCalls": 2,
+          "sqlQueries": 0
+        },
+        {
+          "file": "components/GeneralLedger.jsx",
+          "apiCalls": 4,
+          "sqlQueries": 0
+        },
+        {
+          "file": "components/AccountStatement.jsx",
+          "apiCalls": 0,
+          "sqlQueries": 0
+        },
+        {
+          "file": "components/VatReturn.jsx",
+          "apiCalls": 3,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 45,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "    setFsError('')\n    try {\n      const prevDay = (d => { try { const x = new Date(d); x.setDate(x.getDate()-1); return x.toISOString().slice(0,10) } catch { return '' } })(f)\n      const [periodData, preData] = await Promise.all([\n        apiJournal.list({ ...(f?{ from: f }:{}), ...(t?{ to: t }:{}"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 46,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const prevDay = (d => { try { const x = new Date(d); x.setDate(x.getDate()-1); return x.toISOString().slice(0,10) } catch { return '' } })(f)\n      const [periodData, preData] = await Promise.all([\n        apiJournal.list({ ...(f?{ from: f }:{}), ...(t?{ to: t }:{}), status: 'posted'"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 241,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "  // تحميل جميع القيود المنشورة لحساب الإجماليات\n  useEffect(() => {\n    async function loadAllEntries(){\n      try {\n        const result = await apiJournal.list({ status: 'posted', pageSize: 1000 })\n        const allRows = Array.isArray(result.items) ? result.items : []\n        setAllEntries(allRo"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 241,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "  // تحميل جميع القيود المنشورة لحساب الإجماليات\n  useEffect(() => {\n    async function loadAllEntries(){\n      try {\n        const result = await apiJournal.list({ status: 'posted', pageSize: 1000 })\n        const allRows = Array.isArray(result.items) ? result.items : []\n        setAllEntries(allRo"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "trialBalance",
+          "line": 23,
+          "fullCall": "apiReports.trialBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const params = {}\n      if (from) params.from = from\n      if (to) params.to = to\n      const rep = await apiReports.trialBalance(params)\n      console.log('[TrialBalance] Response:', rep)\n      const itemsArray = Array.isArray(rep.items) ? rep.items : (Array.isArray(rep) ? rep : [])"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "trialBalance",
+          "line": 23,
+          "fullCall": "apiReports.trialBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const params = {}\n      if (from) params.from = from\n      if (to) params.to = to\n      const rep = await apiReports.trialBalance(params)\n      console.log('[TrialBalance] Response:', rep)\n      const itemsArray = Array.isArray(rep.items) ? rep.items : (Array.isArray(rep) ? rep : [])"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 25,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  \r\n\r\n  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n    ]).then(([b,f])=>{ setBranding(b); setFooterCfg(f) })\r\n  },[])\r\n\r\n  \r"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 26,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n    ]).then(([b,f])=>{ setBranding(b); setFooterCfg(f) })\r\n  },[])\r\n\r\n  \r\n\r"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 48,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "      }\r\n      const status = 'posted'\r\n      const params = { from, to, pageSize: 500 }\r\n      if (status) params.status = status\r\n      const data = await apiJournal.list(params)\r\n      const items = Array.isArray(data.items) ? data.items : data\r\n      const flattened = []\r\n      items.forEach(e ="
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 48,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "      }\r\n      const status = 'posted'\r\n      const params = { from, to, pageSize: 500 }\r\n      if (status) params.status = status\r\n      const data = await apiJournal.list(params)\r\n      const items = Array.isArray(data.items) ? data.items : data\r\n      const flattened = []\r\n      items.forEach(e ="
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 68,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "      if (!from || !to) return\n      try {\n        const [acc, periodData] = await Promise.all([\n          apiAccounts.tree(),\n          apiJournal.list({ from, to, status: 'posted', pageSize: 1000 })\n        ])\n        const flat = []\n        const walk = (nodes) => { for (const n of (nodes||[])) {"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 116,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const purchasesBase = inputVatAmt>0 ? (inputVatAmt / stdRate) : 0\n        setRevenueTotal(Math.max(0, revenueBase))\n        setExpensesTotal(Math.max(0, purchasesBase))\n        try {\n          const company = await apiSettings.get('settings_company')\n          const name = (company?.name_ar "
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 116,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const purchasesBase = inputVatAmt>0 ? (inputVatAmt / stdRate) : 0\n        setRevenueTotal(Math.max(0, revenueBase))\n        setExpensesTotal(Math.max(0, purchasesBase))\n        try {\n          const company = await apiSettings.get('settings_company')\n          const name = (company?.name_ar "
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.trialBalance",
+          "file": "components/TrialBalance.jsx",
+          "line": 23,
+          "severity": "high",
+          "message": "استدعاء apiReports.trialBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.trialBalance",
+          "file": "components/TrialBalance.jsx",
+          "line": 23,
+          "severity": "high",
+          "message": "استدعاء apiReports.trialBalance لا يحدد status='posted' صراحة"
+        }
+      ],
+      "recommendations": []
+    },
+    "journal": {
+      "screen": "journal",
+      "description": "القيود اليومية",
+      "files": [
+        {
+          "file": "pages/Journal.jsx",
+          "apiCalls": 25,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 335,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        summary: filters.summary ? 'true' : '',\n        period: filters.period || '',\n        quarter: filters.quarter || ''\n      }\n      const res = await apiJournal.list(params)\n      setData(res || { items: [], total: 0 })\n    } catch (e) {\n      if (e?.status === 403) {\n        setError(lang =="
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "get",
+          "line": 359,
+          "fullCall": "apiJournal.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const q = new URLSearchParams(location.search)\n      const eid = q.get('entry')\n      if (eid) {\n        (async()=>{ try { const one = await apiJournal.get(eid); setSelected(one) } catch {} })()\n      }\n    } catch {}\n  }, [location.search])\n  useEffect(() => {\n    (async()=>{"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 379,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          \n          // Load data based on related_type\n          if (relatedType === 'invoice') {\n            try {\n              const inv = await apiInvoices.get(relatedId)\n              const invoiceData = inv?.invoice || inv || null\n              setRelatedInvoice(invoiceData)\n              // "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 386,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              // Try to get order data if available\n              const ordId = (invoiceData?.order_id || null)\n              if (ordId) {\n                try {\n                  const ord = await apiOrders.get(ordId)\n                  const arr = (function(){ try { return JSON.parse(ord?.order?.lin"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "get",
+          "line": 412,
+          "fullCall": "apiExpenses.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              setRelatedSupplierInvoice(null)\n            }\n          } else if (relatedType === 'expense_invoice') {\n            try {\n              const exp = await apiExpenses.get(relatedId)\n              const expenseData = exp?.expense || exp || null\n              setRelatedExpense(expenseData"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 422,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            }\n          } else if (relatedType === 'payment') {\n            try {\n              // Payments might be stored as invoices with type='payment'\n              const pay = await apiInvoices.get(relatedId).catch(() => null)\n              if (pay) {\n                setRelatedPayment(pay?.inv"
+          }
+        },
+        {
+          "api": "apiPeriods",
+          "method": "get",
+          "line": 447,
+          "fullCall": "apiPeriods.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{\n      try {\n        const d = new Date()\n        const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`\n        const s = await apiPeriods.get(per)\n        setPeriodStatus(String(s?.status||'open'))\n      } catch {}\n    })()\n  }, [])\n  const [readonlyDays, setRead"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 456,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [readonlyDays, setReadonlyDays] = useState(0)\n  useEffect(() => {\n    (async()=>{\n      try {\n        const v = await apiSettings.get('journal_readonly_days')\n        const days = parseInt(String(v?.value||v||'0'), 10) || 0\n        setReadonlyDays(days)\n      } catch {}\n    })()\n  }, [])"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "update",
+          "line": 499,
+          "fullCall": "apiJournal.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const canCreate = can('journal.create')\n      if (!canCreate) { setToast(lang==='ar'?'ليست لديك صلاحية حفظ المسودة':'No permission to save draft'); return }\n      if (selected && selected.status === 'draft') {\n        await apiJournal.update(selected.id, body)\n      } else {\n        "
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "create",
+          "line": 501,
+          "fullCall": "apiJournal.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (!canCreate) { setToast(lang==='ar'?'ليست لديك صلاحية حفظ المسودة':'No permission to save draft'); return }\n      if (selected && selected.status === 'draft') {\n        await apiJournal.update(selected.id, body)\n      } else {\n        await apiJournal.create(body)\n      }\n      setModalOpen"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 610,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        summary: filters.summary ? 'true' : '',\n        period: filters.period || '',\n        quarter: filters.quarter || ''\n      }\n      const res = await apiJournal.list(params)\n      const merged = Array.isArray(data.items) ? data.items.concat(res.items||[]) : (res.items||[])\n      setData({ ..."
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "remove",
+          "line": 1028,
+          "fullCall": "apiJournal.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              <div className=\"space-y-3\">\n                <div className=\"text-sm text-gray-700\">{lang==='ar'?'سيتم حذف المسودة':'Draft will be deleted'}</div>\n                <div className=\"flex justify-end gap-2\">\n                  <button className=\"px-3 py-2 rounded border\" onClick={()=>setDele"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 335,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        summary: filters.summary ? 'true' : '',\n        period: filters.period || '',\n        quarter: filters.quarter || ''\n      }\n      const res = await apiJournal.list(params)\n      setData(res || { items: [], total: 0 })\n    } catch (e) {\n      if (e?.status === 403) {\n        setError(lang =="
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "get",
+          "line": 359,
+          "fullCall": "apiJournal.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const q = new URLSearchParams(location.search)\n      const eid = q.get('entry')\n      if (eid) {\n        (async()=>{ try { const one = await apiJournal.get(eid); setSelected(one) } catch {} })()\n      }\n    } catch {}\n  }, [location.search])\n  useEffect(() => {\n    (async()=>{"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 379,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          \n          // Load data based on related_type\n          if (relatedType === 'invoice') {\n            try {\n              const inv = await apiInvoices.get(relatedId)\n              const invoiceData = inv?.invoice || inv || null\n              setRelatedInvoice(invoiceData)\n              // "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 386,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              // Try to get order data if available\n              const ordId = (invoiceData?.order_id || null)\n              if (ordId) {\n                try {\n                  const ord = await apiOrders.get(ordId)\n                  const arr = (function(){ try { return JSON.parse(ord?.order?.lin"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "get",
+          "line": 412,
+          "fullCall": "apiExpenses.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              setRelatedSupplierInvoice(null)\n            }\n          } else if (relatedType === 'expense_invoice') {\n            try {\n              const exp = await apiExpenses.get(relatedId)\n              const expenseData = exp?.expense || exp || null\n              setRelatedExpense(expenseData"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 422,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            }\n          } else if (relatedType === 'payment') {\n            try {\n              // Payments might be stored as invoices with type='payment'\n              const pay = await apiInvoices.get(relatedId).catch(() => null)\n              if (pay) {\n                setRelatedPayment(pay?.inv"
+          }
+        },
+        {
+          "api": "apiPeriods",
+          "method": "get",
+          "line": 447,
+          "fullCall": "apiPeriods.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{\n      try {\n        const d = new Date()\n        const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`\n        const s = await apiPeriods.get(per)\n        setPeriodStatus(String(s?.status||'open'))\n      } catch {}\n    })()\n  }, [])\n  const [readonlyDays, setRead"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 456,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [readonlyDays, setReadonlyDays] = useState(0)\n  useEffect(() => {\n    (async()=>{\n      try {\n        const v = await apiSettings.get('journal_readonly_days')\n        const days = parseInt(String(v?.value||v||'0'), 10) || 0\n        setReadonlyDays(days)\n      } catch {}\n    })()\n  }, [])"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "update",
+          "line": 499,
+          "fullCall": "apiJournal.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const canCreate = can('journal.create')\n      if (!canCreate) { setToast(lang==='ar'?'ليست لديك صلاحية حفظ المسودة':'No permission to save draft'); return }\n      if (selected && selected.status === 'draft') {\n        await apiJournal.update(selected.id, body)\n      } else {\n        "
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "create",
+          "line": 501,
+          "fullCall": "apiJournal.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (!canCreate) { setToast(lang==='ar'?'ليست لديك صلاحية حفظ المسودة':'No permission to save draft'); return }\n      if (selected && selected.status === 'draft') {\n        await apiJournal.update(selected.id, body)\n      } else {\n        await apiJournal.create(body)\n      }\n      setModalOpen"
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "list",
+          "line": 610,
+          "fullCall": "apiJournal.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        summary: filters.summary ? 'true' : '',\n        period: filters.period || '',\n        quarter: filters.quarter || ''\n      }\n      const res = await apiJournal.list(params)\n      const merged = Array.isArray(data.items) ? data.items.concat(res.items||[]) : (res.items||[])\n      setData({ ..."
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "remove",
+          "line": 1028,
+          "fullCall": "apiJournal.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              <div className=\"space-y-3\">\n                <div className=\"text-sm text-gray-700\">{lang==='ar'?'سيتم حذف المسودة':'Draft will be deleted'}</div>\n                <div className=\"flex justify-end gap-2\">\n                  <button className=\"px-3 py-2 rounded border\" onClick={()=>setDele"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "get",
+          "line": 403,
+          "fullCall": "supplierInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              setRelatedInvoice(null)\n            }\n          } else if (relatedType === 'supplier_invoice') {\n            try {\n              const supInv = await supplierInvoices.get(relatedId)\n              const supplierInvoiceData = supInv?.invoice || supInv || null\n              setRelatedSupp"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [
+        {
+          "type": "missing_status_filter",
+          "api": "apiJournal.list",
+          "file": "pages/Journal.jsx",
+          "line": 335,
+          "severity": "high",
+          "message": "استدعاء apiJournal.list لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiJournal.list",
+          "file": "pages/Journal.jsx",
+          "line": 610,
+          "severity": "high",
+          "message": "استدعاء apiJournal.list لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiJournal.list",
+          "file": "pages/Journal.jsx",
+          "line": 335,
+          "severity": "high",
+          "message": "استدعاء apiJournal.list لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiJournal.list",
+          "file": "pages/Journal.jsx",
+          "line": 610,
+          "severity": "high",
+          "message": "استدعاء apiJournal.list لا يحدد status='posted' صراحة"
+        }
+      ],
+      "recommendations": []
+    },
+    "clients": {
+      "screen": "clients",
+      "description": "العملاء - القوائم، أعمار الديون، المستحقات، الفواتير، كشف الحساب",
+      "files": [
+        {
+          "file": "pages/Clients.jsx",
+          "apiCalls": 9,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/ClientsAging.jsx",
+          "apiCalls": 1,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/ClientsDue.jsx",
+          "apiCalls": 0,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/ClientsInvoicesAll.jsx",
+          "apiCalls": 5,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/ClientsInvoicesPaid.jsx",
+          "apiCalls": 3,
+          "sqlQueries": 0
+        },
+        {
+          "file": "components/ClientStatement.jsx",
+          "apiCalls": 4,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "partners",
+          "method": "list",
+          "line": 92,
+          "fullCall": "partners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  async function load() {\n    setLoading(true)\n    setError('')\n    try {\n      const data = await partners.list({ type: 'customer' })\n      if (!data) {\n        console.warn('[Clients] No data returned from API')\n        setItems([])\n        return\n      }"
+          }
+        },
+        {
+          "api": "partners",
+          "method": "list",
+          "line": 127,
+          "fullCall": "partners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  }, [authLoading, isLoggedIn])\n  useEffect(()=>{ (async()=>{ try { const d = new Date(); const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; if (typeof periods?.get === 'function') { const s = await periods.get(per); setPeriodStatus(String(s?.status||'open')) } } catch {} })"
+          }
+        },
+        {
+          "api": "partners",
+          "method": "create",
+          "line": 138,
+          "fullCall": "partners.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        } catch {}\n        return flag || nm === 'عميل نقدي' || nm === 'cash customer' || nm === 'walk-in'\n      })\n      if (found) return Number(found.id||0)\n      const c = await partners.create({ name: 'عميل نقدي', type: 'customer', customer_type: 'نقدي', phone: null, contact_info: { walk_in: tr"
+          }
+        },
+        {
+          "api": "payments",
+          "method": "list",
+          "line": 238,
+          "fullCall": "payments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            if ((activeTab==='aging' || activeTab==='due' || activeTab==='receivables') && (invFilters.partner_id || (selected && selected.id))) {\n              params.partner_id = invFilters.partner_id || selected.id\n            }\n          }\n          const res = await payments.list({ ...params, p"
+          }
+        },
+        {
+          "api": "invoices",
+          "method": "list",
+          "line": 255,
+          "fullCall": "invoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{\n    if (activeTab!=='home') return\n    (async()=>{\n      try {\n        const res = await invoices.list({ type:'sale', pageSize: 2000 })\n        const rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])\n        const totInv = rows.reduce((s,inv)=> s + (Num"
+          }
+        },
+        {
+          "api": "invoices",
+          "method": "list",
+          "line": 307,
+          "fullCall": "invoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const params = { type: 'sale' }\n        if (payFilters.partner_id) params.partner_id = payFilters.partner_id\n        if (payFilters.from) params.from = payFilters.from\n        if (payFilters.to) params.to = payFilters.to\n        const res = await invoices.list(params)\n        const rows = Ar"
+          }
+        },
+        {
+          "api": "partners",
+          "method": "update",
+          "line": 441,
+          "fullCall": "partners.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const info = { discount_pct: Math.max(0, Number(form.fixed_discount_pct||0)) }\n        payload.contact_info = info\n      }\n      if (editing) {\n        await partners.update(editing.id, payload)\n      } else {\n        await partners.create(payload)\n      }\n      setForm({\n        name: '', t"
+          }
+        },
+        {
+          "api": "partners",
+          "method": "create",
+          "line": 443,
+          "fullCall": "partners.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      }\n      if (editing) {\n        await partners.update(editing.id, payload)\n      } else {\n        await partners.create(payload)\n      }\n      setForm({\n        name: '', type: 'عميل', email: '', phone: '',\n        customer_type: '', trade_name: '', legal_name: '', short_name: '', classificatio"
+          }
+        },
+        {
+          "api": "partners",
+          "method": "remove",
+          "line": 472,
+          "fullCall": "partners.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    }\n  }\n\n  async function remove(id) {\n    await partners.remove(id)\n    await load()\n    try { localStorage.setItem('partners_refresh', String(Date.now())) } catch {}\n  }\n\n  async function exportPDF() {"
+          }
+        },
+        {
+          "api": "customers",
+          "method": "aging",
+          "line": 9,
+          "fullCall": "customers.aging",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const lang = localStorage.getItem('lang')||'ar'\n  const [rows, setRows] = useState([])\n  const [loading, setLoading] = useState(false)\n  const [bucket, setBucket] = useState('')\n  useEffect(()=>{ (async()=>{ setLoading(true); try { const res = await customers.aging(); setRows(res?.items||res||[]) "
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 32,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{ if (defaultPartnerId && String(filters.partner_id||'')!==String(defaultPartnerId)) setFilters(f=>({ ...f, partner_id: String(defaultPartnerId) })) },[defaultPartnerId])\n\n  function formatMoney(v){ const n = Number(v||0); try { return n.toLocaleString('en-US', { minimumFractionDigit"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 32,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{ if (defaultPartnerId && String(filters.partner_id||'')!==String(defaultPartnerId)) setFilters(f=>({ ...f, partner_id: String(defaultPartnerId) })) },[defaultPartnerId])\n\n  function formatMoney(v){ const n = Number(v||0); try { return n.toLocaleString('en-US', { minimumFractionDigit"
+          }
+        },
+        {
+          "api": "invoices",
+          "method": "list",
+          "line": 33,
+          "fullCall": "invoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\n  function formatMoney(v){ const n = Number(v||0); try { return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' SAR' } catch { return String(n.toFixed(2)) + ' SAR' } }\n\n  useEffect(()=>{ (async()=>{ try { const list = await apiPartners.list({ type: 'customer' }"
+          }
+        },
+        {
+          "api": "payments",
+          "method": "list",
+          "line": 35,
+          "fullCall": "payments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\n  useEffect(()=>{ (async()=>{ try { const list = await apiPartners.list({ type: 'customer' }); setPartners(Array.isArray(list)?list:[]) } catch { setPartners([]) } })() },[])\n  useEffect(()=>{ (async()=>{ setLoading(true); try { const q = { type:'sale', ...filters }; const sv = String(q.status||'')"
+          }
+        },
+        {
+          "api": "invoices",
+          "method": "list",
+          "line": 83,
+          "fullCall": "invoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    setPreviewOpen(true)\n  }\n  function editInvoice(inv){ navigate('/clients', { state: { openCustomerId: inv.partner_id } }) }\n  function printInvoice(inv){ }\n  async function reload(){ setLoading(true); try { const q = { type:'sale', ...filters }; const sv = String(q.status||'').toLowerCase(); if "
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "list",
+          "line": 11,
+          "fullCall": "apiPayments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [loading, setLoading] = useState(false)\n  const [filters, setFilters] = useState({ from: '', to: '' })\n  const [payRows, setPayRows] = useState([])\n  useEffect(()=>{ (async()=>{ setLoading(true); try { const res = await invoices.list({ type:'sale', status:'paid', ...filters }); setRows(res?."
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "list",
+          "line": 11,
+          "fullCall": "apiPayments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [loading, setLoading] = useState(false)\n  const [filters, setFilters] = useState({ from: '', to: '' })\n  const [payRows, setPayRows] = useState([])\n  useEffect(()=>{ (async()=>{ setLoading(true); try { const res = await invoices.list({ type:'sale', status:'paid', ...filters }); setRows(res?."
+          }
+        },
+        {
+          "api": "invoices",
+          "method": "list",
+          "line": 10,
+          "fullCall": "invoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [rows, setRows] = useState([])\n  const [loading, setLoading] = useState(false)\n  const [filters, setFilters] = useState({ from: '', to: '' })\n  const [payRows, setPayRows] = useState([])\n  useEffect(()=>{ (async()=>{ setLoading(true); try { const res = await invoices.list({ type:'sale', stat"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 39,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        if (filters.from) params.from = filters.from\r\n        if (filters.to) params.to = filters.to\r\n        if (filters.dueOnly) params.due = '1'\r\n        params.type = 'sale'\r\n        const invRes = await apiInvoices.list(params)\r\n        const invs = (invRes.items||[]).filter(x => !['draft','can"
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "list",
+          "line": 45,
+          "fullCall": "apiPayments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        setRows(invs)\r\n        const payParams = { partner_id: partner.id }\r\n        if (filters.from) payParams.from = filters.from\r\n        if (filters.to) payParams.to = filters.to\r\n        const payRes = await apiPayments.list(payParams)\r\n        setPayments(payRes.items||[])\r\n      } finally {\r"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 39,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        if (filters.from) params.from = filters.from\r\n        if (filters.to) params.to = filters.to\r\n        if (filters.dueOnly) params.due = '1'\r\n        params.type = 'sale'\r\n        const invRes = await apiInvoices.list(params)\r\n        const invs = (invRes.items||[]).filter(x => !['draft','can"
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "list",
+          "line": 45,
+          "fullCall": "apiPayments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        setRows(invs)\r\n        const payParams = { partner_id: partner.id }\r\n        if (filters.from) payParams.from = filters.from\r\n        if (filters.to) payParams.to = filters.to\r\n        const payRes = await apiPayments.list(payParams)\r\n        setPayments(payRes.items||[])\r\n      } finally {\r"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [
+        {
+          "type": "direct_table_access",
+          "api": "apiPayments.list",
+          "file": "pages/ClientsInvoicesPaid.jsx",
+          "line": 11,
+          "severity": "medium",
+          "message": "استدعاء apiPayments.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiPayments.list",
+          "file": "pages/ClientsInvoicesPaid.jsx",
+          "line": 11,
+          "severity": "medium",
+          "message": "استدعاء apiPayments.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "components/ClientStatement.jsx",
+          "line": 39,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiPayments.list",
+          "file": "components/ClientStatement.jsx",
+          "line": 45,
+          "severity": "medium",
+          "message": "استدعاء apiPayments.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "components/ClientStatement.jsx",
+          "line": 39,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiPayments.list",
+          "file": "components/ClientStatement.jsx",
+          "line": 45,
+          "severity": "medium",
+          "message": "استدعاء apiPayments.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        }
+      ],
+      "recommendations": []
+    },
+    "suppliers": {
+      "screen": "suppliers",
+      "description": "الموردون - القوائم، فواتير الموردين",
+      "files": [
+        {
+          "file": "pages/Suppliers.jsx",
+          "apiCalls": 20,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/SupplierInvoice.jsx",
+          "apiCalls": 6,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 225,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  }, [])\n\n  useEffect(() => {\n    Promise.all([\n      apiSettings.get('settings_branding').catch(()=>null),\n      apiSettings.get('settings_footer').catch(()=>null),\n      apiSettings.get('settings_company').catch(()=>null),\n    ]).then(([b,f,c])=>{ setBranding(b); setFooterCfg(f); setCompany(c) })\n"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 226,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\n  useEffect(() => {\n    Promise.all([\n      apiSettings.get('settings_branding').catch(()=>null),\n      apiSettings.get('settings_footer').catch(()=>null),\n      apiSettings.get('settings_company').catch(()=>null),\n    ]).then(([b,f,c])=>{ setBranding(b); setFooterCfg(f); setCompany(c) })\n  },[])\n\n"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 227,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(() => {\n    Promise.all([\n      apiSettings.get('settings_branding').catch(()=>null),\n      apiSettings.get('settings_footer').catch(()=>null),\n      apiSettings.get('settings_company').catch(()=>null),\n    ]).then(([b,f,c])=>{ setBranding(b); setFooterCfg(f); setCompany(c) })\n  },[])\n\n "
+          }
+        },
+        {
+          "api": "partners",
+          "method": "list",
+          "line": 93,
+          "fullCall": "partners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\n  const load = useCallback(async function load() {\n    setLoading(true)\n    try {\n      const data = await partners.list({ type: 'supplier' })\n      let list = Array.isArray(data) ? data : (data?.items||[])\n      list = list.filter(x => { const t = String(x.type||'').toLowerCase(); return t==='supp"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 131,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "          if (supInvFilters.from) params.from = supInvFilters.from\n          if (supInvFilters.to) params.to = supInvFilters.to\n          if (supInvActiveTab!=='invoices' && supInvFilters.status) params.status = supInvFilters.status\n          if (supInvActiveTab==='due') params.due = '1'\n          c"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 132,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "          if (supInvFilters.to) params.to = supInvFilters.to\n          if (supInvActiveTab!=='invoices' && supInvFilters.status) params.status = supInvFilters.status\n          if (supInvActiveTab==='due') params.due = '1'\n          const res1 = await supplierInvoices.list(params)\n          const res"
+          }
+        },
+        {
+          "api": "payments",
+          "method": "list",
+          "line": 158,
+          "fullCall": "payments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const params = { party_type: 'supplier' }\n        if (supInvFilters.partner_id) params.partner_id = supInvFilters.partner_id\n        if (supInvFilters.from) params.from = supInvFilters.from\n        if (supInvFilters.to) params.to = supInvFilters.to\n        const res = await payments.list(par"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 184,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    async function loadMainCredits() {\n      if (supInvActiveTab!=='credits') return\n      if (!mainCreditsSupplier) { setMainCreditsInvs([]); return }\n      try {\n        const res = await supplierInvoices.list({ partner_id: mainCreditsSupplier })\n        setMainCreditsInvs(res.items||[])\n      } c"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 431,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "    if (supInvFilters.status) params.status = supInvFilters.status\n    if (supInvFilters.from) params.from = supInvFilters.from\n    if (supInvFilters.to) params.to = supInvFilters.to\n    if (supInvActiveTab==='due') params.due = '1'\n    const res1 = await supplierInvoices.list(params)\n    const res2"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 432,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "    if (supInvFilters.from) params.from = supInvFilters.from\n    if (supInvFilters.to) params.to = supInvFilters.to\n    if (supInvActiveTab==='due') params.due = '1'\n    const res1 = await supplierInvoices.list(params)\n    const res2 = await supplierInvoices.list({ ...params, status: 'draft' })\n    "
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "get",
+          "line": 467,
+          "fullCall": "supplierInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    setSupPdfUrl('')\n    setSupPdfLoading(false)\n    try {\n      // Fetch full invoice (supplier invoices are served from /invoices/:id)\n      const full = await supplierInvoices.get(r.id).catch(()=>null)\n      let invObj = null\n      let itemsList = []\n      if (full && full.invoice) {\n        invO"
+          }
+        },
+        {
+          "api": "invoices",
+          "method": "get",
+          "line": 485,
+          "fullCall": "invoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      }\n      // Final attempt: fetch items via /invoices/:id (uses invoices.lines)\n      if (!itemsList || itemsList.length === 0) {\n        try {\n          const fullInv = await invoices.get(r.id).catch(()=>null)\n          if (fullInv) {\n            let lines = [];\n            if (Array.isArray(fu"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 556,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "  }\n  async function loadSupplierInvoices(s){\n    setInvLoading(true)\n    try {\n      const res1 = await supplierInvoices.list({ partner_id: s.id })\n      const res2 = await supplierInvoices.list({ partner_id: s.id, status: 'draft' })\n      const arr1 = res1.items||res1||[]\n      const arr2 = res2.i"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 557,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "  async function loadSupplierInvoices(s){\n    setInvLoading(true)\n    try {\n      const res1 = await supplierInvoices.list({ partner_id: s.id })\n      const res2 = await supplierInvoices.list({ partner_id: s.id, status: 'draft' })\n      const arr1 = res1.items||res1||[]\n      const arr2 = res2.items"
+          }
+        },
+        {
+          "api": "products",
+          "method": "list",
+          "line": 570,
+          "fullCall": "products.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  }\n  async function loadSupplierProducts(s){\n    setProdLoading(true)\n    try {\n      const res = await products.list({ supplier_id: s.id })\n      const rows = res||[]\n      setProdRows(rows)\n    } finally { setProdLoading(false) }\n  }\n  async function loadSupplierPayments(s){"
+          }
+        },
+        {
+          "api": "payments",
+          "method": "list",
+          "line": 577,
+          "fullCall": "payments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    } finally { setProdLoading(false) }\n  }\n  async function loadSupplierPayments(s){\n    setPayLoading(true)\n    try { const res = await payments.list({ partner_id: s.id, party_type: 'supplier' }); setPayRows(res.items||res||[]) } catch { setPayRows([]) } finally { setPayLoading(false) }\n  }\n  asyn"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 580,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    setPayLoading(true)\n    try { const res = await payments.list({ partner_id: s.id, party_type: 'supplier' }); setPayRows(res.items||res||[]) } catch { setPayRows([]) } finally { setPayLoading(false) }\n  }\n  async function loadSupplierCredits(s){\n    try { const res = await supplierInvoices.list({"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "create",
+          "line": 610,
+          "fullCall": "supplierInvoices.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    if (!invForm.date) return\n    const po = poRows.find(r => String(r.id)===String(invForm.purchase_order_id))\n    const lines = (po?.lines||[]).map(l => ({ name: l.name, product_id: l.product_id, qty: l.qty, uom: l.uom, unit_price: l.unit_price, tax: l.tax }))\n    const payload = { partner_id: sel"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 642,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "        if (supInvFilters.status) params.status = supInvFilters.status\n        if (supInvFilters.from) params.from = supInvFilters.from\n        if (supInvFilters.to) params.to = supInvFilters.to\n        if (supInvActiveTab==='due') params.due = '1'\n        const res1 = await supplierInvoices.list(pa"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 643,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": true,
+            "context": "        if (supInvFilters.from) params.from = supInvFilters.from\n        if (supInvFilters.to) params.to = supInvFilters.to\n        if (supInvActiveTab==='due') params.due = '1'\n        const res1 = await supplierInvoices.list(params)\n        const res2 = await supplierInvoices.list({ ...params, sta"
+          }
+        },
+        {
+          "api": "partners",
+          "method": "list",
+          "line": 43,
+          "fullCall": "partners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [hasDiscountAcc, setHasDiscountAcc] = useState(false)\r\n\r\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage) },[])\r\n  useEffect(()=>{ (async()=>{ t"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "list",
+          "line": 45,
+          "fullCall": "supplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage) },[])\r\n  useEffect(()=>{ (async()=>{ try { const n = await supplierInvoices.nextNumber(); if (n && n.ne"
+          }
+        },
+        {
+          "api": "payments",
+          "method": "list",
+          "line": 45,
+          "fullCall": "payments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage) },[])\r\n  useEffect(()=>{ (async()=>{ try { const n = await supplierInvoices.nextNumber(); if (n && n.ne"
+          }
+        },
+        {
+          "api": "products",
+          "method": "list",
+          "line": 45,
+          "fullCall": "products.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage) },[])\r\n  useEffect(()=>{ (async()=>{ try { const n = await supplierInvoices.nextNumber(); if (n && n.ne"
+          }
+        },
+        {
+          "api": "supplierInvoices",
+          "method": "create",
+          "line": 113,
+          "fullCall": "supplierInvoices.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          tax: 0.15\r\n        }))\r\n      }\r\n\r\n      const created = await supplierInvoices.create(payload)\r\n      setCreatedId(created?.id||null)\r\n      setToast(lang==='ar'?'تم حفظ الفاتورة':'Invoice saved')\r\n      if (printAfter) { await printInvoice() }\r\n      navigate('/suppliers', { state: { ope"
+          }
+        },
+        {
+          "api": "accounts",
+          "method": "create",
+          "line": 383,
+          "fullCall": "accounts.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                  </>\r\n                )}\r\n                {Number(totals.discount||0)>0 && !hasDiscountAcc && (\r\n                  <div className=\"mt-2\">\r\n                    <button className=\"px-2 py-1 bg-amber-100 text-amber-800 rounded\" onClick={async()=>{ try { await accounts.create({ name: 'خ"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [],
+      "recommendations": []
+    },
+    "employees": {
+      "screen": "employees",
+      "description": "الموظفون - القوائم، سداد الرواتب، كشوف الرواتب",
+      "files": [
+        {
+          "file": "pages/Employees.jsx",
+          "apiCalls": 0,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/PayrollPayments.jsx",
+          "apiCalls": 24,
+          "sqlQueries": 1
+        },
+        {
+          "file": "pages/PayrollStatements.jsx",
+          "apiCalls": 10,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 36,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    const tail = parts[1] ? parts[1].slice(0,4) : ''\n    return tail ? `${head}.${tail}` : head\n  }\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[]"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 37,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    return tail ? `${head}.${tail}` : head\n  }\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEffect(()=>{ function onStorage(e){ if (e.key="
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 46,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (!employees.length) return\n      const balances = new Map()\n      for (const emp of employees) {\n        try {\n          const balanceData = await apiEmployees.advanceBalance(emp.id)\n          balances.set(emp.id, parseFloat(balanceData?.balance || 0))\n        } catch {\n          balances.s"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 57,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    }\n    loadAdvanceBalances()\n  }, [employees])\n  useEffect(()=>{ (async()=>{ if (!runId) { setItems([]); return } try { const its = await apiPayroll.items(runId); setItems(its) } catch { setItems([]) } })() },[runId])\n  useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_c"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 57,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    }\n    loadAdvanceBalances()\n  }, [employees])\n  useEffect(()=>{ (async()=>{ if (!runId) { setItems([]); return } try { const its = await apiPayroll.items(runId); setItems(its) } catch { setItems([]) } })() },[runId])\n  useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_c"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 292,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                <input type=\"date\" className=\"border rounded px-3 py-2 w-full md:w-auto bg-gray-50\" value={payDate} onChange={e=>setPayDate(e.target.value)} />\n              </div>\n\n              <div className=\"pt-5\">\n                <button className=\"p-2 bg-gray-100 hover:bg-gray-200 rounded text"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 464,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            <div className=\"flex gap-2 justify-end\">\n              <button className=\"px-3 py-2 bg-gray-100 rounded\" onClick={()=>{ setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); setModalMonthError('') }}>{lang=="
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 465,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              <button className=\"px-3 py-2 bg-gray-100 rounded\" onClick={()=>{ setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); setModalMonthError('') }}>{lang==='ar'?'إلغاء':'Cancel'}</button>\n              {modal"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 477,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const d = modal.duration ? parseInt(modal.duration, 10) : null\n                      const extra = { method: modal.method }\n                      if (d!=null) extra.duration_months = d\n                      await apiEmployees.advance(modal.employeeId, n, extra)\n                "
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 480,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      await apiEmployees.advance(modal.employeeId, n, extra)\n                      const emps = await apiEmployees.list(); setEmployees(emps)\n                      // Reload advance balance from journal entries\n                      try {\n                        const balanceData = a"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 488,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      } catch {}\n                      setToast(lang==='ar'?'تم منح السلفة':'Advance granted')\n                    } else if (modal.type==='advance_collect') {\n                      await apiEmployees.advanceCollect(modal.employeeId, n, { method: modal.method })\n                     "
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 491,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      await apiEmployees.advanceCollect(modal.employeeId, n, { method: modal.method })\n                      const emps = await apiEmployees.list(); setEmployees(emps)\n                      // Reload advance balance from journal entries\n                      try {\n                   "
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 36,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    const tail = parts[1] ? parts[1].slice(0,4) : ''\n    return tail ? `${head}.${tail}` : head\n  }\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[]"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 37,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    return tail ? `${head}.${tail}` : head\n  }\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEffect(()=>{ function onStorage(e){ if (e.key="
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 46,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (!employees.length) return\n      const balances = new Map()\n      for (const emp of employees) {\n        try {\n          const balanceData = await apiEmployees.advanceBalance(emp.id)\n          balances.set(emp.id, parseFloat(balanceData?.balance || 0))\n        } catch {\n          balances.s"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 57,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    }\n    loadAdvanceBalances()\n  }, [employees])\n  useEffect(()=>{ (async()=>{ if (!runId) { setItems([]); return } try { const its = await apiPayroll.items(runId); setItems(its) } catch { setItems([]) } })() },[runId])\n  useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_c"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 57,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    }\n    loadAdvanceBalances()\n  }, [employees])\n  useEffect(()=>{ (async()=>{ if (!runId) { setItems([]); return } try { const its = await apiPayroll.items(runId); setItems(its) } catch { setItems([]) } })() },[runId])\n  useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_c"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 292,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                <input type=\"date\" className=\"border rounded px-3 py-2 w-full md:w-auto bg-gray-50\" value={payDate} onChange={e=>setPayDate(e.target.value)} />\n              </div>\n\n              <div className=\"pt-5\">\n                <button className=\"p-2 bg-gray-100 hover:bg-gray-200 rounded text"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 464,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            <div className=\"flex gap-2 justify-end\">\n              <button className=\"px-3 py-2 bg-gray-100 rounded\" onClick={()=>{ setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); setModalMonthError('') }}>{lang=="
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 465,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "              <button className=\"px-3 py-2 bg-gray-100 rounded\" onClick={()=>{ setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); setModalMonthError('') }}>{lang==='ar'?'إلغاء':'Cancel'}</button>\n              {modal"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 477,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const d = modal.duration ? parseInt(modal.duration, 10) : null\n                      const extra = { method: modal.method }\n                      if (d!=null) extra.duration_months = d\n                      await apiEmployees.advance(modal.employeeId, n, extra)\n                "
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 480,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      await apiEmployees.advance(modal.employeeId, n, extra)\n                      const emps = await apiEmployees.list(); setEmployees(emps)\n                      // Reload advance balance from journal entries\n                      try {\n                        const balanceData = a"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 488,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      } catch {}\n                      setToast(lang==='ar'?'تم منح السلفة':'Advance granted')\n                    } else if (modal.type==='advance_collect') {\n                      await apiEmployees.advanceCollect(modal.employeeId, n, { method: modal.method })\n                     "
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "advanceBalance",
+          "line": 491,
+          "fullCall": "apiEmployees.advanceBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      await apiEmployees.advanceCollect(modal.employeeId, n, { method: modal.method })\n                      const emps = await apiEmployees.list(); setEmployees(emps)\n                      // Reload advance balance from journal entries\n                      try {\n                   "
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 27,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 27,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 27,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 27,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 72,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            <div className=\"text-xl font-bold text-primary-700\">{lang==='ar'?'كشوف الرواتب':'Payroll Statements'}</div>\n          </div>\n          <div className=\"flex items-center gap-2\">\n            <button className=\"px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors\" onClick={()=>"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 27,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 27,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 27,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 27,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [employees, setEmployees] = useState([])\n  \n  const [accs, setAccs] = useState([])\n  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])\n  useEf"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 72,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            <div className=\"text-xl font-bold text-primary-700\">{lang==='ar'?'كشوف الرواتب':'Payroll Statements'}</div>\n          </div>\n          <div className=\"flex items-center gap-2\">\n            <button className=\"px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors\" onClick={()=>"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 46,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 464,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 465,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 480,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 491,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 46,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 464,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 465,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 480,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiEmployees.advanceBalance",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 491,
+          "severity": "high",
+          "message": "استدعاء apiEmployees.advanceBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "direct_sql_table",
+          "table": "salary",
+          "file": "pages/PayrollPayments.jsx",
+          "line": 464,
+          "severity": "high",
+          "message": "استعلام SQL مباشر على جدول salary - يجب استخدام القيود المنشورة بدلاً من ذلك"
+        }
+      ],
+      "recommendations": []
+    },
+    "expenses": {
+      "screen": "expenses",
+      "description": "المصروفات",
+      "files": [
+        {
+          "file": "pages/Expenses.jsx",
+          "apiCalls": 27,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiExpenses",
+          "method": "list",
+          "line": 144,
+          "fullCall": "apiExpenses.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      return;\n    }\n    (async()=>{ \n      try { \n        const res = await apiExpenses.list(filters); \n        if (!res) { \n          console.warn('[Expenses] No data returned from API'); \n          setList([]); \n          setError(''); \n          return; "
+          }
+        },
+        {
+          "api": "apiPeriods",
+          "method": "get",
+          "line": 173,
+          "fullCall": "apiPeriods.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{ \n      try { \n        const d = new Date(); \n        const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; \n        const s = await apiPeriods.get(per); \n        setPeriodStatus(String(s?.status||'open')) \n      } catch {} \n    })() \n  },[authLoading, isLoggedIn"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 182,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\n  // Smart Linking Data Fetching\n  useEffect(() => {\n    if (form.expense_type === 'payment' && form.payment_details.payment_type === 'supplier') {\n      apiPartners.list().then(res => setSuppliers((res||[]).filter(p => String(p.type).toLowerCase() === 'supplier')))\n    }\n  }, [form.expense_type, f"
+          }
+        },
+        {
+          "api": "apiSupplierInvoices",
+          "method": "list",
+          "line": 188,
+          "fullCall": "apiSupplierInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  }, [form.expense_type, form.payment_details.payment_type])\n\n  useEffect(() => {\n    if (form.payment_details.supplier_id) {\n      apiSupplierInvoices.list({ supplier_id: form.payment_details.supplier_id, status: 'unpaid' })\n        .then(res => {\n          const rows = (res?.items||res||[])\n      "
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "get",
+          "line": 234,
+          "fullCall": "apiExpenses.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(() => {\n    if (location.state && location.state.editId) {\n      const id = location.state.editId\n      setEditingId(id)\n      apiExpenses.get(id).then(inv => {\n        if (inv) {\n          setForm(prev => ({\n            ...prev,\n            date: String(inv.date||'').slice(0,10),\n      "
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "update",
+          "line": 582,
+          "fullCall": "apiExpenses.update",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "          status: 'posted'\n      }\n      \n      if (editingId) {\n        await apiExpenses.update(editingId, payload)\n        setToast(lang==='ar'?'تم تعديل الفاتورة':'Invoice updated')\n        setEditingId(null)\n      } else {\n        await apiExpenses.create(payload)\n        setToast(lang==='ar'?'"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "create",
+          "line": 586,
+          "fullCall": "apiExpenses.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        await apiExpenses.update(editingId, payload)\n        setToast(lang==='ar'?'تم تعديل الفاتورة':'Invoice updated')\n        setEditingId(null)\n      } else {\n        await apiExpenses.create(payload)\n        setToast(lang==='ar'?'تم إنشاء الفاتورة':'Invoice created')\n      }\n      const resetPa"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "list",
+          "line": 614,
+          "fullCall": "apiExpenses.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        payment_account_code: '',\n        items: [{ id: Date.now(), amount: '', account_code: '', description: '', include_tax: false }],\n        payment_details: prev.expense_type==='payment' ? resetPaymentDetails : prev.payment_details\n      }))\n      const ls = await apiExpenses.list(filters); se"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "list",
+          "line": 663,
+          "fullCall": "apiExpenses.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            </motion.button>\n            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className=\"px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 backdrop-blur-sm border border-white/20\" onClick={() => setHelpOpen(true)}>\n              <span classN"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 871,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                <div className=\"font-bold text-blue-800 mb-3\">{lang==='ar'?'تسوية الذمم المدينة':'Accounts Receivable Settlement'}</div>\n                <div className=\"grid grid-cols-1 md:grid-cols-3 gap-3\">\n                  <div className=\"md:col-span-1\">\n                    <label className=\"blo"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 871,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                <div className=\"font-bold text-blue-800 mb-3\">{lang==='ar'?'تسوية الذمم المدينة':'Accounts Receivable Settlement'}</div>\n                <div className=\"grid grid-cols-1 md:grid-cols-3 gap-3\">\n                  <div className=\"md:col-span-1\">\n                    <label className=\"blo"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 879,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                    </select>\n                  </div>\n                  <div className=\"md:col-span-2\">\n                    <label className=\"block text-sm font-medium text-blue-900 mb-1\">{lang==='ar'?'الجهة':'Entity'}</label>\n                    <select className=\"w-full border-blue-300 rounded-lg"
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "create",
+          "line": 970,
+          "fullCall": "apiPayments.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                            const need = wanted[id]||0\n                            if (need<=0) continue\n                            const take = Math.min(amt, need)\n                            if (take>0) {\n                              await apiPayments.create({ partner_id: Number(arEntityId), inv"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 982,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                        setToast(lang==='ar'?'تم تسجيل التسوية':'Settlement recorded')\n                        try { localStorage.setItem('invoices_refresh', JSON.stringify({ partner_id: Number(arEntityId), at: Date.now() })) } catch {}\n                        // Reload balances\n                    "
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "create",
+          "line": 996,
+          "fullCall": "apiJournal.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                        const postings = []\n                        for (const p of arPayments){ const n = parseFloat(p.amount||0)||0; if (!(n>0)) continue; if (p.method==='cash' && accCash) postings.push({ account_id: accCash.id, debit: n, credit: 0 })\n                          else if (p.method==="
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "list",
+          "line": 144,
+          "fullCall": "apiExpenses.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      return;\n    }\n    (async()=>{ \n      try { \n        const res = await apiExpenses.list(filters); \n        if (!res) { \n          console.warn('[Expenses] No data returned from API'); \n          setList([]); \n          setError(''); \n          return; "
+          }
+        },
+        {
+          "api": "apiPeriods",
+          "method": "get",
+          "line": 173,
+          "fullCall": "apiPeriods.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{ \n      try { \n        const d = new Date(); \n        const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; \n        const s = await apiPeriods.get(per); \n        setPeriodStatus(String(s?.status||'open')) \n      } catch {} \n    })() \n  },[authLoading, isLoggedIn"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "update",
+          "line": 582,
+          "fullCall": "apiExpenses.update",
+          "statusCheck": {
+            "hasPostedStatus": true,
+            "hasDraftStatus": false,
+            "context": "          status: 'posted'\n      }\n      \n      if (editingId) {\n        await apiExpenses.update(editingId, payload)\n        setToast(lang==='ar'?'تم تعديل الفاتورة':'Invoice updated')\n        setEditingId(null)\n      } else {\n        await apiExpenses.create(payload)\n        setToast(lang==='ar'?'"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "create",
+          "line": 586,
+          "fullCall": "apiExpenses.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        await apiExpenses.update(editingId, payload)\n        setToast(lang==='ar'?'تم تعديل الفاتورة':'Invoice updated')\n        setEditingId(null)\n      } else {\n        await apiExpenses.create(payload)\n        setToast(lang==='ar'?'تم إنشاء الفاتورة':'Invoice created')\n      }\n      const resetPa"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "list",
+          "line": 614,
+          "fullCall": "apiExpenses.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        payment_account_code: '',\n        items: [{ id: Date.now(), amount: '', account_code: '', description: '', include_tax: false }],\n        payment_details: prev.expense_type==='payment' ? resetPaymentDetails : prev.payment_details\n      }))\n      const ls = await apiExpenses.list(filters); se"
+          }
+        },
+        {
+          "api": "apiExpenses",
+          "method": "list",
+          "line": 663,
+          "fullCall": "apiExpenses.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            </motion.button>\n            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className=\"px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 backdrop-blur-sm border border-white/20\" onClick={() => setHelpOpen(true)}>\n              <span classN"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 871,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                <div className=\"font-bold text-blue-800 mb-3\">{lang==='ar'?'تسوية الذمم المدينة':'Accounts Receivable Settlement'}</div>\n                <div className=\"grid grid-cols-1 md:grid-cols-3 gap-3\">\n                  <div className=\"md:col-span-1\">\n                    <label className=\"blo"
+          }
+        },
+        {
+          "api": "apiEmployees",
+          "method": "list",
+          "line": 871,
+          "fullCall": "apiEmployees.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                <div className=\"font-bold text-blue-800 mb-3\">{lang==='ar'?'تسوية الذمم المدينة':'Accounts Receivable Settlement'}</div>\n                <div className=\"grid grid-cols-1 md:grid-cols-3 gap-3\">\n                  <div className=\"md:col-span-1\">\n                    <label className=\"blo"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 879,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                    </select>\n                  </div>\n                  <div className=\"md:col-span-2\">\n                    <label className=\"block text-sm font-medium text-blue-900 mb-1\">{lang==='ar'?'الجهة':'Entity'}</label>\n                    <select className=\"w-full border-blue-300 rounded-lg"
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "create",
+          "line": 970,
+          "fullCall": "apiPayments.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                            const need = wanted[id]||0\n                            if (need<=0) continue\n                            const take = Math.min(amt, need)\n                            if (take>0) {\n                              await apiPayments.create({ partner_id: Number(arEntityId), inv"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 982,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                        setToast(lang==='ar'?'تم تسجيل التسوية':'Settlement recorded')\n                        try { localStorage.setItem('invoices_refresh', JSON.stringify({ partner_id: Number(arEntityId), at: Date.now() })) } catch {}\n                        // Reload balances\n                    "
+          }
+        },
+        {
+          "api": "apiJournal",
+          "method": "create",
+          "line": 996,
+          "fullCall": "apiJournal.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                        const postings = []\n                        for (const p of arPayments){ const n = parseFloat(p.amount||0)||0; if (!(n>0)) continue; if (p.method==='cash' && accCash) postings.push({ account_id: accCash.id, debit: n, credit: 0 })\n                          else if (p.method==="
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "pages/Expenses.jsx",
+          "line": 879,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "pages/Expenses.jsx",
+          "line": 982,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "pages/Expenses.jsx",
+          "line": 879,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "pages/Expenses.jsx",
+          "line": 982,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        }
+      ],
+      "recommendations": []
+    },
+    "products": {
+      "screen": "products",
+      "description": "المنتجات",
+      "files": [
+        {
+          "file": "pages/Products.jsx",
+          "apiCalls": 7,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 74,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  const [company, setCompany] = useState(null)\r\n  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n      apiSettings.get('settings_company').catch(()=>null),\r\n    ]).then(([b,f,c])=>{ setBran"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 75,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [company, setCompany] = useState(null)\r\n  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n      apiSettings.get('settings_company').catch(()=>null),\r\n    ]).then(([b,f,c])=>{ setBrandi"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 76,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n      apiSettings.get('settings_company').catch(()=>null),\r\n    ]).then(([b,f,c])=>{ setBranding(b); setFooterCfg(f); setCompany(c) })\r\n  },[]"
+          }
+        },
+        {
+          "api": "products",
+          "method": "list",
+          "line": 43,
+          "fullCall": "products.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  async function load() {\r\n    setLoading(true)\r\n    try {\r\n      const data = await products.list(showDisabled ? { include_disabled: 1 } : {})\r\n      const arr = Array.isArray(data) ? data : ((data && Array.isArray(data.items)) ? data.items : [])\r\n      const dis = (data && Array.isArray(data.dis"
+          }
+        },
+        {
+          "api": "products",
+          "method": "update",
+          "line": 95,
+          "fullCall": "products.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        uom: form.uom,\r\n        purchase_uom: form.purchase_uom,\r\n      }\r\n      if (editing) {\r\n        await products.update(editing.id, payload)\r\n      } else {\r\n        await products.create(payload)\r\n      }\r\n      setForm({\r\n        name: '', category: '', sale_price: '', cost_price: '', stock"
+          }
+        },
+        {
+          "api": "products",
+          "method": "create",
+          "line": 97,
+          "fullCall": "products.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      }\r\n      if (editing) {\r\n        await products.update(editing.id, payload)\r\n      } else {\r\n        await products.create(payload)\r\n      }\r\n      setForm({\r\n        name: '', category: '', sale_price: '', cost_price: '', stock_quantity: '',\r\n        section: 'consumable', invoicing_policy: '"
+          }
+        },
+        {
+          "api": "products",
+          "method": "remove",
+          "line": 117,
+          "fullCall": "products.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\r\n      // REMOVED: Admin check - can() function already has admin bypass\r\n      // const canDelete = can('products:delete')\r\n      // if (!canDelete) return\r\n      const resp = await products.remove(id)\r\n      if (resp && resp.error==='product_linked') {\r\n        try { alert(lang==='ar'?'ل"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [],
+      "recommendations": []
+    },
+    "pos": {
+      "screen": "pos",
+      "description": "نقطة البيع - الفواتير، الجداول، الإدارة",
+      "files": [
+        {
+          "file": "pages/POSInvoice.jsx",
+          "apiCalls": 64,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/POSTables.jsx",
+          "apiCalls": 1,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/POSManage.jsx",
+          "apiCalls": 4,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiProducts",
+          "method": "list",
+          "line": 141,
+          "fullCall": "apiProducts.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          }\r\n        } catch {}\r\n        \r\n        // Load fresh data from server\r\n        const list = await apiProducts.list(); \r\n        const arr = Array.isArray(list) ? list : (Array.isArray(list?.items) ? list.items : []); \r\n        const mappedProducts = arr.map(p=>({ \r\n          id: p.id||p."
+          }
+        },
+        {
+          "api": "apiBranches",
+          "method": "list",
+          "line": 168,
+          "fullCall": "apiBranches.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        setLoadingProducts(false) \r\n      } \r\n    })() \r\n  },[])\r\n  useEffect(()=>{ (async()=>{ try { const res = await apiBranches.list(); const items = Array.isArray(res) ? res : (Array.isArray(res?.items)?res.items:[]); setBranchesList(items) } catch { setBranchesList([]) } })() },[])\r\n  useEffec"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 169,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      } \r\n    })() \r\n  },[])\r\n  useEffect(()=>{ (async()=>{ try { const res = await apiBranches.list(); const items = Array.isArray(res) ? res : (Array.isArray(res?.items)?res.items:[]); setBranchesList(items) } catch { setBranchesList([]) } })() },[])\r\n  useEffect(()=>{ (async()=>{ try { const list"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 177,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{\r\n      try {\r\n        const b = String(branch||'')\r\n        const key = b==='palace_india' ? 'settings_branch_place_india' : `settings_branch_${b}`\r\n        const s = await apiSettings.get(key).catch(()=>null)\r\n        if (s) setBranchSettings({ cancel_password: String(s.cancel_passw"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 188,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{\r\n    if (orderId) return\r\n    ;(async()=>{\r\n      try {\r\n        const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])\r\n        function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\\s+/g,'_'); return (s==='palace_in"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 245,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    setHydrating(true)\r\n    setLoadingOrder(true)\r\n    try {\r\n      // OPTIMIZATION: Load order directly - skip tableState check (not critical)\r\n      const o = await apiOrders.get(effectiveId)\r\n      if (!o) {\r\n        console.warn('[POSInvoice] Order not found:', effectiveId);\r\n        throw new E"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 303,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        // Only try fallback if we don't have cached data\r\n        const cacheKey = `pos_order_cache_${effectiveId}`\r\n        const hasCache = localStorage.getItem(cacheKey)\r\n        if (!hasCache) {\r\n          const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])\r"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 354,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  },[orderId, branch, table])\r\n  useEffect(()=>{ (async()=>{ if (partnerId) return; if (!customerPhone && !customerName) return; setLoadingPartner(true); try { await resolvePartner() } catch {} finally { setLoadingPartner(false) } })() },[orderId, customerPhone, customerName])\r\n  useEffect(()=>{ (as"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 369,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            const its=a.filter(x=>x&&x.type==='item'); \r\n            return m && normalizeBranchName(m.branch)===normalizeBranchName(branch) && String(m.table||'')===String(table) && its.length>0 \r\n          } catch { return false } }); \r\n          if (!found || !found.id) { isHydratingRef.current=f"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "remove",
+          "line": 420,
+          "fullCall": "apiOrders.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    if (process.env.NODE_ENV==='test') {\r\n      try { window.__POS_TEST_ADD__ = async (id)=>{ const p = products.find(pr=> String(pr.id)===String(id)); if (p) { await ensureOrderThenAdd(p); await new Promise(res=>setTimeout(res,0)); if (!Array.isArray(items) || items.length===0) { const arr = [{ pro"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 420,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    if (process.env.NODE_ENV==='test') {\r\n      try { window.__POS_TEST_ADD__ = async (id)=>{ const p = products.find(pr=> String(pr.id)===String(id)); if (p) { await ensureOrderThenAdd(p); await new Promise(res=>setTimeout(res,0)); if (!Array.isArray(items) || items.length===0) { const arr = [{ pro"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 530,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  async function resolvePartner(){\r\n    let id = partnerId\r\n    if (!id && customerPhone) {\r\n      try {\r\n        const list = await apiPartners.list({ type: 'customer' })\r\n        const found = (Array.isArray(list)?list:[]).find(p => String(p.phone||'').trim() === String(customerPhone||'').trim())\r"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "create",
+          "line": 542,
+          "fullCall": "apiPartners.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const nm = String(customerName||'').trim()\r\n        const ph = String(customerPhone||'').trim()\r\n        if (ph) {\r\n          const payload = { name: nm, type: 'عميل', phone: ph, customer_type: 'cash_walkin', discount_rate: 0, contact_info: JSON.stringify({ discount_pct: 0, walk_in: true }) "
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 573,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            setDiscountPct(0)\r\n            setDiscountApplied(true)\r\n          }\r\n        } else { id = null }\r\n        try { const list2 = await apiPartners.list({ type: 'customer' }); if (Array.isArray(list2)) setPartners(list2) } catch {}\r\n      } catch {}\r\n    }\r\n    if (!id && !customerName && "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 836,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        initialDraftSavedRef.current = true\r\n        try { window.dispatchEvent(new CustomEvent('pos:table-busy', { detail: { branch: bNorm, table: (/^\\d+$/.test(String(table)) ? Number(table) : String(table)), orderId: id } })) } catch {}\r\n      } catch {}\r\n      try {\r\n        const o = await apiO"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 851,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  },[branch, table, items, orderId, paymentMethod, partnerId, navigate, branchesList, customerName, customerPhone, discountPct, invoiceNumber, lockedSaveDraft, payLines, taxPct])\r\n\r\n  const issueInvoice = useCallback(async (paymentType, orderIdForIssue = null)=>{\r\n    // ⚠️ NOTE: This function retur"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 1033,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    // eslint-disable-next-line react-hooks/exhaustive-deps\r\n  },[customerName, customerPhone, discountPct, taxPct, paymentMethod, payLines, saveDraft, invoiceReady, items])\r\n  \r\n  // ⚠️ IMPORTANT: After issueInvoice succeeds, use response.lines directly\r\n  // ⚠️ DO NOT call apiInvoices.get() or api"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 1069,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            }\r\n          }\r\n          // Only make API call as last resort\r\n          if ((!id || id <= 0) && safeItems.length === 0) {\r\n            const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])\r\n            function normalizeBranchName(b){ const s=String(b"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "create",
+          "line": 1101,
+          "fullCall": "apiInvoices.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const sumRounded = Math.round(sum * 100) / 100\r\n        const totalRounded = Math.round(total * 100) / 100\r\n        if (Math.abs(sumRounded - totalRounded) > 0.0005 && process.env.NODE_ENV!=='test') { showAlert(t('errors.sum_mismatch', lang), t('errors.sum_mismatch_note', lang)); return }\r\n "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 1102,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const totalRounded = Math.round(total * 100) / 100\r\n        if (Math.abs(sumRounded - totalRounded) > 0.0005 && process.env.NODE_ENV!=='test') { showAlert(t('errors.sum_mismatch', lang), t('errors.sum_mismatch_note', lang)); return }\r\n        if (process.env.NODE_ENV==='test') {\r\n        try"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 1123,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          return \r\n        }\r\n        \r\n        // ⚠️ CRITICAL: Use response directly - it already contains all invoice data including lines\r\n        // ⚠️ DO NOT call apiInvoices.get() or apiInvoices.items() after issueInvoice\r\n        // ⚠️ DO NOT reload invoice from backend - everything is in res"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 1228,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        let phone = ''\r\n        let companyNameAr = ''\r\n        let address = ''\r\n        try {\r\n          const company = await apiSettings.get('settings_company')\r\n          companyNameAr = (company?.name_ar || '').trim()\r\n          companyName = (company?.name_en || company?.name_ar || '').trim()"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 1268,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        })()\r\n        let printItems = []\r\n        try {\r\n          // ⚠️ CRITICAL: Use invoice.lines directly from issueInvoice response\r\n          // ⚠️ DO NOT call apiInvoices.items() or apiInvoices.get() - causes 404 on /api/invoice_items/:id\r\n          // ⚠️ Everything is in inv.lines (from res"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "create",
+          "line": 1363,
+          "fullCall": "apiInvoices.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      }\r\n      if (!pid) { showAlert(t('errors.credit_customer_required', lang), lang==='ar'?'يرجى تحديد عميل للفواتير الآجلة':'Please select a customer for deferred invoices'); return }\r\n      if (process.env.NODE_ENV==='test') {\r\n        try { \r\n          await apiInvoices.create({ \r\n            s"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 1370,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            payment_type: 'CREDIT'\r\n          }) \r\n        } catch {}\r\n        try { \r\n          await apiOrders.update(Number(id), { status: 'ISSUED' }) \r\n        } catch {}\r\n        return\r\n      }\r\n      const res2 = await issueInvoice('', id)\r\n      // Backend returns invoice object directly, no"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 1379,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      // Backend returns invoice object directly, not { success: true, invoice }\r\n      if (!res2 || !res2.id) { showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); return }\r\n      \r\n      // ⚠️ CRITICAL: Use response directly - it already contains all invoice data includ"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 1399,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      let phone = ''\r\n      let companyNameAr = ''\r\n      let address = ''\r\n      try {\r\n        const company = await apiSettings.get('settings_company')\r\n        companyNameAr = (company?.name_ar || '').trim()\r\n        companyName = (company?.name_en || company?.name_ar || '').trim()\r\n        vatN"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "get",
+          "line": 1428,
+          "fullCall": "apiInvoices.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      })()\r\n      let printItems2 = []\r\n      try {\r\n        // ⚠️ CRITICAL: Use invoice.lines directly from issueInvoice response\r\n        // ⚠️ DO NOT call apiInvoices.items() or apiInvoices.get() - causes 404 on /api/invoice_items/:id\r\n        // ⚠️ Everything is in inv.lines (from res2.lines) - "
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "create",
+          "line": 1689,
+          "fullCall": "apiPartners.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        discount_rate: d, \r\n        contact_info: d > 0 ? JSON.stringify({ discount_pct: d }) : JSON.stringify({ discount_pct: 0, walk_in: true })\r\n      };\r\n      \r\n      const c = await apiPartners.create(payload);\r\n      \r\n      if (!c || !c.id) {\r\n        setCustError('فشل الحفظ - لم يتم إنشاء ا"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "remove",
+          "line": 2170,
+          "fullCall": "apiOrders.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                    return false\r\n                  })\r\n                  if (!ok) return\r\n                  if (orderId) {\r\n                    try { await apiOrders.remove(orderId) } catch {}\r\n                    try { await apiOrders.update(orderId, { status: 'CANCELLED' }) } catch {}\r\n          "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 2171,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                  })\r\n                  if (!ok) return\r\n                  if (orderId) {\r\n                    try { await apiOrders.remove(orderId) } catch {}\r\n                    try { await apiOrders.update(orderId, { status: 'CANCELLED' }) } catch {}\r\n                    try { localStorage.remov"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "remove",
+          "line": 2180,
+          "fullCall": "apiInvoices.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const invKey2 = `pos_invoice_${norm(branch)}_${table}`\r\n                      const invId = localStorage.getItem(invKey1) || localStorage.getItem(invKey2) || ''\r\n                      if (invId) {\r\n                        // Invoice ID exists in localStorage - remove it\r\n      "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "remove",
+          "line": 2193,
+          "fullCall": "apiOrders.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                    try {\r\n                      const k = `pos_order_${branch}_${table}`\r\n                      const id2 = localStorage.getItem(k)\r\n                      if (id2) {\r\n                        try { await apiOrders.remove(id2) } catch {}\r\n                        try { await apiOrders."
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 2194,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const k = `pos_order_${branch}_${table}`\r\n                      const id2 = localStorage.getItem(k)\r\n                      if (id2) {\r\n                        try { await apiOrders.remove(id2) } catch {}\r\n                        try { await apiOrders.update(id2, { status: 'CANC"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "update",
+          "line": 2204,
+          "fullCall": "apiInvoices.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const invKey1 = `pos_invoice_${branch}_${table}`\r\n                      const invKey2 = `pos_invoice_${norm(branch)}_${table}`\r\n                      const invId = localStorage.getItem(invKey1) || localStorage.getItem(invKey2) || ''\r\n                      if (invId) {\r\n        "
+          }
+        },
+        {
+          "api": "apiProducts",
+          "method": "list",
+          "line": 141,
+          "fullCall": "apiProducts.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          }\r\n        } catch {}\r\n        \r\n        // Load fresh data from server\r\n        const list = await apiProducts.list(); \r\n        const arr = Array.isArray(list) ? list : (Array.isArray(list?.items) ? list.items : []); \r\n        const mappedProducts = arr.map(p=>({ \r\n          id: p.id||p."
+          }
+        },
+        {
+          "api": "apiBranches",
+          "method": "list",
+          "line": 168,
+          "fullCall": "apiBranches.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        setLoadingProducts(false) \r\n      } \r\n    })() \r\n  },[])\r\n  useEffect(()=>{ (async()=>{ try { const res = await apiBranches.list(); const items = Array.isArray(res) ? res : (Array.isArray(res?.items)?res.items:[]); setBranchesList(items) } catch { setBranchesList([]) } })() },[])\r\n  useEffec"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 169,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      } \r\n    })() \r\n  },[])\r\n  useEffect(()=>{ (async()=>{ try { const res = await apiBranches.list(); const items = Array.isArray(res) ? res : (Array.isArray(res?.items)?res.items:[]); setBranchesList(items) } catch { setBranchesList([]) } })() },[])\r\n  useEffect(()=>{ (async()=>{ try { const list"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 177,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{\r\n      try {\r\n        const b = String(branch||'')\r\n        const key = b==='palace_india' ? 'settings_branch_place_india' : `settings_branch_${b}`\r\n        const s = await apiSettings.get(key).catch(()=>null)\r\n        if (s) setBranchSettings({ cancel_password: String(s.cancel_passw"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 188,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{\r\n    if (orderId) return\r\n    ;(async()=>{\r\n      try {\r\n        const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])\r\n        function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\\s+/g,'_'); return (s==='palace_in"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 245,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    setHydrating(true)\r\n    setLoadingOrder(true)\r\n    try {\r\n      // OPTIMIZATION: Load order directly - skip tableState check (not critical)\r\n      const o = await apiOrders.get(effectiveId)\r\n      if (!o) {\r\n        console.warn('[POSInvoice] Order not found:', effectiveId);\r\n        throw new E"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 303,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        // Only try fallback if we don't have cached data\r\n        const cacheKey = `pos_order_cache_${effectiveId}`\r\n        const hasCache = localStorage.getItem(cacheKey)\r\n        if (!hasCache) {\r\n          const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])\r"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 354,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  },[orderId, branch, table])\r\n  useEffect(()=>{ (async()=>{ if (partnerId) return; if (!customerPhone && !customerName) return; setLoadingPartner(true); try { await resolvePartner() } catch {} finally { setLoadingPartner(false) } })() },[orderId, customerPhone, customerName])\r\n  useEffect(()=>{ (as"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 369,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            const its=a.filter(x=>x&&x.type==='item'); \r\n            return m && normalizeBranchName(m.branch)===normalizeBranchName(branch) && String(m.table||'')===String(table) && its.length>0 \r\n          } catch { return false } }); \r\n          if (!found || !found.id) { isHydratingRef.current=f"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "remove",
+          "line": 420,
+          "fullCall": "apiOrders.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    if (process.env.NODE_ENV==='test') {\r\n      try { window.__POS_TEST_ADD__ = async (id)=>{ const p = products.find(pr=> String(pr.id)===String(id)); if (p) { await ensureOrderThenAdd(p); await new Promise(res=>setTimeout(res,0)); if (!Array.isArray(items) || items.length===0) { const arr = [{ pro"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 420,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    if (process.env.NODE_ENV==='test') {\r\n      try { window.__POS_TEST_ADD__ = async (id)=>{ const p = products.find(pr=> String(pr.id)===String(id)); if (p) { await ensureOrderThenAdd(p); await new Promise(res=>setTimeout(res,0)); if (!Array.isArray(items) || items.length===0) { const arr = [{ pro"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 530,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  async function resolvePartner(){\r\n    let id = partnerId\r\n    if (!id && customerPhone) {\r\n      try {\r\n        const list = await apiPartners.list({ type: 'customer' })\r\n        const found = (Array.isArray(list)?list:[]).find(p => String(p.phone||'').trim() === String(customerPhone||'').trim())\r"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "create",
+          "line": 542,
+          "fullCall": "apiPartners.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const nm = String(customerName||'').trim()\r\n        const ph = String(customerPhone||'').trim()\r\n        if (ph) {\r\n          const payload = { name: nm, type: 'عميل', phone: ph, customer_type: 'cash_walkin', discount_rate: 0, contact_info: JSON.stringify({ discount_pct: 0, walk_in: true }) "
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 573,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            setDiscountPct(0)\r\n            setDiscountApplied(true)\r\n          }\r\n        } else { id = null }\r\n        try { const list2 = await apiPartners.list({ type: 'customer' }); if (Array.isArray(list2)) setPartners(list2) } catch {}\r\n      } catch {}\r\n    }\r\n    if (!id && !customerName && "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "get",
+          "line": 836,
+          "fullCall": "apiOrders.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        initialDraftSavedRef.current = true\r\n        try { window.dispatchEvent(new CustomEvent('pos:table-busy', { detail: { branch: bNorm, table: (/^\\d+$/.test(String(table)) ? Number(table) : String(table)), orderId: id } })) } catch {}\r\n      } catch {}\r\n      try {\r\n        const o = await apiO"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 1069,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            }\r\n          }\r\n          // Only make API call as last resort\r\n          if ((!id || id <= 0) && safeItems.length === 0) {\r\n            const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])\r\n            function normalizeBranchName(b){ const s=String(b"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "create",
+          "line": 1101,
+          "fullCall": "apiInvoices.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const sumRounded = Math.round(sum * 100) / 100\r\n        const totalRounded = Math.round(total * 100) / 100\r\n        if (Math.abs(sumRounded - totalRounded) > 0.0005 && process.env.NODE_ENV!=='test') { showAlert(t('errors.sum_mismatch', lang), t('errors.sum_mismatch_note', lang)); return }\r\n "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 1102,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const totalRounded = Math.round(total * 100) / 100\r\n        if (Math.abs(sumRounded - totalRounded) > 0.0005 && process.env.NODE_ENV!=='test') { showAlert(t('errors.sum_mismatch', lang), t('errors.sum_mismatch_note', lang)); return }\r\n        if (process.env.NODE_ENV==='test') {\r\n        try"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 1228,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        let phone = ''\r\n        let companyNameAr = ''\r\n        let address = ''\r\n        try {\r\n          const company = await apiSettings.get('settings_company')\r\n          companyNameAr = (company?.name_ar || '').trim()\r\n          companyName = (company?.name_en || company?.name_ar || '').trim()"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "create",
+          "line": 1363,
+          "fullCall": "apiInvoices.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      }\r\n      if (!pid) { showAlert(t('errors.credit_customer_required', lang), lang==='ar'?'يرجى تحديد عميل للفواتير الآجلة':'Please select a customer for deferred invoices'); return }\r\n      if (process.env.NODE_ENV==='test') {\r\n        try { \r\n          await apiInvoices.create({ \r\n            s"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 1370,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            payment_type: 'CREDIT'\r\n          }) \r\n        } catch {}\r\n        try { \r\n          await apiOrders.update(Number(id), { status: 'ISSUED' }) \r\n        } catch {}\r\n        return\r\n      }\r\n      const res2 = await issueInvoice('', id)\r\n      // Backend returns invoice object directly, no"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 1399,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      let phone = ''\r\n      let companyNameAr = ''\r\n      let address = ''\r\n      try {\r\n        const company = await apiSettings.get('settings_company')\r\n        companyNameAr = (company?.name_ar || '').trim()\r\n        companyName = (company?.name_en || company?.name_ar || '').trim()\r\n        vatN"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "create",
+          "line": 1689,
+          "fullCall": "apiPartners.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        discount_rate: d, \r\n        contact_info: d > 0 ? JSON.stringify({ discount_pct: d }) : JSON.stringify({ discount_pct: 0, walk_in: true })\r\n      };\r\n      \r\n      const c = await apiPartners.create(payload);\r\n      \r\n      if (!c || !c.id) {\r\n        setCustError('فشل الحفظ - لم يتم إنشاء ا"
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "remove",
+          "line": 2170,
+          "fullCall": "apiOrders.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                    return false\r\n                  })\r\n                  if (!ok) return\r\n                  if (orderId) {\r\n                    try { await apiOrders.remove(orderId) } catch {}\r\n                    try { await apiOrders.update(orderId, { status: 'CANCELLED' }) } catch {}\r\n          "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 2171,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                  })\r\n                  if (!ok) return\r\n                  if (orderId) {\r\n                    try { await apiOrders.remove(orderId) } catch {}\r\n                    try { await apiOrders.update(orderId, { status: 'CANCELLED' }) } catch {}\r\n                    try { localStorage.remov"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "remove",
+          "line": 2180,
+          "fullCall": "apiInvoices.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const invKey2 = `pos_invoice_${norm(branch)}_${table}`\r\n                      const invId = localStorage.getItem(invKey1) || localStorage.getItem(invKey2) || ''\r\n                      if (invId) {\r\n                        // Invoice ID exists in localStorage - remove it\r\n      "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "remove",
+          "line": 2193,
+          "fullCall": "apiOrders.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                    try {\r\n                      const k = `pos_order_${branch}_${table}`\r\n                      const id2 = localStorage.getItem(k)\r\n                      if (id2) {\r\n                        try { await apiOrders.remove(id2) } catch {}\r\n                        try { await apiOrders."
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "update",
+          "line": 2194,
+          "fullCall": "apiOrders.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const k = `pos_order_${branch}_${table}`\r\n                      const id2 = localStorage.getItem(k)\r\n                      if (id2) {\r\n                        try { await apiOrders.remove(id2) } catch {}\r\n                        try { await apiOrders.update(id2, { status: 'CANC"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "update",
+          "line": 2204,
+          "fullCall": "apiInvoices.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "                      const invKey1 = `pos_invoice_${branch}_${table}`\r\n                      const invKey2 = `pos_invoice_${norm(branch)}_${table}`\r\n                      const invId = localStorage.getItem(invKey1) || localStorage.getItem(invKey2) || ''\r\n                      if (invId) {\r\n        "
+          }
+        },
+        {
+          "api": "apiOrders",
+          "method": "list",
+          "line": 66,
+          "fullCall": "apiOrders.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  },[branch, canScreen, navigate, isAdmin])\n  function isOccupied(t){ return busy.has(String(t)) }\n  async function openTable(t){\n    try {\n      const p = (apiOrders && typeof apiOrders.list==='function') ? apiOrders.list({ branch, table: t, status: 'DRAFT,OPEN' }) : Promise.resolve([])\n      const"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 21,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [toast, setToast] = useState('')\n  const [branding, setBranding] = useState({ logo: '', companyName: '' })\n  const [helpOpen, setHelpOpen] = useState(false)\n  const [periodStatus, setPeriodStatus] = useState('open')\n  useEffect(()=>{ (async()=>{ try{ const c = await apiSettings.get('settings"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 21,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [toast, setToast] = useState('')\n  const [branding, setBranding] = useState({ logo: '', companyName: '' })\n  const [helpOpen, setHelpOpen] = useState(false)\n  const [periodStatus, setPeriodStatus] = useState('open')\n  useEffect(()=>{ (async()=>{ try{ const c = await apiSettings.get('settings"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 21,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [toast, setToast] = useState('')\n  const [branding, setBranding] = useState({ logo: '', companyName: '' })\n  const [helpOpen, setHelpOpen] = useState(false)\n  const [periodStatus, setPeriodStatus] = useState('open')\n  useEffect(()=>{ (async()=>{ try{ const c = await apiSettings.get('settings"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 21,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  const [toast, setToast] = useState('')\n  const [branding, setBranding] = useState({ logo: '', companyName: '' })\n  const [helpOpen, setHelpOpen] = useState(false)\n  const [periodStatus, setPeriodStatus] = useState('open')\n  useEffect(()=>{ (async()=>{ try{ const c = await apiSettings.get('settings"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [],
+      "recommendations": []
+    },
+    "purchases": {
+      "screen": "purchases",
+      "description": "المشتريات - طلبات الشراء",
+      "files": [
+        {
+          "file": "pages/PurchaseOrders.jsx",
+          "apiCalls": 3,
+          "sqlQueries": 0
+        },
+        {
+          "file": "pages/PurchaseOrderDetail.jsx",
+          "apiCalls": 22,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 35,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  },[])\r\n\r\n  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_company').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n    ]).then(([b,c,f])=>{ setBranding(b); setCompany(c); setFooterCfg(f)"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 36,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_company').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n    ]).then(([b,c,f])=>{ setBranding(b); setCompany(c); setFooterCfg(f) })\r\n  },"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 37,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{\r\n    Promise.all([\r\n      apiSettings.get('settings_branding').catch(()=>null),\r\n      apiSettings.get('settings_company').catch(()=>null),\r\n      apiSettings.get('settings_footer').catch(()=>null),\r\n    ]).then(([b,c,f])=>{ setBranding(b); setCompany(c); setFooterCfg(f) })\r\n  },[]"
+          }
+        },
+        {
+          "api": "apiPO",
+          "method": "get",
+          "line": 40,
+          "fullCall": "apiPO.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{\r\n    let mounted = true\r\n    async function load(){\r\n      try {\r\n        const res = await apiPO.get(id)\r\n        const data = res || {}\r\n        if (!mounted) return\r\n        setPo({ id: data.id || Number(id), order_number: data.order_number || String(id) })\r\n        setSupplierI"
+          }
+        },
+        {
+          "api": "apiPO",
+          "method": "remove",
+          "line": 61,
+          "fullCall": "apiPO.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  },[id])\r\n\r\n  useEffect(()=>{\r\n    return ()=>{\r\n      if (status==='draft' && !supplierId && po?.id){ apiPO.remove(po.id).catch(()=>{}) }\r\n    }\r\n  },[status, supplierId, po])\r\n\r\n  \r\n\r"
+          }
+        },
+        {
+          "api": "apiProducts",
+          "method": "list",
+          "line": 75,
+          "fullCall": "apiProducts.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    if (productItems.length===0){\r\n      setPickerLoading(true)\r\n      try {\r\n        const params = supplierId ? { supplier_id: supplierId } : {}\r\n        const items = await apiProducts.list(params)\r\n        setProductItems(items)\r\n      } catch { setProductItems([]) } finally { setPickerLoading(f"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 86,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  async function openSupplierPicker(){\r\n    setClientPickerOpen(true)\r\n    if (suppliers.length===0){\r\n      setClientLoading(true)\r\n      try { const items = await apiPartners.list(); setSuppliers(items.filter(x=>{ const t=String(x.type||'').toLowerCase(); return t==='supplier' || x.type==='مورد' }"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 111,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  function updateLine(sl, patch){ setLines(lines.map(x=>x.sl===sl?{...x, ...(typeof patch==='function'?patch(x):patch)}:x)); scheduleSave() }\r\n\r\n  function getTaxRate(p){ const v = p.vat_rate || p.tax_rate || 0.15; return typeof v==='number' ? (v>1?v/100:v) : 0.15 }\r\n\r\n  useEffect(()=>{ (async ()=>{"
+          }
+        },
+        {
+          "api": "apiPO",
+          "method": "update",
+          "line": 124,
+          "fullCall": "apiPO.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        setToast(lang==='ar'?'يرجى اختيار مورد وإضافة بنود صالحة':'Please select a supplier and add valid lines')\r\n        return \r\n      }\r\n      const payload = { partner_id: supplierId, date: orderDate.slice(0,10), status, lines, supplier_invoice_number: supplierInvNumber?.trim() || null }\r\n     "
+          }
+        },
+        {
+          "api": "apiSupInv",
+          "method": "create",
+          "line": 138,
+          "fullCall": "apiSupInv.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  async function createSupplierInvoice(){\r\n    if (!po?.id || !supplierId || !lines.length || !supplierInvNumber.trim()) { setToast(lang==='ar'?'يرجى إدخال رقم فاتورة المورد مع البنود':'Enter supplier invoice number with valid lines'); return }\r\n    const invLines = lines.map(l => ({ product: l.pr"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 150,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const pid = supplierId\r\n      const dt = String(orderDate||'').slice(0,10)\r\n      if (!pid || !dt || String(status||'')==='draft') { setActivities([]); return }\r\n      try {\r\n        const invs = await apiInvoices.list({ partner_id: pid, type: 'purchase', from: dt })\r\n        const pays = awai"
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "list",
+          "line": 151,
+          "fullCall": "apiPayments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const dt = String(orderDate||'').slice(0,10)\r\n      if (!pid || !dt || String(status||'')==='draft') { setActivities([]); return }\r\n      try {\r\n        const invs = await apiInvoices.list({ partner_id: pid, type: 'purchase', from: dt })\r\n        const pays = await apiPayments.list({ partner_i"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 175,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    let companyVAT = '—'\r\n    let companyAddr = ''\r\n    let logo = ''\r\n    try {\r\n      const company = await apiSettings.get('settings_company')\r\n      const branding = await apiSettings.get('settings_branding')\r\n      if (branding?.logo) logo = branding.logo\r\n      companyName = (company?.name_ar "
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 176,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    let companyAddr = ''\r\n    let logo = ''\r\n    try {\r\n      const company = await apiSettings.get('settings_company')\r\n      const branding = await apiSettings.get('settings_branding')\r\n      if (branding?.logo) logo = branding.logo\r\n      companyName = (company?.name_ar || company?.name_en || '')"
+          }
+        },
+        {
+          "api": "apiPO",
+          "method": "remove",
+          "line": 342,
+          "fullCall": "apiPO.remove",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "            <button className=\"px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-md\" onClick={async()=>{ setStatus('draft'); await savePO(); navigate('/products/purchase-orders') }}>{lang==='ar'?'حفظ كمسودة':'Save as Draft'}</button>\r\n            <button className=\"px-3 py-2 bg-gray-100 hover:bg-gray-"
+          }
+        },
+        {
+          "api": "apiPO",
+          "method": "get",
+          "line": 40,
+          "fullCall": "apiPO.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{\r\n    let mounted = true\r\n    async function load(){\r\n      try {\r\n        const res = await apiPO.get(id)\r\n        const data = res || {}\r\n        if (!mounted) return\r\n        setPo({ id: data.id || Number(id), order_number: data.order_number || String(id) })\r\n        setSupplierI"
+          }
+        },
+        {
+          "api": "apiProducts",
+          "method": "list",
+          "line": 75,
+          "fullCall": "apiProducts.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    if (productItems.length===0){\r\n      setPickerLoading(true)\r\n      try {\r\n        const params = supplierId ? { supplier_id: supplierId } : {}\r\n        const items = await apiProducts.list(params)\r\n        setProductItems(items)\r\n      } catch { setProductItems([]) } finally { setPickerLoading(f"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 86,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  async function openSupplierPicker(){\r\n    setClientPickerOpen(true)\r\n    if (suppliers.length===0){\r\n      setClientLoading(true)\r\n      try { const items = await apiPartners.list(); setSuppliers(items.filter(x=>{ const t=String(x.type||'').toLowerCase(); return t==='supplier' || x.type==='مورد' }"
+          }
+        },
+        {
+          "api": "apiPartners",
+          "method": "list",
+          "line": 111,
+          "fullCall": "apiPartners.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  function updateLine(sl, patch){ setLines(lines.map(x=>x.sl===sl?{...x, ...(typeof patch==='function'?patch(x):patch)}:x)); scheduleSave() }\r\n\r\n  function getTaxRate(p){ const v = p.vat_rate || p.tax_rate || 0.15; return typeof v==='number' ? (v>1?v/100:v) : 0.15 }\r\n\r\n  useEffect(()=>{ (async ()=>{"
+          }
+        },
+        {
+          "api": "apiPO",
+          "method": "update",
+          "line": 124,
+          "fullCall": "apiPO.update",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        setToast(lang==='ar'?'يرجى اختيار مورد وإضافة بنود صالحة':'Please select a supplier and add valid lines')\r\n        return \r\n      }\r\n      const payload = { partner_id: supplierId, date: orderDate.slice(0,10), status, lines, supplier_invoice_number: supplierInvNumber?.trim() || null }\r\n     "
+          }
+        },
+        {
+          "api": "apiSupInv",
+          "method": "create",
+          "line": 138,
+          "fullCall": "apiSupInv.create",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  async function createSupplierInvoice(){\r\n    if (!po?.id || !supplierId || !lines.length || !supplierInvNumber.trim()) { setToast(lang==='ar'?'يرجى إدخال رقم فاتورة المورد مع البنود':'Enter supplier invoice number with valid lines'); return }\r\n    const invLines = lines.map(l => ({ product: l.pr"
+          }
+        },
+        {
+          "api": "apiInvoices",
+          "method": "list",
+          "line": 150,
+          "fullCall": "apiInvoices.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const pid = supplierId\r\n      const dt = String(orderDate||'').slice(0,10)\r\n      if (!pid || !dt || String(status||'')==='draft') { setActivities([]); return }\r\n      try {\r\n        const invs = await apiInvoices.list({ partner_id: pid, type: 'purchase', from: dt })\r\n        const pays = awai"
+          }
+        },
+        {
+          "api": "apiPayments",
+          "method": "list",
+          "line": 151,
+          "fullCall": "apiPayments.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const dt = String(orderDate||'').slice(0,10)\r\n      if (!pid || !dt || String(status||'')==='draft') { setActivities([]); return }\r\n      try {\r\n        const invs = await apiInvoices.list({ partner_id: pid, type: 'purchase', from: dt })\r\n        const pays = await apiPayments.list({ partner_i"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 175,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    let companyVAT = '—'\r\n    let companyAddr = ''\r\n    let logo = ''\r\n    try {\r\n      const company = await apiSettings.get('settings_company')\r\n      const branding = await apiSettings.get('settings_branding')\r\n      if (branding?.logo) logo = branding.logo\r\n      companyName = (company?.name_ar "
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 176,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    let companyAddr = ''\r\n    let logo = ''\r\n    try {\r\n      const company = await apiSettings.get('settings_company')\r\n      const branding = await apiSettings.get('settings_branding')\r\n      if (branding?.logo) logo = branding.logo\r\n      companyName = (company?.name_ar || company?.name_en || '')"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "pages/PurchaseOrderDetail.jsx",
+          "line": 150,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiPayments.list",
+          "file": "pages/PurchaseOrderDetail.jsx",
+          "line": 151,
+          "severity": "medium",
+          "message": "استدعاء apiPayments.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiInvoices.list",
+          "file": "pages/PurchaseOrderDetail.jsx",
+          "line": 150,
+          "severity": "medium",
+          "message": "استدعاء apiInvoices.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        },
+        {
+          "type": "direct_table_access",
+          "api": "apiPayments.list",
+          "file": "pages/PurchaseOrderDetail.jsx",
+          "line": 151,
+          "severity": "medium",
+          "message": "استدعاء apiPayments.list قد يعتمد على جداول مباشرة بدلاً من القيود المنشورة"
+        }
+      ],
+      "recommendations": []
+    },
+    "reports": {
+      "screen": "reports",
+      "description": "التقارير - جميع التقارير المالية والتشغيلية",
+      "files": [
+        {
+          "file": "pages/Reports.jsx",
+          "apiCalls": 12,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 83,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  useEffect(() => {\r\n    (async()=>{\r\n      try {\r\n        const c = await apiSettings.get('settings_company')\r\n        setCompany(c)\r\n        const b = await apiSettings.get('settings_branding')\r\n        setBranding(b)\r\n      } catch {}\r\n    })()\r"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 85,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{\r\n      try {\r\n        const c = await apiSettings.get('settings_company')\r\n        setCompany(c)\r\n        const b = await apiSettings.get('settings_branding')\r\n        setBranding(b)\r\n      } catch {}\r\n    })()\r\n  }, [])\r\n\r"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "salesVsExpenses",
+          "line": 158,
+          "fullCall": "apiReports.salesVsExpenses",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (from) params.from = from\r\n      if (to) params.to = to\r\n      if (!from && !to && p && p !== 'كل الفترات') params.period = p\r\n      try {\r\n        const res = await apiReports.salesVsExpenses(params)\r\n        setCrossModuleData({ reportId: report.id, data: res, filters: { period: selectedP"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "salesByBranch",
+          "line": 186,
+          "fullCall": "apiReports.salesByBranch",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (to) params.to = to\r\n      if (!from && !to && p && p !== 'كل الفترات') params.period = p\r\n      if (selectedBranch && selectedBranch !== 'كل الفروع') params.branch = selectedBranch\r\n      try {\r\n        const res = await apiReports.salesByBranch(params)\r\n        setCrossModuleData({ report"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "expensesByBranch",
+          "line": 214,
+          "fullCall": "apiReports.expensesByBranch",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (to) params.to = to\r\n      if (!from && !to && p && p !== 'كل الفترات') params.period = p\r\n      if (selectedBranch && selectedBranch !== 'كل الفروع') params.branch = selectedBranch\r\n      try {\r\n        const res = await apiReports.expensesByBranch(params)\r\n        setCrossModuleData({ rep"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "trialBalance",
+          "line": 359,
+          "fullCall": "apiReports.trialBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          await print({ type:'thermal', template:'incomeSummary', data, autoPrint: false })\r\n          return\r\n        }\r\n        if (id === 'trial-balance') {\r\n          const rep = await apiReports.trialBalance({ from: from||undefined, to: to||undefined }).catch(()=>null)\r\n          if (!rep) retu"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 83,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\r\n  useEffect(() => {\r\n    (async()=>{\r\n      try {\r\n        const c = await apiSettings.get('settings_company')\r\n        setCompany(c)\r\n        const b = await apiSettings.get('settings_branding')\r\n        setBranding(b)\r\n      } catch {}\r\n    })()\r"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 85,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    (async()=>{\r\n      try {\r\n        const c = await apiSettings.get('settings_company')\r\n        setCompany(c)\r\n        const b = await apiSettings.get('settings_branding')\r\n        setBranding(b)\r\n      } catch {}\r\n    })()\r\n  }, [])\r\n\r"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "salesVsExpenses",
+          "line": 158,
+          "fullCall": "apiReports.salesVsExpenses",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (from) params.from = from\r\n      if (to) params.to = to\r\n      if (!from && !to && p && p !== 'كل الفترات') params.period = p\r\n      try {\r\n        const res = await apiReports.salesVsExpenses(params)\r\n        setCrossModuleData({ reportId: report.id, data: res, filters: { period: selectedP"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "salesByBranch",
+          "line": 186,
+          "fullCall": "apiReports.salesByBranch",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (to) params.to = to\r\n      if (!from && !to && p && p !== 'كل الفترات') params.period = p\r\n      if (selectedBranch && selectedBranch !== 'كل الفروع') params.branch = selectedBranch\r\n      try {\r\n        const res = await apiReports.salesByBranch(params)\r\n        setCrossModuleData({ report"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "expensesByBranch",
+          "line": 214,
+          "fullCall": "apiReports.expensesByBranch",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      if (to) params.to = to\r\n      if (!from && !to && p && p !== 'كل الفترات') params.period = p\r\n      if (selectedBranch && selectedBranch !== 'كل الفروع') params.branch = selectedBranch\r\n      try {\r\n        const res = await apiReports.expensesByBranch(params)\r\n        setCrossModuleData({ rep"
+          }
+        },
+        {
+          "api": "apiReports",
+          "method": "trialBalance",
+          "line": 359,
+          "fullCall": "apiReports.trialBalance",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "          await print({ type:'thermal', template:'incomeSummary', data, autoPrint: false })\r\n          return\r\n        }\r\n        if (id === 'trial-balance') {\r\n          const rep = await apiReports.trialBalance({ from: from||undefined, to: to||undefined }).catch(()=>null)\r\n          if (!rep) retu"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.salesVsExpenses",
+          "file": "pages/Reports.jsx",
+          "line": 158,
+          "severity": "high",
+          "message": "استدعاء apiReports.salesVsExpenses لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.salesByBranch",
+          "file": "pages/Reports.jsx",
+          "line": 186,
+          "severity": "high",
+          "message": "استدعاء apiReports.salesByBranch لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.expensesByBranch",
+          "file": "pages/Reports.jsx",
+          "line": 214,
+          "severity": "high",
+          "message": "استدعاء apiReports.expensesByBranch لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.trialBalance",
+          "file": "pages/Reports.jsx",
+          "line": 359,
+          "severity": "high",
+          "message": "استدعاء apiReports.trialBalance لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.salesVsExpenses",
+          "file": "pages/Reports.jsx",
+          "line": 158,
+          "severity": "high",
+          "message": "استدعاء apiReports.salesVsExpenses لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.salesByBranch",
+          "file": "pages/Reports.jsx",
+          "line": 186,
+          "severity": "high",
+          "message": "استدعاء apiReports.salesByBranch لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.expensesByBranch",
+          "file": "pages/Reports.jsx",
+          "line": 214,
+          "severity": "high",
+          "message": "استدعاء apiReports.expensesByBranch لا يحدد status='posted' صراحة"
+        },
+        {
+          "type": "missing_status_filter",
+          "api": "apiReports.trialBalance",
+          "file": "pages/Reports.jsx",
+          "line": 359,
+          "severity": "high",
+          "message": "استدعاء apiReports.trialBalance لا يحدد status='posted' صراحة"
+        }
+      ],
+      "recommendations": []
+    },
+    "settings": {
+      "screen": "settings",
+      "description": "الإعدادات",
+      "files": [
+        {
+          "file": "pages/Settings.jsx",
+          "apiCalls": 14,
+          "sqlQueries": 0
+        }
+      ],
+      "apiCalls": [
+        {
+          "api": "apiUsers",
+          "method": "list",
+          "line": 44,
+          "fullCall": "apiUsers.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "\n  useEffect(()=>{ (async()=>{\n    try {\n      const [ul, ac, sc, br] = await Promise.all([\n        apiUsers.list(),\n        apiActions.list(),\n        apiScreens.list(),\n        apiBranches.list(),\n      ])\n      setUsers(Array.isArray(ul)?ul:[])"
+          }
+        },
+        {
+          "api": "apiActions",
+          "method": "list",
+          "line": 45,
+          "fullCall": "apiActions.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "  useEffect(()=>{ (async()=>{\n    try {\n      const [ul, ac, sc, br] = await Promise.all([\n        apiUsers.list(),\n        apiActions.list(),\n        apiScreens.list(),\n        apiBranches.list(),\n      ])\n      setUsers(Array.isArray(ul)?ul:[])\n      setActions(Array.isArray(ac)?ac:[])"
+          }
+        },
+        {
+          "api": "apiScreens",
+          "method": "list",
+          "line": 46,
+          "fullCall": "apiScreens.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    try {\n      const [ul, ac, sc, br] = await Promise.all([\n        apiUsers.list(),\n        apiActions.list(),\n        apiScreens.list(),\n        apiBranches.list(),\n      ])\n      setUsers(Array.isArray(ul)?ul:[])\n      setActions(Array.isArray(ac)?ac:[])\n      setScreens(Array.isArray(sc)?sc:[])"
+          }
+        },
+        {
+          "api": "apiBranches",
+          "method": "list",
+          "line": 47,
+          "fullCall": "apiBranches.list",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const [ul, ac, sc, br] = await Promise.all([\n        apiUsers.list(),\n        apiActions.list(),\n        apiScreens.list(),\n        apiBranches.list(),\n      ])\n      setUsers(Array.isArray(ul)?ul:[])\n      setActions(Array.isArray(ac)?ac:[])\n      setScreens(Array.isArray(sc)?sc:[])\n      set"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 56,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      setBranches(Array.isArray(br)?br:[])\n      const list = Array.isArray(ul)?ul:[]\n      const defaultUser = list.find(u => String(u.role||'').toLowerCase() !== 'admin') || list[0] || null\n      setSelectedUserId(defaultUser?.id || user?.id || null)\n      try { const c = await apiSettings.get('se"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 57,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const list = Array.isArray(ul)?ul:[]\n      const defaultUser = list.find(u => String(u.role||'').toLowerCase() !== 'admin') || list[0] || null\n      setSelectedUserId(defaultUser?.id || user?.id || null)\n      try { const c = await apiSettings.get('settings_company'); if (c) setCompany(c) } ca"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 58,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const defaultUser = list.find(u => String(u.role||'').toLowerCase() !== 'admin') || list[0] || null\n      setSelectedUserId(defaultUser?.id || user?.id || null)\n      try { const c = await apiSettings.get('settings_company'); if (c) setCompany(c) } catch {}\n      try { const b = await apiSetti"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 67,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const map = { CT: 'china_town', PI: 'place_india' }\n        const bRow = (Array.isArray(br)?br:[]).find(x => String(x.code||'')===bc)\n        const slug = map[String(bRow?.code||'')] || normalize(bRow?.name||bc)\n        const key = `settings_branch_${slug}`\n        try { const bs = await api"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 180,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    const bRow = branches.find(x => String(x.code||'') === String(code));\n    const slug = map[String(bRow?.code||'')] || normalize(bRow?.name||code);\n    const key = `settings_branch_${slug}`;\n    try {\n      const bs = await apiSettings.get(key);\n      setBranchSettings(prev => ({ ...prev, ...(bs|"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 56,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      setBranches(Array.isArray(br)?br:[])\n      const list = Array.isArray(ul)?ul:[]\n      const defaultUser = list.find(u => String(u.role||'').toLowerCase() !== 'admin') || list[0] || null\n      setSelectedUserId(defaultUser?.id || user?.id || null)\n      try { const c = await apiSettings.get('se"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 57,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const list = Array.isArray(ul)?ul:[]\n      const defaultUser = list.find(u => String(u.role||'').toLowerCase() !== 'admin') || list[0] || null\n      setSelectedUserId(defaultUser?.id || user?.id || null)\n      try { const c = await apiSettings.get('settings_company'); if (c) setCompany(c) } ca"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 58,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "      const defaultUser = list.find(u => String(u.role||'').toLowerCase() !== 'admin') || list[0] || null\n      setSelectedUserId(defaultUser?.id || user?.id || null)\n      try { const c = await apiSettings.get('settings_company'); if (c) setCompany(c) } catch {}\n      try { const b = await apiSetti"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 67,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "        const map = { CT: 'china_town', PI: 'place_india' }\n        const bRow = (Array.isArray(br)?br:[]).find(x => String(x.code||'')===bc)\n        const slug = map[String(bRow?.code||'')] || normalize(bRow?.name||bc)\n        const key = `settings_branch_${slug}`\n        try { const bs = await api"
+          }
+        },
+        {
+          "api": "apiSettings",
+          "method": "get",
+          "line": 180,
+          "fullCall": "apiSettings.get",
+          "statusCheck": {
+            "hasPostedStatus": false,
+            "hasDraftStatus": false,
+            "context": "    const bRow = branches.find(x => String(x.code||'') === String(code));\n    const slug = map[String(bRow?.code||'')] || normalize(bRow?.name||code);\n    const key = `settings_branch_${slug}`;\n    try {\n      const bs = await apiSettings.get(key);\n      setBranchSettings(prev => ({ ...prev, ...(bs|"
+          }
+        }
+      ],
+      "sqlQueries": [],
+      "issues": [],
+      "recommendations": []
+    }
+  },
+  "backendEndpoints": [
+    {
+      "method": "GET",
+      "path": "/expenses",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/expenses",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/expenses/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "POST",
+      "path": "/expenses/:id/post",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/expenses/:id/post",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/supplier-invoices",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/supplier-invoices",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "PUT",
+      "path": "/supplier-invoices/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/supplier-invoices/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "POST",
+      "path": "/supplier-invoices/:id/post",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/supplier-invoices/:id/post",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/supplier-invoices/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/supplier-invoices/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/invoices",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/invoices",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/invoices/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/invoices/next-number",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "POST",
+      "path": "/invoices",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/invoices/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/invoices/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/invoice_items/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/invoice_items/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/orders",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/orders",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "PUT",
+      "path": "/orders/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/orders/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/orders/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/orders/:id",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/payments",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "POST",
+      "path": "/payments",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/ar/summary",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/pos/tables-layout",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/pos/tables-layout",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "PUT",
+      "path": "/pos/tables-layout",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/pos/tables-layout",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    },
+    {
+      "method": "GET",
+      "path": "/pos/table-state",
+      "usesPostedStatus": false,
+      "usesJournalEntries": false,
+      "usesDirectTables": true,
+      "needsReview": true
+    }
+  ]
+}

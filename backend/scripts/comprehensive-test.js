@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const API_BASE = 'http://localhost:4000/api';
+const API_BASE = process.env.API_BASE_URL || 'http://localhost:5000/api';
 const TEST_USER = {
   email: 'fysl71443@gmail.com',
   password: 'StrongPass123'
@@ -40,10 +40,19 @@ async function makeRequest(method, endpoint, data = null) {
     const response = await axios(config);
     return { success: true, data: response.data, status: response.status };
   } catch (error) {
+    const errorDetails = error.response?.data || error.message;
+    if (error.code === 'ECONNREFUSED') {
+      return {
+        success: false,
+        error: `Connection refused - Server may not be running on ${API_BASE}`,
+        status: 0
+      };
+    }
     return {
       success: false,
-      error: error.response?.data || error.message,
-      status: error.response?.status || 500
+      error: errorDetails,
+      status: error.response?.status || 500,
+      fullError: error.message
     };
   }
 }

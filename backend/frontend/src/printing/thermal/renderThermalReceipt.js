@@ -121,29 +121,68 @@ export async function renderThermalReceipt(template, data){
   const sep = `<div class='sep'>─────────────────────────────</div>`
   const rowsHtml = Array.isArray(data.items)?data.items.map(it=>{
     const amt = Number(it.qty||0)*Number(it.price||0)
-    return `<tr><td class='item'>${esc(it.name)}</td><td class='qty'>${Number(it.qty||0)}</td><td class='amt'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(amt,'en')}</span></td></tr>`
+    // Always show bilingual item names: Arabic / English
+    const nameAr = String(it.name||it.name_ar||'').trim()
+    const nameEn = String(it.name_en||'').trim()
+    // Show bilingual format: Arabic / English (always show both if English exists, even if same)
+    let itemNameBi = nameAr || ''
+    if (nameEn && nameEn.trim()) {
+      if (nameAr && nameAr.trim()) {
+        itemNameBi = `${nameAr} / ${nameEn}`
+      } else {
+        itemNameBi = nameEn
+      }
+    }
+    return `<tr><td class='item'>${esc(itemNameBi)}</td><td class='qty'>${Number(it.qty||0)}</td><td class='amt'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(amt,'en')}</span></td></tr>`
   }).join(''):''
   const tableHead = `<thead>
     <tr><th class='item' style='width:54%'>الصنف / Item</th><th class='qty' style='width:16%'>الكمية / Qty</th><th class='amt' style='width:30%'>المبلغ / Amount</th></tr>
   </thead>`
+  const discountAmount = Number(data.discountAmount||0)
+  const discountPct = Number(data.discountPct||0)
+  // Only show discount if amount is greater than 0.01 (to handle floating point precision)
+  const showDiscount = Math.abs(discountAmount) > 0.01
+  
   const totalsHtml = `
     <div class='line'><div>Subtotal / إجمالي الأصناف</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(data.subtotal,'en')}</span></div></div>
-    <div class='line'><div>Discount / الخصم${data.discountPct>0?` (${fmt(data.discountPct,'en')}%)`:''}</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(data.discountAmount||0,'en')}</span></div></div>
+    ${showDiscount ? `<div class='line'><div>Discount / الخصم${discountPct>0?` (${fmt(discountPct,'en')}%)`:''}</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(discountAmount,'en')}</span></div></div>` : ''}
     <div class='line'><div>VAT ${fmt(data.vatPct||0,'en')}% / الضريبة</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(data.vatAmount,'en')}</span></div></div>
     <div class='line total'><div>TOTAL / الإجمالي الكلي</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(data.total,'en')}</span></div></div>
   `
   const payLinesHtml = (function(){
     const labelPayments = 'طرق الدفع / Payment Method'
-    function mapLabelAr(t){ const s = String(t||'').toLowerCase(); if (s==='card' || s==='bank') return 'بطاقة'; if (s==='cash') return 'نقدي'; if (s==='credit') return 'آجل'; if (s==='multiple') return 'مزيج'; return s.toUpperCase() }
+    function mapLabelAr(t){ 
+      const s = String(t||'').toLowerCase().trim(); 
+      if (s==='card' || s==='bank') return 'بطاقة'; 
+      if (s==='cash') return 'نقدي'; 
+      if (s==='credit') return 'آجل'; 
+      if (s==='qr') return 'QR'; 
+      if (s==='multiple') return 'مزيج'; 
+      return String(t||'').toUpperCase() 
+    }
+    function mapLabelEn(t){ 
+      const s = String(t||'').toLowerCase().trim(); 
+      if (s==='card' || s==='bank') return 'Card'; 
+      if (s==='cash') return 'Cash'; 
+      if (s==='credit') return 'Credit'; 
+      if (s==='qr') return 'QR'; 
+      if (s==='multiple') return 'Multiple'; 
+      return String(t||'').toUpperCase() 
+    }
+    function mapLabelBi(t){ const ar = mapLabelAr(t); const en = mapLabelEn(t); return `${ar} / ${en}` }
     const linesArr = Array.isArray(data.paymentLines) ? data.paymentLines : []
     if (linesArr.length > 0) {
-      const rows = linesArr.map(l => `<div class='line'><div>${esc(mapLabelAr(l.label||l.method||''))}</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(l.amount,'en')}</span></div></div>`).join('')
+      const rows = linesArr.map(l => {
+        const method = String(l.label||l.method||'').trim()
+        const labelBi = mapLabelBi(method)
+        return `<div class='line'><div>${esc(labelBi)}</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(l.amount,'en')}</span></div></div>`
+      }).join('')
       return `<div class='line'><div class='f'>${labelPayments}:</div><div></div></div>${rows}`
     }
     const paymentsArr = Array.isArray(data.payments) ? data.payments : []
     if (paymentsArr.length > 0) {
       const agg = {}
-      for (const p of paymentsArr) { const k = mapLabelAr(p.type); agg[k] = (agg[k]||0) + Number(p.amount||0) }
+      for (const p of paymentsArr) { const k = mapLabelBi(p.type); agg[k] = (agg[k]||0) + Number(p.amount||0) }
       const rows = Object.entries(agg).map(([k,v]) => `<div class='line'><div>${esc(k)}</div><div class='ltr'><span class='currency' style='display:inline-flex;align-items:center;gap:3px'>${icon}${fmt(v,'en')}</span></div></div>`).join('')
       return `<div class='line'><div class='f'>${labelPayments}:</div><div></div></div>${rows}`
     }
@@ -151,7 +190,7 @@ export async function renderThermalReceipt(template, data){
       return `<div class='line'><div>Payment Status / حالة الدفع:</div><div>Unpaid / غير مدفوعة</div></div>`
     }
     if (data.paymentMethod) {
-      const pm = mapLabelAr(data.paymentMethod)
+      const pm = mapLabelBi(data.paymentMethod)
       return `<div class='line'><div>Payment Method / طريقة الدفع:</div><div>${esc(pm)}</div></div>`
     }
     return ''

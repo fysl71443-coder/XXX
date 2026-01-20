@@ -82,7 +82,18 @@
     if (branding && branding.logo) { const img=document.getElementById('logo'); img.src=branding.logo; img.style.display='block' }
     const id = qp('id'); if(!id) return
     const inv = await authFetch(`${API_BASE}/invoices/${encodeURIComponent(id)}`)
-    const items = await authFetch(`${API_BASE}/invoice_items/${encodeURIComponent(id)}`)
+    // Use lines from invoice object directly (not from /invoice_items endpoint)
+    let items = []
+    if (Array.isArray(inv.lines)) {
+      items = inv.lines.filter(x => x && x.type === 'item')
+    } else if (typeof inv.lines === 'string') {
+      try {
+        const parsed = JSON.parse(inv.lines || '[]')
+        items = Array.isArray(parsed) ? parsed.filter(x => x && x.type === 'item') : []
+      } catch {}
+    } else if (Array.isArray(inv.items)) {
+      items = inv.items
+    }
     const meta = document.getElementById('meta')
     const partner = inv.partner?.name || inv.partner_name || '—'
     meta.textContent = `رقم الفاتورة: ${inv.invoice_number || inv.number || id} • التاريخ: ${inv.date || ''} • العميل: ${partner}`
@@ -91,7 +102,7 @@
     let total = 0
     ;(Array.isArray(items)?items:[]).forEach(it => {
       const name = it.product?.name || it.name || ''
-      const qty = Number(it.quantity||1)
+      const qty = Number(it.quantity||it.qty||1)
       const price = Number(it.unit_price||it.price||0)
       const line = qty * price
       const tr = document.createElement('tr')

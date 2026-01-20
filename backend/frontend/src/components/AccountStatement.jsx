@@ -25,9 +25,12 @@ export default function AccountStatement({ account }) {
     setLoading(true)
     try {
       const rows = await apiJournal.byAccount(account.id, { from, to })
-      setEntries(rows)
+      // Handle both array and object with items property
+      const entriesArray = Array.isArray(rows) ? rows : (Array.isArray(rows?.items) ? rows.items : [])
+      setEntries(entriesArray)
       setError(null)
     } catch (e) {
+      console.error('[AccountStatement] Error loading entries:', e)
       setError('request_failed')
       setEntries([])
     } finally {
@@ -42,7 +45,8 @@ export default function AccountStatement({ account }) {
       ? parseFloat(account?.opening_balance || 0)
       : (parseFloat(account?.opening_debit || 0) - parseFloat(account?.opening_credit || 0))
     let balance = start
-    return entries.map(e => {
+    const entriesArray = Array.isArray(entries) ? entries : (Array.isArray(entries?.items) ? entries.items : [])
+    return entriesArray.map(e => {
       const debit = parseFloat(e.debit || 0)
       const credit = parseFloat(e.credit || 0)
       balance += debit - credit

@@ -4,25 +4,16 @@ import { isAdminUser } from "../utils/auth.js";
 function normalize(str){ return String(str||'').trim().toLowerCase() }
 
 async function ensurePermissionsMap(req){
-  if (req.user && req.user.permissionsMap) return req.user.permissionsMap
-  const id = Number(req.user?.id || 0)
-  if (!id) return {}
-  const { rows } = await pool.query('SELECT screen_code, branch_code, action_code, allowed FROM user_permissions WHERE user_id = $1', [id])
-  const map = {}
-  for (const r of rows || []) {
-    const sc = normalize(r.screen_code)
-    const br = String(r.branch_code || '')
-    const ac = normalize(r.action_code)
-    map[sc] = map[sc] || { _global: {} }
-    if (!br) {
-      map[sc]._global[ac] = !!r.allowed
-    } else {
-      map[sc][br] = map[sc][br] || {}
-      map[sc][br][ac] = !!r.allowed
-    }
+  // OPTIMIZATION: Permissions are loaded at login and sent with every request in header
+  // No database query needed - just use the cached permissions from req.user.permissionsMap
+  if (req.user && req.user.permissionsMap) {
+    return req.user.permissionsMap;
   }
-  try { if (req.user) req.user.permissionsMap = map } catch {}
-  return map
+  
+  // If permissions are not available (should not happen if login worked correctly),
+  // return empty map - user will be denied access
+  console.warn(`[AUTHORIZE] No permissions found for user ${req.user?.id} - permissions should be loaded at login`);
+  return {};
 }
 
 export function authorize(screen, action, options = {}) {

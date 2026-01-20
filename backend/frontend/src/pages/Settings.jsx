@@ -27,6 +27,8 @@ export default function Settings(){
   
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState({ type: '', message: '' })
+  const [editingUser, setEditingUser] = useState(null)
+  const [userForm, setUserForm] = useState({ email: '', password: '', role: 'user' })
   
   const companyValid = useMemo(()=>{
     // Only require name - VAT and phone are optional
@@ -192,6 +194,51 @@ export default function Settings(){
     }
   }
 
+  async function saveUserData(){
+    try {
+      setSaving(true)
+      if (!editingUser || !editingUser.id) {
+        setToast({ type: 'error', message: 'لم يتم اختيار مستخدم' })
+        setSaving(false)
+        return
+      }
+      
+      // Update email and role
+      if (userForm.email && userForm.email !== editingUser.email) {
+        await apiUsers.update(editingUser.id, { email: userForm.email, role: userForm.role })
+      } else if (userForm.role && userForm.role !== editingUser.role) {
+        await apiUsers.update(editingUser.id, { role: userForm.role })
+      }
+      
+      // Update password if provided
+      if (userForm.password && userForm.password.trim()) {
+        await apiUsers.resetPassword(editingUser.id, userForm.password)
+      }
+      
+      // Refresh users list
+      const ul = await apiUsers.list()
+      setUsers(Array.isArray(ul) ? ul : [])
+      
+      setToast({ type: 'success', message: 'تم حفظ بيانات المستخدم بنجاح' })
+      setEditingUser(null)
+      setUserForm({ email: '', password: '', role: 'user' })
+    } catch (e) {
+      console.error('[Settings] Error saving user data:', e)
+      setToast({ type: 'error', message: 'فشل حفظ بيانات المستخدم: ' + (e?.message || 'خطأ غير معروف') })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startEditUser(user) {
+    setEditingUser(user)
+    setUserForm({
+      email: user.email || '',
+      password: '',
+      role: user.role || 'user'
+    })
+  }
+
   async function saveBranch(){
     try {
       setSaving(true)
@@ -240,6 +287,7 @@ export default function Settings(){
             <h2 className="text-2xl font-semibold text-gray-800">الإعدادات</h2>
             <div className="flex gap-2">
               {activeTab==='permissions' && (<Button variant="primary" onClick={saveAll} disabled={saving} loading={saving}>حفظ</Button>)}
+              {activeTab==='users' && editingUser && (<Button variant="primary" onClick={saveUserData} disabled={saving} loading={saving}>حفظ</Button>)}
               {activeTab==='general' && (<Button variant="primary" onClick={saveCompany} disabled={saving || !companyValid} loading={saving}>حفظ</Button>)}
               {activeTab==='branding' && (<Button variant="primary" onClick={saveBranding} disabled={saving} loading={saving}>حفظ</Button>)}
               {activeTab==='footer' && (<Button variant="primary" onClick={saveFooter} disabled={saving} loading={saving}>حفظ</Button>)}
@@ -249,6 +297,7 @@ export default function Settings(){
           <div className="mt-4 flex flex-wrap gap-2">
             {[
               { k:'permissions', t:'صلاحيات المستخدمين' },
+              { k:'users', t:'إدارة المستخدمين' },
               { k:'general', t:'إعدادات عامة' },
               { k:'branches', t:'إعدادات الفروع' },
               { k:'branding', t:'العلامة التجارية' },
@@ -383,6 +432,62 @@ export default function Settings(){
             </div>
           </div>
         )}
+        {activeTab==='users' && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-white border rounded p-4">
+              <div className="font-semibold mb-3">قائمة المستخدمين</div>
+              <ul className="space-y-2">
+                {users.map(u => (
+                  <li key={u.id}>
+                    <button 
+                      className={`w-full text-left px-3 py-2 rounded ${editingUser?.id===u.id?'bg-primary-50 border-primary-200':'bg-gray-50 border-gray-200'} border`} 
+                      onClick={()=>startEditUser(u)}
+                    >
+                      <div className="font-medium">{u.name || u.email}</div>
+                      <div className="text-sm text-gray-600">{u.email}</div>
+                      <div className="text-xs text-gray-500">Role: {u.role || 'user'}</div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            {editingUser && (
+              <div className="bg-white border rounded p-4">
+                <div className="font-semibold mb-3">تعديل بيانات المستخدم</div>
+                <div className="grid grid-cols-1 gap-3">
+                  <FormField 
+                    label="البريد الإلكتروني" 
+                    value={userForm.email||''} 
+                    onChange={e=>setUserForm({...userForm, email: e.target.value})} 
+                    placeholder="email@example.com" 
+                  />
+                  <FormField 
+                    label="كلمة المرور (اتركها فارغة للاحتفاظ بالكلمة الحالية)" 
+                    type="password"
+                    value={userForm.password||''} 
+                    onChange={e=>setUserForm({...userForm, password: e.target.value})} 
+                    placeholder="كلمة مرور جديدة" 
+                  />
+                  <div>
+                    <label className="block text-sm font-medium mb-1">الدور (Role)</label>
+                    <select 
+                      className="w-full border rounded px-3 py-2"
+                      value={userForm.role||'user'}
+                      onChange={e=>setUserForm({...userForm, role: e.target.value})}
+                    >
+                      <option value="user">مستخدم</option>
+                      <option value="admin">مدير</option>
+                    </select>
+                  </div>
+                  <div className="text-sm text-gray-600 mt-2">
+                    <div>المستخدم الحالي: {editingUser.email}</div>
+                    <div>الدور الحالي: {editingUser.role || 'user'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         {activeTab==='permissions' && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white border rounded p-4">
@@ -390,7 +495,7 @@ export default function Settings(){
             <ul className="space-y-2">
               {users.map(u => (
                 <li key={u.id}>
-                  <button className={`w-full text-left px-3 py-2 rounded ${selectedUserId===u.id?'bg-primary-50 border-primary-200':'bg-gray-50 border-gray-200'} border`} onClick={async()=>{ setSelectedUserId(u.id); try { await impersonatePermissionsForUser(u.id) } catch {} }}>{u.name} — {u.email}</button>
+                  <button className={`w-full text-left px-3 py-2 rounded ${selectedUserId===u.id?'bg-primary-50 border-primary-200':'bg-gray-50 border-gray-200'} border`} onClick={async()=>{ setSelectedUserId(u.id); try { await impersonatePermissionsForUser(u.id) } catch {} }}>{u.name || u.email} — {u.email}</button>
                 </li>
               ))}
             </ul>

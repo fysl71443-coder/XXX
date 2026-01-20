@@ -21,6 +21,7 @@ export default function AccountsScreen() {
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [entries, setEntries] = useState([])
+  const [allEntries, setAllEntries] = useState([]) // جميع القيود المنشورة
   const [showCreate, setShowCreate] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
@@ -158,7 +159,14 @@ export default function AccountsScreen() {
   const cash = useMemo(() => {
     const isCash = (a) => {
       const n = ((a.name||'') + ' ' + (a.name_en||'') + ' ' + (a.account_number||a.account_code||''))
-      return String(a.type)==='asset' && (/(cash|bank|نقد|البنوك|الصناديق)/i.test(n) || String(a.account_code||'').startsWith('101'))
+      const code = String(a.account_code || a.account_number || '')
+      // Check for cash/bank accounts: codes starting with 101, 111, 112, or names containing cash/bank keywords
+      return String(a.type)==='asset' && (
+        /(cash|bank|نقد|البنوك|الصناديق|صندوق|بنك|خزينة)/i.test(n) || 
+        code.startsWith('101') || 
+        code.startsWith('111') || 
+        code.startsWith('112')
+      )
     }
     let opening = 0
     let periodIn = 0
@@ -211,8 +219,16 @@ export default function AccountsScreen() {
       const qp = new URLSearchParams(location.search)
       const v = qp.get('view')
       if (v) setView(v)
+      
+      // CRITICAL: Read filters from URL (from, to, period, branch)
+      const fromParam = qp.get('from')
+      const toParam = qp.get('to')
       const per = qp.get('period')
-      if (per && /^\d{4}-\d{2}$/.test(per)){
+      
+      if (fromParam) setFrom(fromParam)
+      if (toParam) setTo(toParam)
+      
+      if (per && /^\d{4}-\d{2}$/.test(per) && !fromParam && !toParam){
         const [y,m] = per.split('-')
         const f = `${y}-${m}-01`
         const d = new Date(Number(y), Number(m), 0)
@@ -223,6 +239,21 @@ export default function AccountsScreen() {
         setTo(t)
       }
     } catch {}
+  }, [location.search])
+
+  // تحميل جميع القيود المنشورة لحساب الإجماليات
+  useEffect(() => {
+    async function loadAllEntries(){
+      try {
+        const result = await apiJournal.list({ status: 'posted', pageSize: 1000 })
+        const allRows = Array.isArray(result.items) ? result.items : []
+        setAllEntries(allRows)
+      } catch (e) {
+        console.warn('[AccountsScreen] Could not load all entries:', e)
+        setAllEntries([])
+      }
+    }
+    loadAllEntries()
   }, [])
 
   useEffect(() => {
@@ -255,11 +286,31 @@ export default function AccountsScreen() {
     return filterTree(accounts)
   }, [accounts, search, typeFilter])
 
+  // حساب الإجماليات من جميع القيود المنشورة
   const totals = useMemo(() => {
-    const debit = entries.reduce((s, e) => s + parseFloat(e.debit||0), 0)
-    const credit = entries.reduce((s, e) => s + parseFloat(e.credit||0), 0)
-    return { debit, credit, net: debit - credit }
-  }, [entries])
+    // إذا كان هناك حساب محدد، استخدم entries الخاصة به
+    // وإلا استخدم جميع القيود المنشورة
+    const sourceEntries = selectedAccount ? entries : allEntries
+    
+    // حساب الإجماليات من جميع الـ postings في القيود
+    let totalDebit = 0
+    let totalCredit = 0
+    
+    for (const entry of sourceEntries) {
+      if (Array.isArray(entry.postings)) {
+        for (const posting of entry.postings) {
+          totalDebit += parseFloat(posting.debit || 0)
+          totalCredit += parseFloat(posting.credit || 0)
+        }
+      } else {
+        // Fallback: إذا لم تكن postings موجودة، استخدم القيم المباشرة
+        totalDebit += parseFloat(entry.debit || entry.total_debit || 0)
+        totalCredit += parseFloat(entry.credit || entry.total_credit || 0)
+      }
+    }
+    
+    return { debit: totalDebit, credit: totalCredit, net: totalDebit - totalCredit }
+  }, [entries, allEntries, selectedAccount])
 
   if (!authorized) {
     return (
@@ -338,13 +389,7 @@ export default function AccountsScreen() {
             ) : (
               <AccountTree accounts={filteredAccounts} onSelect={a=>{ setSelectedAccount(a); setView('account') }} />
             )}
-            <div className="mt-2 flex gap-2">
-              <button className="px-3 py-2 bg-primary-600 text-white rounded flex items-center gap-2" onClick={()=>{ setForm({ name: '', name_en: '', type: '', opening_balance: '' }); setShowCreate(true) }}><FaPlus /> {lang==='ar'?'إضافة حساب':'Add Account'}</button>
-              <button className="px-3 py-2 bg-green-600 text-white rounded" disabled={!selectedAccount} onClick={()=>{ setForm({ name: '', name_en: '', type: selectedAccount?.type||'', opening_balance: '' }); setShowCreate(true) }}>{lang==='ar'?'إضافة فرعي':'Add Child'}</button>
-              <button className="px-3 py-2 bg-gray-800 text-white rounded disabled:opacity-50" disabled={seeding} onClick={async()=>{
-                try { setSeeding(true); await apiAccounts.seedDefault(); const data = await apiAccounts.tree(); setAccounts(data) } catch {} finally { setSeeding(false) }
-              }}>{seeding ? (lang==='ar'?'جارٍ البذر...':'Seeding...') : (lang==='ar'?'بذر الشجرة الافتراضية':'Seed Default Tree')}</button>
-            </div>
+            {/* تم إزالة أزرار إضافة/تعديل/حذف الحسابات - الشجرة تُزرع من قاعدة البيانات فقط */}
           </div>
           <div>
             <div className="font-semibold mb-2">{lang==='ar'?'📘 الدفاتر المحاسبية':'📘 Ledgers'}</div>
@@ -479,10 +524,6 @@ export default function AccountsScreen() {
                       <AccountSummary account={selectedAccount} />
                       <div className="flex gap-2">
                         <button className="px-3 py-2 bg-gray-100 text-gray-800 rounded flex items-center gap-2" onClick={()=>navigate('/journal')}><FaFileInvoice /> {lang==='ar'?'القيود':'Journal'}</button>
-                        <button className="px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-2" onClick={()=>setShowEdit(true)} disabled={!selectedAccount}><FaEdit /> {lang==='ar'?'تعديل':'Edit'}</button>
-              <button className="px-3 py-2 bg-red-600 text-white rounded flex items-center gap-2" onClick={()=>setShowDelete(true)} disabled={!selectedAccount}><FaTrash /> {lang==='ar'?'حذف':'Delete'}</button>
-                        <button className="px-3 py-2 bg-gray-100 text-gray-800 rounded" disabled><FaLock /> {lang==='ar'?'قفل':'Lock'}</button>
-                        <button className="px-3 py-2 bg-gray-100 text-gray-800 rounded" disabled><FaUnlock /> {lang==='ar'?'فتح':'Unlock'}</button>
                       </div>
                     </div>
                   )}
@@ -536,137 +577,7 @@ export default function AccountsScreen() {
           )}
         </div>
       </div>
-      {showCreate && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
-          <div className="bg-white rounded shadow p-4 w-full max-w-md">
-            <div className="text-lg font-bold mb-2">{lang==='ar'?'إضافة حساب':'Add Account'}</div>
-            <div className="space-y-2">
-              <input className="w-full px-3 py-2 border rounded" placeholder={lang==='ar'?'الاسم بالعربية':'Arabic name'} value={form.name} onChange={e=>setForm({...form, name: e.target.value})} />
-              <input className="w-full px-3 py-2 border rounded" placeholder={lang==='ar'?'الاسم بالإنجليزية':'English name'} value={form.name_en} onChange={e=>setForm({...form, name_en: e.target.value})} />
-              <select className="w-full px-3 py-2 border rounded" value={form.type} onChange={e=>setForm({...form, type: e.target.value})}>
-                <option value="">{lang==='ar'?'اختر النوع':'Select type'}</option>
-                <option value="asset">{lang==='ar'?'أصول':'Assets'}</option>
-                <option value="liability">{lang==='ar'?'التزامات':'Liabilities'}</option>
-                <option value="equity">{lang==='ar'?'حقوق ملكية':'Equity'}</option>
-                <option value="revenue">{lang==='ar'?'إيرادات':'Revenue'}</option>
-                <option value="expense">{lang==='ar'?'مصروفات':'Expenses'}</option>
-              </select>
-              <input className="w-full px-3 py-2 border rounded" placeholder={lang==='ar'?'الرصيد الافتتاحي (اختياري)':'Opening balance (optional)'} value={form.opening_balance} onChange={e=>setForm({...form, opening_balance: e.target.value})} />
-            </div>
-            <div className="flex justify-end gap-2 mt-3">
-              <button className="px-3 py-2 bg-gray-100 rounded" onClick={()=>setShowCreate(false)}>{lang==='ar'?'إلغاء':'Cancel'}</button>
-              <button className="px-3 py-2 bg-primary-600 text-white rounded flex items-center gap-2" onClick={async ()=>{
-                setCreateError('')
-                try {
-                  const payload = { ...form }
-                  if (selectedAccount) payload.parent_code = (selectedAccount.account_code || selectedAccount.account_number || '')
-                  if (payload.type) payload.type = String(payload.type).toLowerCase()
-                  await apiAccounts.create(payload)
-                  const data = await apiAccounts.tree(); setAccounts(data); setShowCreate(false)
-                } catch (e) {
-                  setCreateError(e.code || 'request_failed')
-                }
-              }}><FaPlus/> {lang==='ar'?'حفظ':'Save'}</button>
-            </div>
-            {createError && <div className="mt-2 text-sm text-red-600">{lang==='ar'?'فشل الإنشاء:':'Create failed:'} {createError}</div>}
-          </div>
-        </div>
-      )}
-      {showEdit && selectedAccount && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
-          <div className="bg-white rounded shadow p-4 w-full max-w-md">
-            <div className="text-lg font-bold mb-2">{lang==='ar'?'تعديل الحساب':'Edit Account'}</div>
-            <div className="space-y-2">
-              <input className="w-full px-3 py-2 border rounded" value={form.name || selectedAccount.name || ''} onChange={e=>setForm({...form, name: e.target.value})} />
-              <input className="w-full px-3 py-2 border rounded" value={form.name_en || selectedAccount.name_en || ''} onChange={e=>setForm({...form, name_en: e.target.value})} />
-              <select className="w-full px-3 py-2 border rounded" value={form.type || selectedAccount.type || ''} onChange={e=>setForm({...form, type: e.target.value})}>
-                <option value="asset">{lang==='ar'?'أصول':'Assets'}</option>
-                <option value="liability">{lang==='ar'?'التزامات':'Liabilities'}</option>
-                <option value="equity">{lang==='ar'?'حقوق ملكية':'Equity'}</option>
-                <option value="revenue">{lang==='ar'?'إيرادات':'Revenue'}</option>
-                <option value="expense">{lang==='ar'?'مصروفات':'Expenses'}</option>
-              </select>
-
-              {/* Prevent VAT Claim Checkbox (Only for Expense accounts) */}
-              {(form.type === 'expense' || selectedAccount.type === 'expense') && (
-                <div className="flex flex-col gap-2 mt-2">
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="checkbox" 
-                      id="prevent_vat_claim"
-                      checked={form.prevent_vat_claim ?? selectedAccount.prevent_vat_claim ?? false} 
-                      onChange={e => setForm({...form, prevent_vat_claim: e.target.checked})} 
-                    />
-                    <label htmlFor="prevent_vat_claim" className="text-sm text-gray-700">
-                      {lang === 'ar' ? 'ضريبة غير مستردة (توجيه الضريبة إلى 2140)' : 'Non-recoverable VAT (Route VAT to 2140)'}
-                    </label>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="checkbox" 
-                      id="zakat_deductible"
-                      checked={form.zakat_deductible ?? selectedAccount.zakat_deductible ?? true} 
-                      onChange={e => setForm({...form, zakat_deductible: e.target.checked})} 
-                    />
-                    <label htmlFor="zakat_deductible" className="text-sm text-gray-700">
-                      {lang === 'ar' ? 'قابل للخصم الزكوي/الضريبي' : 'Deductible for Zakat/Tax'}
-                    </label>
-                  </div>
-                </div>
-              )}
-              
-              {(()=>{ const defOpen = (selectedAccount.opening_balance!=null)
-                ? String(selectedAccount.opening_balance)
-                : String((parseFloat(selectedAccount.opening_debit||0) - parseFloat(selectedAccount.opening_credit||0))||0);
-                return (
-                  <input className="w-full px-3 py-2 border rounded" placeholder={lang==='ar'?'الرصيد الافتتاحي':'Opening balance'} value={(form.opening_balance ?? defOpen)} onChange={e=>setForm({...form, opening_balance: e.target.value})} />
-                ) })()}
-            </div>
-            <div className="flex justify-end gap-2 mt-3">
-              <button className="px-3 py-2 bg-gray-100 rounded" onClick={()=>{ setShowEdit(false); setForm({ name:'', name_en:'', type:'', opening_balance:'' }) }}>{lang==='ar'?'إلغاء':'Cancel'}</button>
-              <button className="px-3 py-2 bg-blue-600 text-white rounded flex items-center gap-2" onClick={async ()=>{
-                const payload = { name: form.name || selectedAccount.name, name_en: form.name_en || selectedAccount.name_en, type: form.type || selectedAccount.type }
-                if (form.opening_balance != null && String(form.opening_balance).trim() !== '') {
-                  const val = parseFloat(form.opening_balance)
-                  if (!isNaN(val)) {
-                    const abs = Math.abs(val)
-                    if (val >= 0) { payload.opening_debit = abs; payload.opening_credit = 0 }
-                    else { payload.opening_debit = 0; payload.opening_credit = abs }
-                  }
-                }
-                await apiAccounts.update(selectedAccount.id, payload)
-                const data = await apiAccounts.tree(); setAccounts(data); setShowEdit(false)
-              }}><FaEdit/> {lang==='ar'?'حفظ':'Save'}</button>
-            </div>
-          </div>
-        </div>
-      )}
-      {showDelete && selectedAccount && (
-        <div className="fixed inset-0 bg-black/30 flex items-center justify-center">
-          <div className="bg-white rounded shadow p-4 w-full max-w-md">
-            <div className="text-lg font-bold mb-2">{lang==='ar'?'حذف الحساب':'Delete Account'}</div>
-            <div className="text-sm">{lang==='ar'?'هل أنت متأكد من حذف الحساب؟':'Are you sure to delete this account?'}</div>
-            {deleteError && <div className="mt-2 text-sm text-red-600">{lang==='ar'?'لا يمكن الحذف:':'Cannot delete:'} {deleteError}</div>}
-            <label className="flex items-center gap-2 mt-2 text-sm">
-              <input type="checkbox" onChange={e=>setForm({...form, force_delete: e.target.checked})} />
-              {lang==='ar'?'حذف شامل للحركات والفواتير المرتبطة':'Cascade delete journal entries and related documents'}
-            </label>
-            <div className="flex justify-end gap-2 mt-3">
-              <button className="px-3 py-2 bg-gray-100 rounded" onClick={()=>setShowDelete(false)}>{lang==='ar'?'إلغاء':'Cancel'}</button>
-              <button className="px-3 py-2 bg-red-600 text-white rounded flex items-center gap-2" onClick={async ()=>{
-                setDeleteError('')
-                try {
-                  const params = form.force_delete ? { force: 1 } : {}
-                  await apiAccounts.remove(selectedAccount.id, params)
-                  const data = await apiAccounts.tree(); setAccounts(data); setSelectedAccount(null); setShowDelete(false)
-                } catch (e) {
-                  setDeleteError(e.code || 'request_failed')
-                }
-              }}><FaTrash/> {lang==='ar'?'حذف':'Delete'}</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* تم إزالة جميع نوافذ إضافة/تعديل/حذف الحسابات - الشجرة تُزرع من قاعدة البيانات فقط */}
     </div>
   )
 }

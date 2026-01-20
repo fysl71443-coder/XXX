@@ -47,6 +47,7 @@
 <table id="tbl">
   <thead>
     <tr>
+      <th>الكود</th>
       <th>الحساب</th>
       <th>الرصيد الابتدائي</th>
       <th>القيد</th>
@@ -106,22 +107,108 @@
     const tb = await authFetch(`${API_BASE}/reports/trial-balance${paramsTB.toString()?`?${paramsTB.toString()}`:''}`)
     const accounts = Array.isArray(tb?.items)?tb.items:[]
     const tbody = document.querySelector('#tbl tbody'); tbody.innerHTML = ''
-    if (!accounts.length){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=7; td.textContent='لا توجد حركات منشورة للفترة المحددة'; tr.appendChild(td); tbody.appendChild(tr); setTimeout(()=>window.print(),200); return }
+    if (!accounts.length){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=8; td.textContent='لا توجد حركات منشورة للفترة المحددة'; tr.appendChild(td); tbody.appendChild(tr); setTimeout(()=>window.print(),200); return }
+    
+    // Fetch account names from accounts API if missing
+    const accountMap = new Map()
+    try {
+      const accountsTree = await authFetch(`${API_BASE}/accounts`)
+      const flatAccounts = []
+      function flattenAccounts(arr) {
+        if (!Array.isArray(arr)) return
+        for (const a of arr) {
+          if (a && a.id) {
+            flatAccounts.push(a)
+            if (Array.isArray(a.children)) flattenAccounts(a.children)
+          }
+        }
+      }
+      flattenAccounts(accountsTree)
+      
+      for (const acc of flatAccounts) {
+        const accId = Number(acc.id || 0)
+        const accCode = String(acc.account_code || acc.account_number || '').trim()
+        if (accId) accountMap.set(accId, acc)
+        if (accCode) accountMap.set(accCode, acc)
+      }
+      
+      // Enrich accounts with names
+      for (const acc of accounts) {
+        const accId = Number(acc.account_id || acc.id || 0)
+        const accCode = String(acc.account_code || acc.code || acc.account_number || '').trim()
+        const name = String(acc.name || acc.name_en || acc.name_ar || acc.account_name || acc.account_name_en || '').trim()
+        
+        if (!name && (accId || accCode)) {
+          const fullAccount = accountMap.get(accId) || accountMap.get(accCode)
+          if (fullAccount) {
+            acc.name = acc.name || fullAccount.name || fullAccount.name_en || fullAccount.name_ar || ''
+            acc.name_en = acc.name_en || fullAccount.name_en || fullAccount.name || fullAccount.name_ar || ''
+            acc.name_ar = acc.name_ar || fullAccount.name || fullAccount.name_en || fullAccount.name_ar || ''
+            acc.account_name = acc.account_name || fullAccount.name || fullAccount.name_en || fullAccount.name_ar || ''
+            acc.account_name_en = acc.account_name_en || fullAccount.name_en || fullAccount.name || fullAccount.name_ar || ''
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[LEDGER] Failed to fetch account names:', e)
+    }
+    
     for (const acc of accounts){
-      const paramsDL = new URLSearchParams(); if (from) paramsDL.set('from', from); if (to) paramsDL.set('to', to); paramsDL.set('account_id', acc.account_id||'')
+      const paramsDL = new URLSearchParams(); if (from) paramsDL.set('from', from); if (to) paramsDL.set('to', to); paramsDL.set('account_id', acc.account_id||acc.id||'')
       let rows = []
-      try { const drill = await authFetch(`${API_BASE}/reports/trial-balance/drilldown${paramsDL.toString()?`?${paramsDL.toString()}`:''}`); rows = Array.isArray(drill?.items)?drill.items:[] } catch {}
+      let drillResponse = null
+      try { drillResponse = await authFetch(`${API_BASE}/reports/trial-balance/drilldown${paramsDL.toString()?`?${paramsDL.toString()}`:''}`); rows = Array.isArray(drillResponse?.items)?drillResponse.items:[] } catch {}
       let running = Number(acc.beginning||0)
       if (!rows.length) { continue }
+      
+      const code = String(acc.account_code || acc.code || acc.account_number || '').trim()
+      // Try multiple sources for account name:
+      // 1. From drilldown response account info
+      // 2. From first row in drilldown (if it has account_name)
+      // 3. From trial-balance account object
+      // 4. From accountMap if available
+      let name = ''
+      if (rows.length > 0 && rows[0].account_name) {
+        name = String(rows[0].account_name || rows[0].account_name_en || '').trim()
+      }
+      if (!name) {
+        name = String(acc.name_en || acc.name || acc.name_ar || acc.account_name_en || acc.account_name || '').trim()
+      }
+      // Final fallback: try accountMap
+      if (!name) {
+        const accId = Number(acc.account_id || acc.id || 0)
+        const accCode = String(acc.account_code || acc.code || acc.account_number || '').trim()
+        const fullAccount = accountMap.get(accId) || accountMap.get(accCode)
+        if (fullAccount) {
+          name = String(fullAccount.name || fullAccount.name_en || fullAccount.name_ar || '').trim()
+        }
+      }
+      
       rows.forEach((r, idx)=>{
-        const debit = Number(r.debit||0)
-        const credit = Number(r.credit||0)
+        const debit = Number(r.debit||r.debit_total||0)
+        const credit = Number(r.credit||r.credit_total||0)
         running = running + debit - credit
         const ref = String(r.description||'').trim() || (String(r.related_type||'')==='invoice' ? String(r.related_id||'') : '')
         const note = noteFor(acc, r)
         const tr = document.createElement('tr')
-        const cells = [ idx===0 ? (acc.name||'') : '', idx===0 ? fmt(Number(acc.beginning||0)) : '', ref, fmt(debit), fmt(credit), fmt(running), note ]
-        cells.forEach((v, i)=>{ const td=document.createElement('td'); td.textContent=String(v); if (i===3 && Number(debit)>0) td.className='debit'; if (i===4 && Number(credit)>0) td.className='credit'; if (i===5) td.className='balance'; tr.appendChild(td) })
+        const cells = [
+          idx===0 ? (code || '') : '',
+          idx===0 ? (name || '') : '',
+          idx===0 ? fmt(Number(acc.beginning||0)) : '',
+          ref,
+          fmt(debit),
+          fmt(credit),
+          fmt(running),
+          note
+        ]
+        cells.forEach((v, i)=>{ 
+          const td=document.createElement('td')
+          td.textContent=String(v)
+          if (i===4 && Number(debit)>0) td.className='debit'
+          if (i===5 && Number(credit)>0) td.className='credit'
+          if (i===6) td.className='balance'
+          tr.appendChild(td)
+        })
         tbody.appendChild(tr)
       })
     }

@@ -11,5 +11,9 @@ export default {
   update: (id, data) => api.put(`/employees/${id}`, data).then(res => res.data),
   delete: (id) => api.delete(`/employees/${id}`).then(res => res.data),
   advance: (id, amount, extra = {}) => api.post(`/employees/${id}/advance`, { amount, ...extra }).then(res => res.data),
+  advanceBalance: (id, params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return api.get(`/employees/${id}/advance-balance${query ? `?${query}` : ''}`).then(res => res.data)
+  },
   advanceCollect: (id, amount, extra = {}) => api.post(`/employees/${id}/advance/collect`, { amount, ...extra }).then(res => res.data),
 };

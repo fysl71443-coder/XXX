@@ -1,0 +1,61 @@
+
+> backend@1.0.0 start
+> node server.js
+
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ΓÜÖ∩╕Å  load multiple .env files with { path: ['.env.local', '.env'] }
+[SERVER] Started on port 4000 | NODE_ENV=development
+[SERVER] Build path: C:\Users\DELL\Documents\augment-projects\XXX\backend\frontend\build
+[SERVER] JWT_SECRET: configured
+[SERVER] Database: NOT configured
+[SCHEMA] Error adding columns to expenses: Cannot read properties of null (reading 'query')
+[REQUEST] 2026-01-17T11:11:07.712Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:11:22.043Z | POST /api/auth/login | auth_header=missing
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[ERROR] 2026-01-17T11:11:47.299Z | POST /api/auth/login | Expected property name or '}' in JSON at position 1 (line 1 column 2) SyntaxError: Expected property name or '}' in JSON at position 1 (line 1 column 2)
+    at JSON.parse (<anonymous>)
+    at parse (C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\body-parser\lib\types\json.js:92:19)
+    at C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\body-parser\lib\read.js:128:18
+    at AsyncResource.runInAsyncScope (node:async_hooks:214:14)
+    at invokeCallback (C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\raw-body\index.js:238:16)
+    at done (C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\raw-body\index.js:227:7)
+    at IncomingMessage.onEnd (C:\Users\DELL\Documents\augment-projects\XXX\backend\node_modules\raw-body\index.js:287:7)
+    at IncomingMessage.emit (node:events:518:28)
+    at endReadableNT (node:internal/streams/readable:1698:12)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
+[REQUEST] 2026-01-17T11:12:08.259Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:14:31.000Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:14:32.684Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:14:33.214Z | POST /api/auth/login | auth_header=missing
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:17:02.693Z | POST /api/auth/login | auth_header=missing
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:18:06.845Z | POST /api/auth/login | auth_header=missing
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:18:08.375Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:18:08.565Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:18:08.748Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:18:51.788Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[SPA FALLBACK] Serving index.html for frontend route: /login
+[REQUEST] 2026-01-17T11:22:15.844Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com

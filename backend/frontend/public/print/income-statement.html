@@ -75,17 +75,97 @@
     document.getElementById('meta').textContent = meta.join(' • ')
     const params = new URLSearchParams(); if (from) params.set('from', from); if (to) params.set('to', to)
     const res = await authFetch(`${API_BASE}/reports/income-statement${params.toString()?`?${params.toString()}`:''}`)
-    const revs = Array.isArray(res.revenues)?res.revenues:(res.revenue_items||[]) 
-    const exps = Array.isArray(res.expenses)?res.expenses:(res.expense_items||[])
-    const tbodyR = document.querySelector('#revenues tbody'); tbodyR.innerHTML = ''
-    revs.filter(r=> Math.abs(Number(r.amount!=null?r.amount:(r.total||0))) > 1e-9).forEach(r=>{ const tr=document.createElement('tr'); ;[r.name||r.account||'', fmt(r.amount||r.total||0)].forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) }); tbodyR.appendChild(tr) })
-    const tbodyE = document.querySelector('#expenses tbody'); tbodyE.innerHTML = ''
-    exps.filter(r=> Math.abs(Number(r.amount!=null?r.amount:(r.total||0))) > 1e-9).forEach(r=>{ const tr=document.createElement('tr'); ;[r.name||r.account||'', fmt(r.amount||r.total||0)].forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) }); tbodyE.appendChild(tr) })
-    const net = Number(res.net_income!=null?res.net_income:(Number(revs.reduce((s,r)=>s+Number(r.amount||r.total||0),0))-Number(exps.reduce((s,r)=>s+Number(r.amount||r.total||0),0))))
+    if (!res) {
+      throw new Error('No response from server')
+    }
+    const revs = Array.isArray(res.revenues) ? res.revenues : (Array.isArray(res.revenue_items) ? res.revenue_items : [])
+    const exps = Array.isArray(res.expenses) ? res.expenses : (Array.isArray(res.expense_items) ? res.expense_items : [])
+    
+    // Fetch account names from accounts API if missing
+    const accountMap = new Map()
+    try {
+      const accountsTree = await authFetch(`${API_BASE}/accounts`)
+      const flatAccounts = []
+      function flattenAccounts(arr) {
+        if (!Array.isArray(arr)) return
+        for (const a of arr) {
+          if (a && a.id) {
+            flatAccounts.push(a)
+            if (Array.isArray(a.children)) flattenAccounts(a.children)
+          }
+        }
+      }
+      flattenAccounts(accountsTree)
+      
+      for (const acc of flatAccounts) {
+        const accCode = String(acc.account_code || acc.account_number || '').trim()
+        if (accCode) accountMap.set(accCode, acc)
+      }
+      
+      // Enrich revenues and expenses with account names
+      for (const r of revs) {
+        const code = String(r.code || '').trim()
+        const name = String(r.name || r.account || '').trim()
+        if (!name && code) {
+          const acc = accountMap.get(code)
+          if (acc) {
+            r.name = acc.name || acc.name_en || acc.name_ar || ''
+          }
+        }
+      }
+      
+      for (const e of exps) {
+        const code = String(e.code || '').trim()
+        const name = String(e.name || e.account || '').trim()
+        if (!name && code) {
+          const acc = accountMap.get(code)
+          if (acc) {
+            e.name = acc.name || acc.name_en || acc.name_ar || ''
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[INCOME STATEMENT] Failed to fetch account names:', e)
+    }
+    
+    const tbodyR = document.querySelector('#revenues tbody')
+    tbodyR.innerHTML = ''
+    revs.filter(r => Math.abs(Number(r.amount != null ? r.amount : (r.total || 0))) > 1e-9).forEach(r => {
+      const tr = document.createElement('tr')
+      const name = String(r.name || r.account || '').trim()
+      const amount = Number(r.amount != null ? r.amount : (r.total || 0))
+      ;[name || '', fmt(amount)].forEach(v => {
+        const td = document.createElement('td')
+        td.textContent = String(v)
+        tr.appendChild(td)
+      })
+      tbodyR.appendChild(tr)
+    })
+    
+    const tbodyE = document.querySelector('#expenses tbody')
+    tbodyE.innerHTML = ''
+    exps.filter(r => Math.abs(Number(r.amount != null ? r.amount : (r.total || 0))) > 1e-9).forEach(r => {
+      const tr = document.createElement('tr')
+      const name = String(r.name || r.account || '').trim()
+      const amount = Number(r.amount != null ? r.amount : (r.total || 0))
+      ;[name || '', fmt(amount)].forEach(v => {
+        const td = document.createElement('td')
+        td.textContent = String(v)
+        tr.appendChild(td)
+      })
+      tbodyE.appendChild(tr)
+    })
+    
+    const revenueTotal = revs.reduce((s, r) => s + Number(r.amount != null ? r.amount : (r.total || 0)), 0)
+    const expenseTotal = exps.reduce((s, r) => s + Number(r.amount != null ? r.amount : (r.total || 0)), 0)
+    const net = Number(res.net_income != null ? res.net_income : (revenueTotal - expenseTotal))
     document.getElementById('net').textContent = `صافي الدخل: ${fmt(net)}`
-    setTimeout(()=>window.print(), 200)
+    setTimeout(() => window.print(), 200)
   }
-  load().catch(()=>{ alert('فشل الطباعة. يرجى المحاولة مرة أخرى.') })
+  load().catch((err) => {
+    console.error('[INCOME STATEMENT] Load error:', err)
+    alert('فشل الطباعة. يرجى المحاولة مرة أخرى.\n' + (err?.message || ''))
+  })
 </script>
 </body>
 </html>

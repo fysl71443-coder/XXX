@@ -46,6 +46,7 @@
 <table id="tbl">
   <thead>
     <tr>
+      <th>الكود</th>
       <th>الحساب</th>
       <th>مدين</th>
       <th>دائن</th>
@@ -59,6 +60,7 @@
       <td class="summary">الإجمالي</td>
       <td id="totalDebit"></td>
       <td id="totalCredit"></td>
+      <td></td>
     </tr>
   </tfoot>
   </table>
@@ -68,18 +70,20 @@
   function fmt(n){ try { return Number(n||0).toFixed(2) } catch { return '0.00' } }
   function labelOpType(t){ const v=String(t||''); if(v==='invoice') return 'بيع'; if(v==='supplier_invoice') return 'مورد'; if(v==='expense_invoice') return 'مصروف'; if(v==='payment') return 'سداد/تحصيل'; if(v==='payroll_run') return 'مسير رواتب'; if(!v||v==='manual') return 'يدوي'; return v }
   function composeNote(acc, drill){
-    const code = String(acc.account_code||'')
-    const name = String(acc.name||'')
-    const type = String(acc.type||'')
+    const code = String(acc.account_code||acc.code||'').trim()
+    const name = String(acc.name||acc.name_en||acc.name_ar||'').trim()
+    const type = String(acc.type||'').trim()
     const items = Array.isArray(drill?.items)?drill.items:[]
-    const types = new Set(items.map(i=> String(i.related_type||'')))
+    const types = new Set(items.map(i=> String(i.related_type||i.reference_type||'').trim()))
     const hasInvoice = types.has('invoice')
     const hasSupplier = types.has('supplier_invoice')
-    const hasExpense = types.has('expense_invoice')
+    const hasExpense = types.has('expense') || types.has('expense_invoice')
     const hasPayment = types.has('payment')
-    const sumD = Number(acc.debit||0)
-    const sumC = Number(acc.credit||0)
-    const isCash = ['1110','1010','1120'].includes(code) || /cash|bank/i.test(name)
+    const sumD = Number(acc.debit||acc.debit_total||0)
+    const sumC = Number(acc.credit||acc.credit_total||0)
+    
+    // Cash accounts
+    const isCash = ['1110','1010','1120','1111'].includes(code) || /cash|bank|صندوق|بنك/i.test(name)
     if (isCash) {
       if (hasPayment && hasInvoice) return 'بيع نقدي وتحويلات'
       if (hasPayment) {
@@ -91,25 +95,52 @@
         return sumD>=sumC?'استلام نقدي':'سداد نقدي'
       }
       if (hasInvoice) return 'بيع نقدي'
-      return 'حركة نقدية'
+      if (items.length > 0) return 'حركة نقدية'
     }
-    if (code==='1210' || /customers|accounts receivable/i.test(name)) {
+    
+    // Accounts Receivable
+    if (code==='1210' || code==='1141' || /customers|accounts receivable|عملاء|ذمم/i.test(name)) {
       if (hasInvoice && hasPayment) return 'بيع وتحصيل جزئي'
       if (hasInvoice) return 'بيع آجل'
       if (hasPayment) return 'تحصيل من العملاء'
-      return 'ذمم عملاء'
+      if (items.length > 0) return 'ذمم عملاء'
     }
-    if (code==='2410' || /suppliers|accounts payable/i.test(name)) return 'التزام الموردين'
-    if (code==='2150' || /vat payable|output vat/i.test(name)) return 'ضريبة القيمة المضافة على المبيعات'
-    if (code==='1250' || /vat input/i.test(name)) return 'ضريبة مشتريات مستحقة'
-    if (code==='5110' || /purchases/i.test(name)) return 'مشتريات الموردين'
-    if (code==='5210' || /salaries/i.test(name)) return 'مصروف الرواتب'
-    if (code==='2430' || /accrued payroll/i.test(name)) return 'الالتزام المستحق للرواتب'
-    if (code==='4190' || /discount/i.test(name)) return 'خصم على المبيعات'
+    
+    // Accounts Payable
+    if (code==='2410' || code==='2111' || /suppliers|accounts payable|موردين|ذمم/i.test(name)) return 'التزام الموردين'
+    
+    // VAT accounts
+    if (code==='2150' || code==='2141' || /vat payable|output vat|ضريبة مبيعات/i.test(name)) return 'ضريبة القيمة المضافة على المبيعات'
+    if (code==='1250' || /vat input|ضريبة مشتريات/i.test(name)) return 'ضريبة مشتريات مستحقة'
+    
+    // Expense accounts
+    if (code==='5110' || /purchases|مشتريات/i.test(name)) return 'مشتريات الموردين'
+    if (code==='5210' || /salaries|رواتب/i.test(name)) return 'مصروف الرواتب'
+    if (code==='2430' || /accrued payroll|رواتب مستحقة/i.test(name)) return 'الالتزام المستحق للرواتب'
+    
+    // Revenue accounts
+    if (code==='4190' || /discount|خصم/i.test(name)) return 'خصم على المبيعات'
+    if (code==='4111' || code==='4112' || code==='4121' || code==='4122' || /sales|revenue|مبيعات|إيرادات/i.test(name)) {
+      if (hasInvoice) return 'مبيعات'
+      return 'إيرادات المبيعات'
+    }
+    
+    // Type-based fallback
     if (type==='revenue') return 'إيرادات البيع الفعلية'
     if (type==='expense') return 'مصروفات تشغيلية'
     if (type==='liability') return 'التزامات'
     if (type==='asset') return 'أصول'
+    if (type==='equity') return 'حقوق ملكية'
+    
+    // If there are items but no specific match, show general note
+    if (items.length > 0) {
+      if (hasInvoice) return 'عمليات بيع'
+      if (hasSupplier) return 'عمليات شراء'
+      if (hasExpense) return 'عمليات مصروفات'
+      if (hasPayment) return 'عمليات سداد'
+      return 'عمليات محاسبية'
+    }
+    
     return ''
   }
   async function authFetch(url){ const token = localStorage.getItem('token'); const h = token? { Authorization: `Bearer ${token}` } : {}; const r = await fetch(url, { headers: h }); if(!r.ok) throw new Error('request_failed'); return r.json() }
@@ -130,21 +161,75 @@
     const params = new URLSearchParams(); if (period) params.set('period', period); if (from) params.set('from', from); if (to) params.set('to', to)
     const res = await authFetch(`${API_BASE}/reports/trial-balance${params.toString()?`?${params.toString()}`:''}`)
     const rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res?.rows) ? res.rows : (Array.isArray(res) ? res : []))
+    
+    // Fetch account names from accounts API if missing
+    const accountMap = new Map()
+    try {
+      const accountsTree = await authFetch(`${API_BASE}/accounts`)
+      const flatAccounts = []
+      function flattenAccounts(arr) {
+        if (!Array.isArray(arr)) return
+        for (const a of arr) {
+          if (a && a.id) {
+            flatAccounts.push(a)
+            if (Array.isArray(a.children)) flattenAccounts(a.children)
+          }
+        }
+      }
+      flattenAccounts(accountsTree)
+      
+      for (const acc of flatAccounts) {
+        const accId = Number(acc.id || 0)
+        const accCode = String(acc.account_code || acc.account_number || '').trim()
+        if (accId) accountMap.set(accId, acc)
+        if (accCode) accountMap.set(accCode, acc)
+      }
+      
+      // Enrich rows with account names
+      for (const r of rows) {
+        const accId = Number(r.account_id || r.id || 0)
+        const accCode = String(r.account_code || r.code || r.account_number || '').trim()
+        const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || '').trim()
+        
+        if (!name && (accId || accCode)) {
+          const acc = accountMap.get(accId) || accountMap.get(accCode)
+          if (acc) {
+            r.name = acc.name || acc.name_en || acc.name_ar || ''
+            r.name_en = acc.name_en || acc.name || acc.name_ar || ''
+            r.name_ar = acc.name || acc.name_en || acc.name_ar || ''
+            r.account_name = acc.name || acc.name_en || acc.name_ar || ''
+            r.account_name_en = acc.name_en || acc.name || acc.name_ar || ''
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[TRIAL BALANCE] Failed to fetch account names:', e)
+    }
+    
     const tbody = document.querySelector('#tbl tbody')
     tbody.innerHTML = ''
     let sumD = 0, sumC = 0
+    // Load drilldown data for notes (only if account_id exists)
     const drillPromises = rows.map(r => {
-      const params2 = new URLSearchParams(); if (period) params2.set('period', period); if (from) params2.set('from', from); if (to) params2.set('to', to); params2.set('account_id', r.account_id||'')
+      const accountId = r.account_id || r.id
+      if (!accountId) return Promise.resolve({ items: [] })
+      const params2 = new URLSearchParams(); 
+      if (period) params2.set('period', period); 
+      if (from) params2.set('from', from); 
+      if (to) params2.set('to', to); 
+      params2.set('account_id', String(accountId))
       return authFetch(`${API_BASE}/reports/trial-balance/drilldown${params2.toString()?`?${params2.toString()}`:''}`).catch(()=>({ items: [] }))
     })
     const drills = await Promise.all(drillPromises)
     rows.filter(r=>{ const d = Number(r.debit||r.debit_total||0); const c = Number(r.credit||r.credit_total||0); return Math.abs(d) + Math.abs(c) > 1e-9 }).forEach((r, idx) => {
       const tr = document.createElement('tr')
-      const name = r.name || r.name_en || r.name_ar || ''
+      const code = String(r.account_code || r.code || r.account_number || '').trim()
+      const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || '').trim()
       const d = Number(r.debit||r.debit_total||0)
       const c = Number(r.credit||r.credit_total||0)
-      const note = composeNote(r, drills[idx])
-      ;[name, fmt(d), fmt(c), note].forEach(v => { const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) })
+      const note = composeNote(r, drills[idx] || { items: [] })
+      // Always show code, name, debit, credit, and note
+      ;[code || '', name || '', fmt(d), fmt(c), note || ''].forEach(v => { const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) })
       tbody.appendChild(tr)
       sumD += d; sumC += c
     })

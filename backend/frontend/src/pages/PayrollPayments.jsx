@@ -14,6 +14,7 @@ export default function PayrollPayments(){
   const [method, setMethod] = useState('bank')
   const [payDate, setPayDate] = useState('')
   const [employees, setEmployees] = useState([])
+  const [advanceBalances, setAdvanceBalances] = useState(new Map()) // Map<employeeId, balance>
   const [company, setCompany] = useState(null)
   const [branding, setBranding] = useState(null)
   const printRef = useRef(null)
@@ -34,6 +35,24 @@ export default function PayrollPayments(){
   useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])
   useEffect(()=>{ function onStorage(e){ if (e.key==='employees_version') { (async()=>{ try { const emps = await apiEmployees.list(); setEmployees(emps) } catch {} })() } } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])
   useEffect(()=>{ (async()=>{ try { const rs = await apiPayroll.runs(); const posted = rs.filter(r=>String(r.derived_status||'draft')==='posted'); setRuns(posted); if (!runId && posted.length) setRunId(String(posted[0].id)) } catch {} try { const emps = await apiEmployees.list(); setEmployees(emps) } catch {} })() },[runId])
+  
+  // Load advance balances from journal entries
+  useEffect(() => {
+    async function loadAdvanceBalances() {
+      if (!employees.length) return
+      const balances = new Map()
+      for (const emp of employees) {
+        try {
+          const balanceData = await apiEmployees.advanceBalance(emp.id)
+          balances.set(emp.id, parseFloat(balanceData?.balance || 0))
+        } catch {
+          balances.set(emp.id, 0)
+        }
+      }
+      setAdvanceBalances(balances)
+    }
+    loadAdvanceBalances()
+  }, [employees])
   useEffect(()=>{ (async()=>{ if (!runId) { setItems([]); return } try { const its = await apiPayroll.items(runId); setItems(its) } catch { setItems([]) } })() },[runId])
   useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_company'); setCompany(c||null) } catch {} try { const b = await apiSettings.get('settings_branding'); setBranding(b||null) } catch {} })() },[])
 
@@ -301,13 +320,16 @@ export default function PayrollPayments(){
               </tr>
             </thead>
             <tbody>
-              {employees.map(e => (
-                <tr key={e.id} className="border-b hover:bg-gray-50 transition-colors">
-                  <td className="p-2">{e.full_name}</td>
-                  <td className="p-2">{parseFloat(e.advance_balance||0).toFixed(2)}</td>
-                  <td className="p-2"><div className="flex gap-2"><button className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm transition-colors" onClick={()=>grantAdvance(e.id)}>{lang==='ar'?'منح سلفة':'Grant advance'}</button><button className="px-2 py-1 bg-green-100 hover:bg-green-200 text-green-800 rounded text-sm transition-colors" onClick={()=>collectAdvance(e.id)}>{lang==='ar'?'تحصيل سلفة':'Collect advance'}</button></div></td>
-                </tr>
-              ))}
+              {employees.map(e => {
+                const advanceBalance = advanceBalances.get(e.id) || 0
+                return (
+                  <tr key={e.id} className="border-b hover:bg-gray-50 transition-colors">
+                    <td className="p-2">{e.full_name}</td>
+                    <td className="p-2">{advanceBalance.toFixed(2)}</td>
+                    <td className="p-2"><div className="flex gap-2"><button className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded text-sm transition-colors" onClick={()=>grantAdvance(e.id)}>{lang==='ar'?'منح سلفة':'Grant advance'}</button><button className="px-2 py-1 bg-green-100 hover:bg-green-200 text-green-800 rounded text-sm transition-colors" onClick={()=>collectAdvance(e.id)}>{lang==='ar'?'تحصيل سلفة':'Collect advance'}</button></div></td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           )}
@@ -439,8 +461,8 @@ export default function PayrollPayments(){
               <button className="px-3 py-2 bg-gray-100 rounded" onClick={()=>{ setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); setModalMonthError('') }}>{lang==='ar'?'إلغاء':'Cancel'}</button>
               {modal.type==='advance_prompt' ? (
                 <>
-                  <button className="px-3 py-2 bg-primary-600 text-white rounded" onClick={async()=>{ try { if (!payDate) { setError(lang==='ar'?'يرجى تحديد تاريخ السداد':'Please select a payment date'); return } await apiPayroll.pay(runId, { date: payDate, method, items: [{ employee_id: modal.employeeId, advance: parseFloat(modal.amount||0) }] }); const its = await apiPayroll.items(runId); setItems(its); setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); setToast(lang==='ar'?'تم خصم السلفة من الراتب':'Advance deducted from salary') } catch (er) { setError(er.code||'failed') } }}>{lang==='ar'?'خصم من الراتب':'Deduct from salary'}</button>
-                  <button className="px-3 py-2 bg-gray-100 rounded" onClick={async()=>{ try { if (!payDate) { setError(lang==='ar'?'يرجى تحديد تاريخ السداد':'Please select a payment date'); return } await apiPayroll.pay(runId, { date: payDate, method, items: [{ employee_id: modal.employeeId }] }); const its = await apiPayroll.items(runId); setItems(its); setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }) } catch (er) { setError(er.code||'failed') } }}>{lang==='ar'?'تجاهل مؤقتًا':'Ignore for now'}</button>
+                  <button className="px-3 py-2 bg-primary-600 text-white rounded" onClick={async()=>{ try { if (!payDate) { setError(lang==='ar'?'يرجى تحديد تاريخ السداد':'Please select a payment date'); return } await apiPayroll.pay(runId, { date: payDate, method, items: [{ employee_id: modal.employeeId, advance: parseFloat(modal.amount||0) }] }); const its = await apiPayroll.items(runId); setItems(its); setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); setToast(lang==='ar'?'تم خصم السلفة من الراتب':'Advance deducted from salary'); try { const balanceData = await apiEmployees.advanceBalance(modal.employeeId); const newBalances = new Map(advanceBalances); newBalances.set(modal.employeeId, parseFloat(balanceData?.balance || 0)); setAdvanceBalances(newBalances) } catch {} } catch (er) { setError(er.code||'failed') } }}>{lang==='ar'?'خصم من الراتب':'Deduct from salary'}</button>
+                  <button className="px-3 py-2 bg-gray-100 rounded" onClick={async()=>{ try { if (!payDate) { setError(lang==='ar'?'يرجى تحديد تاريخ السداد':'Please select a payment date'); return } await apiPayroll.pay(runId, { date: payDate, method, items: [{ employee_id: modal.employeeId }] }); const its = await apiPayroll.items(runId); setItems(its); setModal({ open:false, type:'', employeeId:null, amount:'', month: new Date().toISOString().slice(0,7), duration:'', method:'cash' }); try { const balanceData = await apiEmployees.advanceBalance(modal.employeeId); const newBalances = new Map(advanceBalances); newBalances.set(modal.employeeId, parseFloat(balanceData?.balance || 0)); setAdvanceBalances(newBalances) } catch {} } catch (er) { setError(er.code||'failed') } }}>{lang==='ar'?'تجاهل مؤقتًا':'Ignore for now'}</button>
                 </>
               ) : (
                 <button className="px-3 py-2 bg-primary-600 text-white rounded" onClick={async()=>{
@@ -453,10 +475,24 @@ export default function PayrollPayments(){
                       if (d!=null) extra.duration_months = d
                       await apiEmployees.advance(modal.employeeId, n, extra)
                       const emps = await apiEmployees.list(); setEmployees(emps)
+                      // Reload advance balance from journal entries
+                      try {
+                        const balanceData = await apiEmployees.advanceBalance(modal.employeeId)
+                        const newBalances = new Map(advanceBalances)
+                        newBalances.set(modal.employeeId, parseFloat(balanceData?.balance || 0))
+                        setAdvanceBalances(newBalances)
+                      } catch {}
                       setToast(lang==='ar'?'تم منح السلفة':'Advance granted')
                     } else if (modal.type==='advance_collect') {
                       await apiEmployees.advanceCollect(modal.employeeId, n, { method: modal.method })
                       const emps = await apiEmployees.list(); setEmployees(emps)
+                      // Reload advance balance from journal entries
+                      try {
+                        const balanceData = await apiEmployees.advanceBalance(modal.employeeId)
+                        const newBalances = new Map(advanceBalances)
+                        newBalances.set(modal.employeeId, parseFloat(balanceData?.balance || 0))
+                        setAdvanceBalances(newBalances)
+                      } catch {}
                       setToast(lang==='ar'?'تم تحصيل السلفة محاسبيًا':'Advance collected')
                     } else if (modal.type==='deduction') {
                       if (!runId) { setError(lang==='ar'?'يرجى اختيار مسير':'Select a run'); return }

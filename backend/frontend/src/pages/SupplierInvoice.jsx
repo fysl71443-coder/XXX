@@ -97,7 +97,7 @@ async function saveInvoice(printAfter=false){
         payment_method: paymentMethod,
         payment_type: (paymentStatus==='unpaid' ? 'credit' : (paymentStatus==='partial' ? 'partial' : (paymentMethod||'').toLowerCase())),
         paid_amount: paymentStatus==='partial' ? paidEffective : 0,
-        payment_account_code: paymentStatus==='unpaid' ? undefined : (paymentMethod==='bank' ? (bankAccountCode||undefined) : '1110'),
+        payment_account_code: paymentStatus==='unpaid' ? undefined : (paymentMethod==='bank' ? (bankAccountCode||undefined) : '1111'),
         bank_account_code: bankAccountCode||undefined,
         lines: lines.map(l => ({
           name: l.product||l.desc||'',

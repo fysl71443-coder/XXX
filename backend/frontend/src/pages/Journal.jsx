@@ -6,7 +6,7 @@ import Toast from '../ui/Toast'
 import StatusBadge from '../ui/StatusBadge'
 import ActionButton from '../ui/ActionButton'
 import JournalEntryCard from '../components/JournalEntryCard'
-import { journal as apiJournal, accounts as apiAccounts, settings as apiSettings, debug as apiDebug, periods as apiPeriods, invoices as apiInvoices, orders as apiOrders } from '../services/api'
+import { journal as apiJournal, accounts as apiAccounts, settings as apiSettings, debug as apiDebug, periods as apiPeriods, invoices as apiInvoices, orders as apiOrders, supplierInvoices, expenses as apiExpenses, payments as apiPayments } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { TrendingUp, TrendingDown, FileText, CheckCircle, Search } from 'lucide-react'
@@ -285,6 +285,9 @@ export default function Journal() {
   const [helpOpen, setHelpOpen] = useState(false)
   const [relatedInvoice, setRelatedInvoice] = useState(null)
   const [orderMeta, setOrderMeta] = useState(null)
+  const [relatedSupplierInvoice, setRelatedSupplierInvoice] = useState(null)
+  const [relatedExpense, setRelatedExpense] = useState(null)
+  const [relatedPayment, setRelatedPayment] = useState(null)
   useEffect(() => {
     function onKey(e){
       if (e.ctrlKey && e.key === 's') { e.preventDefault(); if (modalOpen) document.getElementById('save-draft-btn')?.click() }
@@ -361,20 +364,79 @@ export default function Journal() {
     (async()=>{
       try {
         setRelatedInvoice(null)
-        if (selected && (selected.related_type==='invoice' || selected.related_type==='supplier_invoice' || selected.related_type==='expense_invoice' || selected.related_type==='payment') && selected.related_id) {
-          const inv = await apiInvoices.get(selected.related_id)
-          setRelatedInvoice(inv?.invoice || inv || null)
-          const ordId = (inv?.invoice?.order_id || inv?.order_id || null)
-          if (ordId) {
+        setOrderMeta(null)
+        setRelatedSupplierInvoice(null)
+        setRelatedExpense(null)
+        setRelatedPayment(null)
+        
+        if (selected && selected.related_id) {
+          const relatedType = selected.related_type
+          const relatedId = selected.related_id
+          
+          // Load data based on related_type
+          if (relatedType === 'invoice') {
             try {
-              const ord = await apiOrders.get(ordId)
-              const arr = (function(){ try { return JSON.parse(ord?.order?.lines||ord?.lines||'[]')||[] } catch { return [] } })()
-              const meta = arr.find(x => x && x.type==='meta') || null
-              setOrderMeta(meta)
-            } catch { setOrderMeta(null) }
-          } else setOrderMeta(null)
+              const inv = await apiInvoices.get(relatedId)
+              const invoiceData = inv?.invoice || inv || null
+              setRelatedInvoice(invoiceData)
+              // Try to get order data if available
+              const ordId = (invoiceData?.order_id || null)
+              if (ordId) {
+                try {
+                  const ord = await apiOrders.get(ordId)
+                  const arr = (function(){ try { return JSON.parse(ord?.order?.lines||ord?.lines||'[]')||[] } catch { return [] } })()
+                  const meta = arr.find(x => x && x.type==='meta') || null
+                  setOrderMeta(meta)
+                } catch (orderErr) {
+                  console.warn('[Journal] Could not load order data:', orderErr)
+                  setOrderMeta(null)
+                }
+              } else {
+                setOrderMeta(null)
+              }
+            } catch (invErr) {
+              console.warn('[Journal] Could not load invoice data:', invErr)
+              setRelatedInvoice(null)
+            }
+          } else if (relatedType === 'supplier_invoice') {
+            try {
+              const supInv = await supplierInvoices.get(relatedId)
+              const supplierInvoiceData = supInv?.invoice || supInv || null
+              setRelatedSupplierInvoice(supplierInvoiceData)
+            } catch (supInvErr) {
+              console.warn('[Journal] Could not load supplier invoice data:', supInvErr)
+              setRelatedSupplierInvoice(null)
+            }
+          } else if (relatedType === 'expense_invoice') {
+            try {
+              const exp = await apiExpenses.get(relatedId)
+              const expenseData = exp?.expense || exp || null
+              setRelatedExpense(expenseData)
+            } catch (expErr) {
+              console.warn('[Journal] Could not load expense data:', expErr)
+              setRelatedExpense(null)
+            }
+          } else if (relatedType === 'payment') {
+            try {
+              // Payments might be stored as invoices with type='payment'
+              const pay = await apiInvoices.get(relatedId).catch(() => null)
+              if (pay) {
+                setRelatedPayment(pay?.invoice || pay || null)
+              }
+            } catch (payErr) {
+              console.warn('[Journal] Could not load payment data:', payErr)
+              setRelatedPayment(null)
+            }
+          }
         }
-      } catch { setRelatedInvoice(null) }
+      } catch (err) {
+        console.warn('[Journal] Error loading related data:', err)
+        setRelatedInvoice(null)
+        setOrderMeta(null)
+        setRelatedSupplierInvoice(null)
+        setRelatedExpense(null)
+        setRelatedPayment(null)
+      }
     })()
   }, [selected])
   useEffect(() => {
@@ -709,10 +771,24 @@ export default function Journal() {
                   <div className="text-sm text-gray-700">
                     {selected.related_type && selected.related_id ? (
                       <div className="flex items-center gap-2">
-                        <span>نوع: {operationTypeOf(selected, relatedInvoice)}</span>
+                        <span>نوع: {operationTypeOf(selected, relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment)}</span>
                         {(selected.related_type==='invoice' || selected.related_type==='supplier_invoice' || selected.related_type==='expense_invoice') && (
-                          <button className="px-2 py-1 border rounded text-primary-700" onClick={()=>{ window.open(`/api/preview/invoice/${selected.related_id}`, '_blank') }}>
-                            معاينة الفاتورة #{selected.related_id}
+                          <button className="px-2 py-1 border rounded text-primary-700 hover:bg-primary-50" onClick={()=>{ 
+                            const url = selected.related_type==='supplier_invoice' 
+                              ? `/supplier-invoices/${selected.related_id}` 
+                              : selected.related_type==='expense_invoice'
+                              ? `/expenses/${selected.related_id}`
+                              : `/api/preview/invoice/${selected.related_id}`;
+                            window.open(url, '_blank') 
+                          }}>
+                            {selected.related_type==='supplier_invoice' ? 'معاينة فاتورة المورد' : selected.related_type==='expense_invoice' ? 'معاينة المصروف' : `معاينة الفاتورة #${selected.related_id}`}
+                          </button>
+                        )}
+                        {selected.related_type==='payment' && (
+                          <button className="px-2 py-1 border rounded text-primary-700 hover:bg-primary-50" onClick={()=>{ 
+                            window.open(`/payments?invoice_id=${selected.related_id}`, '_blank') 
+                          }}>
+                            معاينة الدفع
                           </button>
                         )}
                       </div>
@@ -721,9 +797,12 @@ export default function Journal() {
                     )}
                     {(selected.related_type && selected.related_id) && (
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">طريقة الدفع: {paymentTypeText(relatedInvoice, orderMeta, selected)}</span>
-                        {selected.related_type==='invoice' && (
+                        <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">طريقة الدفع: {paymentTypeText(relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment, orderMeta, selected)}</span>
+                        {selected.related_type==='invoice' && relatedInvoice && (
                           <span className="px-2 py-1 bg-red-50 text-red-700 rounded border">الخصم: {formatAmount(discountAmountOf(selected, relatedInvoice))} {discountPctOf(selected, relatedInvoice, orderMeta)}</span>
+                        )}
+                        {selected.related_type==='supplier_invoice' && relatedSupplierInvoice && Number(relatedSupplierInvoice.discount_amount || relatedSupplierInvoice.discount_total || 0) > 0 && (
+                          <span className="px-2 py-1 bg-red-50 text-red-700 rounded border">الخصم: {formatAmount(relatedSupplierInvoice.discount_amount || relatedSupplierInvoice.discount_total || 0)} SAR</span>
                         )}
                       </div>
                     )}
@@ -772,11 +851,27 @@ export default function Journal() {
                   </table>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                  <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">نوع العملية: {operationTypeOf(selected, relatedInvoice)}</div>
-                  <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">رقم الفاتورة: {String(relatedInvoice?.invoice_number||selected?.description||'').match(/INV\/[0-9]{4}\/[A-Z_]+_[0-9]+/)?.[0] || relatedInvoice?.invoice_number || selected.related_id || '—'}</div>
-                  <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">نوع الدفع: {paymentTypeText(relatedInvoice, orderMeta, selected)}</div>
-                  <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">فرع النشاط: {branchNameOf(selected, relatedInvoice, orderMeta)}</div>
-                  {selected.related_type==='invoice' && (
+                  <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">نوع العملية: {operationTypeOf(selected, relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment)}</div>
+                  <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">رقم الفاتورة: {(() => {
+                    const inv = relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment
+                    // Try to get invoice_number from related data first
+                    if (inv?.invoice_number) return inv.invoice_number;
+                    if (inv?.number) return inv.number;
+                    // Try to extract from description using regex
+                    const descMatch = String(selected?.description||'').match(/INV\/[0-9]{4}\/[A-Z_]+_[0-9]+/);
+                    if (descMatch?.[0]) return descMatch[0];
+                    // Try to extract invoice number pattern from description (INV-9-302659 format)
+                    const invMatch = String(selected?.description||'').match(/INV-[\d-]+/);
+                    if (invMatch?.[0]) return invMatch[0];
+                    // Fallback to related_id if available
+                    if (selected?.related_id) return `#${selected.related_id}`;
+                    return '—';
+                  })()}</div>
+                  <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">نوع الدفع: {paymentTypeText(relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment, orderMeta, selected)}</div>
+                  <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">فرع النشاط: {branchNameOf(selected, relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment, orderMeta)}</div>
+                  
+                  {/* تفاصيل فواتير المبيعات */}
+                  {selected.related_type==='invoice' && relatedInvoice && (
                     <>
                       <div className="px-2 py-1 bg-green-50 text-green-700 rounded border">صافي المبيعات: {formatAmount(netSalesOfEntry(selected))} SAR</div>
                       <div className="px-2 py-1 bg-purple-50 text-purple-700 rounded border">الضريبة: {formatAmount(vatOfEntry(selected, relatedInvoice))} SAR</div>
@@ -784,7 +879,77 @@ export default function Journal() {
                       {paymentTypeText(relatedInvoice, orderMeta, selected)==='ذمم مدينة' && (
                         <div className="px-2 py-1 bg-sky-50 text-sky-700 rounded border">العملاء: ذمم مدينة</div>
                       )}
+                      {relatedInvoice?.partner?.name && (
+                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">العميل: {relatedInvoice.partner.name}</div>
+                      )}
+                      {relatedInvoice?.total && (
+                        <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">الإجمالي: {formatAmount(relatedInvoice.total)} SAR</div>
+                      )}
                     </>
+                  )}
+                  
+                  {/* تفاصيل فواتير الموردين */}
+                  {selected.related_type==='supplier_invoice' && relatedSupplierInvoice && (
+                    <>
+                      <div className="px-2 py-1 bg-orange-50 text-orange-700 rounded border">إجمالي المشتريات: {formatAmount(relatedSupplierInvoice.subtotal || relatedSupplierInvoice.total || 0)} SAR</div>
+                      <div className="px-2 py-1 bg-purple-50 text-purple-700 rounded border">الضريبة: {formatAmount(relatedSupplierInvoice.tax_amount || relatedSupplierInvoice.tax || 0)} SAR</div>
+                      {Number(relatedSupplierInvoice.discount_amount || relatedSupplierInvoice.discount_total || 0) > 0 && (
+                        <div className="px-2 py-1 bg-rose-50 text-rose-700 rounded border">الخصم: {formatAmount(relatedSupplierInvoice.discount_amount || relatedSupplierInvoice.discount_total || 0)} SAR</div>
+                      )}
+                      {relatedSupplierInvoice?.total && (
+                        <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">الإجمالي: {formatAmount(relatedSupplierInvoice.total)} SAR</div>
+                      )}
+                      {relatedSupplierInvoice?.partner?.name && (
+                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">المورد: {relatedSupplierInvoice.partner.name}</div>
+                      )}
+                      {relatedSupplierInvoice?.payment_status && (
+                        <div className="px-2 py-1 bg-yellow-50 text-yellow-700 rounded border">حالة الدفع: {relatedSupplierInvoice.payment_status === 'paid' ? 'مدفوعة' : relatedSupplierInvoice.payment_status === 'partial' ? 'مدفوعة جزئياً' : 'غير مدفوعة'}</div>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* تفاصيل المصروفات */}
+                  {selected.related_type==='expense_invoice' && relatedExpense && (
+                    <>
+                      <div className="px-2 py-1 bg-red-50 text-red-700 rounded border">نوع المصروف: {relatedExpense.expense_type === 'expense' ? 'مصروف' : relatedExpense.expense_type === 'withdraw' ? 'سحب' : relatedExpense.expense_type === 'deposit' ? 'إيداع' : relatedExpense.expense_type === 'payment' ? 'سداد' : relatedExpense.expense_type || 'مصروف'}</div>
+                      <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">المبلغ: {formatAmount(relatedExpense.amount || relatedExpense.total || 0)} SAR</div>
+                      {relatedExpense?.account_code && (
+                        <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">حساب المصروف: {relatedExpense.account_code}</div>
+                      )}
+                      {relatedExpense?.partner?.name && (
+                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">المستفيد: {relatedExpense.partner.name}</div>
+                      )}
+                      {relatedExpense?.description && (
+                        <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border col-span-2">الوصف: {relatedExpense.description}</div>
+                      )}
+                      {relatedExpense?.branch && (
+                        <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">الفرع: {relatedExpense.branch}</div>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* تفاصيل المدفوعات */}
+                  {selected.related_type==='payment' && relatedPayment && (
+                    <>
+                      <div className="px-2 py-1 bg-green-50 text-green-700 rounded border">نوع الدفع: {relatedPayment.payment_method === 'cash' ? 'نقدي' : relatedPayment.payment_method === 'card' ? 'بطاقة' : relatedPayment.payment_method === 'bank' ? 'بنك' : relatedPayment.payment_method || '—'}</div>
+                      {relatedPayment?.total && (
+                        <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">المبلغ: {formatAmount(relatedPayment.total)} SAR</div>
+                      )}
+                      {relatedPayment?.partner?.name && (
+                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">الطرف: {relatedPayment.partner.name}</div>
+                      )}
+                      {relatedPayment?.invoice_id && (
+                        <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">فاتورة مرتبطة: #{relatedPayment.invoice_id}</div>
+                      )}
+                    </>
+                  )}
+                  
+                  {/* تفاصيل عامة لجميع الأنواع */}
+                  {selected.branch && (
+                    <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">الفرع: {selected.branch}</div>
+                  )}
+                  {selected.period && (
+                    <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">الفترة: {selected.period}</div>
                   )}
                 </div>
               </div>
@@ -894,13 +1059,58 @@ function formatAmount(v){ const n = parseFloat(v||0); return isFinite(n) ? n.toF
 function netSalesOf(inv){ try { const t=parseFloat(inv?.total||0), tax=parseFloat(inv?.tax||0), disc=parseFloat(inv?.discount_total||0); const n=Math.max(0, t - tax - disc); return n } catch { return 0 } }
 
 function netSalesOfEntry(entry){ try { const revCodes=new Set(['4100','4130','4140']); return (entry?.postings||[]).filter(p=> revCodes.has(String(p?.account?.account_code||''))).reduce((s,p)=> s + parseFloat(p.credit||0), 0) } catch { return 0 } }
-function vatOfEntry(entry, inv){ try { const fromInv = parseFloat(inv?.tax||0); if (fromInv>0) return fromInv; return (entry?.postings||[]).filter(p=> String(p?.account?.account_code||'')==='2150').reduce((s,p)=> s + parseFloat(p.credit||0), 0) } catch { return 0 } }
-function discountAmountOf(entry, inv){ try { const invD = parseFloat(inv?.discount_total||inv?.discount_amount||0); const postD = (entry?.postings||[]).filter(p=> String(p?.account?.account_code||'')==='4190').reduce((s,p)=> s + parseFloat(p.debit||0), 0); return Math.max(invD, postD) } catch { return 0 } }
-function branchNameOf(entry, inv, meta){ try { const map={ china_town:'China Town', place_india:'Place India' }; const b1=String(inv?.branch||'').toLowerCase(); if (map[b1]) return map[b1]; const b2=String(meta?.branch||'').toLowerCase(); if (map[b2]) return map[b2]; const rev = (entry?.postings||[]).find(p=> ['4130','4140'].includes(String(p?.account?.account_code||''))); if (rev) return String(rev?.account?.name_en||rev?.account?.name||'').replace(/^.*?\s+/,'').trim() || (rev.account.account_code==='4140'?'China Town':'Place India'); return '—' } catch { return '—' } }
+function vatOfEntry(entry, inv){ try { 
+  // Try to get VAT from invoice/expense/supplier invoice
+  const fromInv = parseFloat(inv?.tax_amount||inv?.tax||inv?.vat_amount||0); 
+  if (fromInv>0) return fromInv; 
+  // Try to get from postings (VAT accounts: 2141, 2150)
+  return (entry?.postings||[]).filter(p=> ['2141','2150'].includes(String(p?.account?.account_code||''))).reduce((s,p)=> s + parseFloat(p.credit||0), 0) 
+} catch { return 0 } }
+function discountAmountOf(entry, inv){ try { 
+  // Try to get discount from invoice/expense/supplier invoice
+  const invD = parseFloat(inv?.discount_total||inv?.discount_amount||0); 
+  // Try to get from postings (discount account: 4190)
+  const postD = (entry?.postings||[]).filter(p=> String(p?.account?.account_code||'')==='4190').reduce((s,p)=> s + parseFloat(p.debit||0), 0); 
+  return Math.max(invD, postD) 
+} catch { return 0 } }
+function branchNameOf(entry, inv, meta){ try { 
+  const map={ china_town:'China Town', place_india:'Place India' }; 
+  // Try entry.branch first (most reliable)
+  const entryBranch = String(entry?.branch||'').toLowerCase();
+  if (map[entryBranch]) return map[entryBranch];
+  // Try invoice/expense/supplier invoice branch
+  const b1=String(inv?.branch||'').toLowerCase(); if (map[b1]) return map[b1]; 
+  // Try order meta branch
+  const b2=String(meta?.branch||'').toLowerCase(); if (map[b2]) return map[b2]; 
+  // Try to infer from account codes in postings
+  const rev = (entry?.postings||[]).find(p=> ['4130','4140'].includes(String(p?.account?.account_code||''))); 
+  if (rev) return String(rev?.account?.name_en||rev?.account?.name||'').replace(/^.*?\s+/,'').trim() || (rev.account.account_code==='4140'?'China Town':'Place India'); 
+  return '—' 
+} catch { return '—' } }
 function paymentMethodOf(entry, inv){ try { const pm = String(inv?.payment_method||'').toLowerCase(); if (pm==='cash') return 'نقد'; if (pm==='card') return 'بطاقة'; if (pm==='bank' || pm==='transfer') return 'تحويل بنكي'; const hasAR = (entry?.postings||[]).some(p=> String(p?.account?.account_code||'')==='1210' && parseFloat(p.debit||0)>0); const hasCash = (entry?.postings||[]).some(p=> String(p?.account?.account_code||'')==='1110' && parseFloat(p.debit||0)>0); const hasBank = (entry?.postings||[]).some(p=> String(p?.account?.account_code||'')==='1010' && parseFloat(p.debit||0)>0); if (hasAR) return 'أجل'; if (hasCash) return 'نقد'; if (hasBank) return 'بنك'; return '—' } catch { return '—' } }
 function discountPctOf(entry, inv, meta){ try { const fromInv = Number(inv?.discount_rate ?? inv?.discount_pct ?? inv?.discountPercent ?? 0); if (fromInv>0) return `(${fromInv.toFixed(0)}%)`; const pct = Number(meta?.discountPct||0); if (pct>0) return `(${pct.toFixed(0)}%)`; const disc = discountAmountOf(entry, inv); const net = netSalesOfEntry(entry); if (net>0 && disc>0) return `(${(disc/net*100).toFixed(0)}%)`; return '' } catch { return '' } }
 
-function paymentTypeText(inv, meta, entry){ try { const lines = (Array.isArray(meta?.payLines)?meta.payLines:(Array.isArray(inv?.pay_lines)?inv.pay_lines:(Array.isArray(inv?.payLines)?inv.payLines:[]))); if (lines.length>0) { const set = new Set(lines.map(l=> String(l.method||'').toLowerCase())); const parts = []; if (set.has('card')) parts.push('بطاقة'); if (set.has('cash')) parts.push('نقدًا'); if (parts.length) return parts.join(' + '); } const pmRaw = String(inv?.payment_method||inv?.payment_type||'').toLowerCase(); if (pmRaw==='credit' || pmRaw==='deferred' || pmRaw==='ar') return 'ذمم مدينة'; if (pmRaw==='cash') return 'نقدًا'; if (pmRaw==='card') return 'بطاقة'; const hasAR = (entry?.postings||[]).some(p=> String(p?.account?.account_code||'')==='1210' && parseFloat(p.debit||0)>0); if (hasAR) return 'ذمم مدينة'; return '—' } catch { return '—' } }
+function paymentTypeText(inv, meta, entry){ try { 
+  const lines = (Array.isArray(meta?.payLines)?meta.payLines:(Array.isArray(inv?.pay_lines)?inv.pay_lines:(Array.isArray(inv?.payLines)?inv.payLines:[]))); 
+  if (lines.length>0) { 
+    const set = new Set(lines.map(l=> String(l.method||'').toLowerCase())); 
+    const parts = []; 
+    if (set.has('card')) parts.push('بطاقة'); 
+    if (set.has('cash')) parts.push('نقدًا'); 
+    if (parts.length) return parts.join(' + '); 
+  } 
+  const pmRaw = String(inv?.payment_method||inv?.payment_type||'').toLowerCase(); 
+  if (pmRaw==='credit' || pmRaw==='deferred' || pmRaw==='ar') return 'ذمم مدينة'; 
+  if (pmRaw==='cash') return 'نقدًا'; 
+  if (pmRaw==='card') return 'بطاقة'; 
+  if (pmRaw==='bank') return 'بنك'; 
+  // Check postings for payment method indicators
+  const hasAR = (entry?.postings||[]).some(p=> String(p?.account?.account_code||'')==='1210' && parseFloat(p.debit||0)>0); 
+  const hasAP = (entry?.postings||[]).some(p=> String(p?.account?.account_code||'')==='2410' && parseFloat(p.debit||0)>0); 
+  if (hasAR) return 'ذمم مدينة'; 
+  if (hasAP) return 'ذمم دائنة'; 
+  return '—' 
+} catch { return '—' } }
 
 function exportCSV(items){
   const lang = localStorage.getItem('lang') || 'ar'

@@ -1,0 +1,364 @@
+
+> backend@1.0.0 start
+> node server.js
+
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+[SERVER] Started on port 4000 | NODE_ENV=development
+[SERVER] Build path: C:\Users\DELL\Documents\augment-projects\XXX\backend\frontend\build
+[SERVER] JWT_SECRET: configured
+[SERVER] Database: connected
+[REQUEST] 2026-01-17T11:26:27.965Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] SUCCESS | userId=1 email=fysl71443@gmail.com role=admin screens=11 branches=1
+[REQUEST] 2026-01-17T11:27:03.437Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] REJECTED: Invalid password | userId=1 email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:27:07.838Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] REJECTED: Invalid password | userId=1 email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:27:23.070Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] REJECTED: Invalid password | userId=1 email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:27:59.179Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] SUCCESS | userId=1 email=fysl71443@gmail.com role=admin screens=11 branches=1
+[REQUEST] 2026-01-17T11:28:06.182Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] REJECTED: Invalid password | userId=1 email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:29:18.850Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] SUCCESS | userId=1 email=fysl71443@gmail.com role=admin screens=11 branches=1
+[REQUEST] 2026-01-17T11:29:21.863Z | GET /api/auth/me | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/auth/me
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH/ME] SUCCESS | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true
+[REQUEST] 2026-01-17T11:29:22.686Z | GET /api/settings/settings_branding | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branding
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[STATIC REWRITE] /pos/china_town/static/js/5336.5e275e4a.chunk.js -> /static/js/5336.5e275e4a.chunk.js
+[REQUEST] 2026-01-17T11:29:29.153Z | GET /pos/china_town/favicon.ico | auth_header=missing
+[REQUEST] 2026-01-17T11:29:29.181Z | GET /api/pos/table-state?branch=china_town | auth_header=present
+[REQUEST] 2026-01-17T11:29:29.183Z | GET /api/pos/tables-layout?branch=china_town | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/table-state
+[REQUEST] 2026-01-17T11:29:29.860Z | GET /api/orders?branch=china_town&table=4&status=DRAFT%2COPEN | auth_header=present
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/orders
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/tables-layout
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=sales action=view GET /api/orders
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[ORDERS] GET /api/orders - Found 0 orders for branch=china_town, table=4, status=DRAFT,OPEN
+[ORDERS] Returning 0 orders with lines parsed
+[STATIC REWRITE] /pos/china_town/tables/static/js/4689.ab0223d9.chunk.js -> /static/js/4689.ab0223d9.chunk.js
+[STATIC REWRITE] /pos/china_town/tables/static/js/8970.1991c26f.chunk.js -> /static/js/8970.1991c26f.chunk.js
+[STATIC REWRITE] /pos/china_town/tables/static/js/5418.56689fb2.chunk.js -> /static/js/5418.56689fb2.chunk.js
+[STATIC REWRITE] /pos/china_town/tables/static/js/7026.7d7f743f.chunk.js -> /static/js/7026.7d7f743f.chunk.js
+[REQUEST] 2026-01-17T11:29:33.283Z | GET /pos/china_town/tables/favicon.ico | auth_header=missing
+[REQUEST] 2026-01-17T11:29:33.476Z | GET /api/settings/settings_branch_china_town | auth_header=present
+[REQUEST] 2026-01-17T11:29:33.493Z | GET /api/partners?type=customer | auth_header=present
+[REQUEST] 2026-01-17T11:29:33.494Z | GET /api/orders?branch=china_town&table=4&status=DRAFT%2COPEN | auth_header=present
+[REQUEST] 2026-01-17T11:29:33.496Z | GET /api/pos/table-state?branch=china_town | auth_header=present
+[REQUEST] 2026-01-17T11:29:33.498Z | GET /api/products | auth_header=present
+[REQUEST] 2026-01-17T11:29:33.500Z | GET /api/branches | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/orders
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branch_china_town
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=clients action=view GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=sales action=view GET /api/orders
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/partners
+[ORDERS] GET /api/orders - Found 0 orders for branch=china_town, table=4, status=DRAFT,OPEN
+[ORDERS] Returning 0 orders with lines parsed
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/branches
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/table-state
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/products
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=products action=view GET /api/products
+[REQUEST] 2026-01-17T11:29:37.614Z | GET /api/pos/table-state?branch=china_town | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/table-state
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:30:13.886Z | POST /api/pos/saveDraft | auth_header=present
+[REQUEST] 2026-01-17T11:30:15.434Z | GET /api/settings/settings_branding | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true POST /api/pos/saveDraft
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=sales action=create POST /api/pos/saveDraft
+[POS] saveDraft - Request received | userId= 1 email= fysl71443@gmail.com
+[POS] saveDraft - branch=china_town, table=4, order_id=null, raw_lines_count=2
+[POS] saveDraft - Full payload: {"branch":"china_town","table":"4","lines_count":0,"items_count":2}
+[POS] saveDraft - Converted lines: 3 items (1 meta + 2 items)
+[POS] saveDraft - Sample item: {"type":"item","product_id":177,"id":177,"name":"╪▒┘ê╪¿┘è┘å╪½┘ê┘ü┘ê","qty":1,"quantity":1,"price":50.43,"discount":0}
+[POS] saveDraft - Creating new order for branch=china_town, table=4
+[REQUEST] 2026-01-17T11:30:16.909Z | GET /api/accounts | auth_header=present
+[REQUEST] 2026-01-17T11:30:16.914Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[REQUEST] 2026-01-17T11:30:16.917Z | GET /api/accounting-periods/2026-01 | auth_header=present
+[POS] saveDraft - SUCCESS - Created order 28, lines type: object
+[POS] saveDraft - Returning 3 lines for new order 28
+[POS] saveDraft - Response includes order_id: 28, invoice: null, total_amount: 115.989, lines: 3, items: 2
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branding
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[REQUEST] 2026-01-17T11:30:19.444Z | GET /api/settings/settings_branding | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounting-periods/2026-01
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branding
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounting-periods/2026-01
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[REQUEST] 2026-01-17T11:30:20.206Z | GET /api/accounting-periods/2026-01 | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[REQUEST] 2026-01-17T11:30:20.334Z | GET /api/accounts | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounting-periods/2026-01
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounting-periods/2026-01
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[STATIC REWRITE] /expenses/static/js/1238.f71cd858.chunk.js -> /static/js/1238.f71cd858.chunk.js
+[STATIC REWRITE] /expenses/static/js/8895.84af89ac.chunk.js -> /static/js/8895.84af89ac.chunk.js
+[REQUEST] 2026-01-17T11:30:21.312Z | GET /expenses/favicon.ico | auth_header=missing
+[STATIC REWRITE] /expenses/static/js/2906.da98a236.chunk.js -> /static/js/2906.da98a236.chunk.js
+[REQUEST] 2026-01-17T11:30:21.434Z | GET /api/accounts | auth_header=present
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[REQUEST] 2026-01-17T11:30:21.820Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:30:23.665Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[REQUEST] 2026-01-17T11:30:24.381Z | GET /api/settings/settings_branding | auth_header=present
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branding
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:30:27.297Z | GET /api/accounts | auth_header=present
+[REQUEST] 2026-01-17T11:30:27.300Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[REQUEST] 2026-01-17T11:30:27.303Z | GET /api/accounting-periods/2026-01 | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounting-periods/2026-01
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounting-periods/2026-01
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:02.686Z | POST /api/expenses | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true POST /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=create POST /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true POST /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=create POST /api/expenses
+[EXPENSES] Created expense 6, amount=123, account=5130
+[REQUEST] 2026-01-17T11:31:07.871Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:10.303Z | GET /api/accounts | auth_header=present
+[REQUEST] 2026-01-17T11:31:10.309Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[SPA FALLBACK] Serving index.html for frontend route: /expenses/invoices
+[STATIC REWRITE] /expenses/static/js/main.e78c8868.js -> /static/js/main.e78c8868.js
+[STATIC REWRITE] /expenses/static/css/main.e13aa8b4.css -> /static/css/main.e13aa8b4.css
+[STATIC REWRITE] /expenses/static/media/cairo-latin-400-normal.115755d5d85ea3aa10e4.woff2 -> /static/media/cairo-latin-400-normal.115755d5d85ea3aa10e4.woff2
+[REQUEST] 2026-01-17T11:31:14.005Z | GET /api/auth/me | auth_header=present
+[REQUEST] 2026-01-17T11:31:14.020Z | GET /expenses/logo192.png | auth_header=missing
+[STATIC REWRITE] /expenses/static/media/cairo-arabic-400-normal.058cbf3782fbcd1fa0b4.woff2 -> /static/media/cairo-arabic-400-normal.058cbf3782fbcd1fa0b4.woff2
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/auth/me
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH/ME] SUCCESS | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true
+[STATIC REWRITE] /expenses/static/js/4689.ab0223d9.chunk.js -> /static/js/4689.ab0223d9.chunk.js
+[STATIC REWRITE] /expenses/static/js/1238.f71cd858.chunk.js -> /static/js/1238.f71cd858.chunk.js
+[STATIC REWRITE] /expenses/static/js/8895.84af89ac.chunk.js -> /static/js/8895.84af89ac.chunk.js
+[STATIC REWRITE] /expenses/static/js/2906.da98a236.chunk.js -> /static/js/2906.da98a236.chunk.js
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:15.096Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[REQUEST] 2026-01-17T11:31:15.098Z | GET /api/accounts | auth_header=present
+[STATIC REWRITE] /expenses/static/media/cairo-latin-700-normal.de3ee125ce756c30135b.woff2 -> /static/media/cairo-latin-700-normal.de3ee125ce756c30135b.woff2
+[STATIC REWRITE] /expenses/static/media/cairo-arabic-700-normal.b4370cf49720a94bc6af.woff2 -> /static/media/cairo-arabic-700-normal.b4370cf49720a94bc6af.woff2
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:16.914Z | POST /api/error-log | auth_header=present
+[ERROR-LOG] Frontend error captured: {
+  error: 'J.map is not a function',
+  url: 'http://localhost:4000/expenses/invoices',
+  timestamp: '2026-01-17T11:31:16.927Z',
+  hasStack: true,
+  hasComponentStack: true
+}
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[SPA FALLBACK] Serving index.html for frontend route: /expenses/invoices
+[STATIC REWRITE] /expenses/static/js/main.e78c8868.js -> /static/js/main.e78c8868.js
+[STATIC REWRITE] /expenses/static/css/main.e13aa8b4.css -> /static/css/main.e13aa8b4.css
+[REQUEST] 2026-01-17T11:31:18.616Z | GET /api/auth/me | auth_header=present
+[REQUEST] 2026-01-17T11:31:18.632Z | GET /expenses/logo192.png | auth_header=missing
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/auth/me
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH/ME] SUCCESS | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true
+[STATIC REWRITE] /expenses/static/js/4689.ab0223d9.chunk.js -> /static/js/4689.ab0223d9.chunk.js
+[STATIC REWRITE] /expenses/static/js/1238.f71cd858.chunk.js -> /static/js/1238.f71cd858.chunk.js
+[STATIC REWRITE] /expenses/static/js/8895.84af89ac.chunk.js -> /static/js/8895.84af89ac.chunk.js
+[STATIC REWRITE] /expenses/static/js/2906.da98a236.chunk.js -> /static/js/2906.da98a236.chunk.js
+[REQUEST] 2026-01-17T11:31:19.682Z | GET /api/accounts | auth_header=present
+[REQUEST] 2026-01-17T11:31:19.685Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:21.652Z | POST /api/error-log | auth_header=present
+[ERROR-LOG] Frontend error captured: {
+  error: 'J.map is not a function',
+  url: 'http://localhost:4000/expenses/invoices',
+  timestamp: '2026-01-17T11:31:21.651Z',
+  hasStack: true,
+  hasComponentStack: true
+}
+[SPA FALLBACK] Serving index.html for frontend route: /expenses/invoices
+[STATIC REWRITE] /expenses/static/css/main.e13aa8b4.css -> /static/css/main.e13aa8b4.css
+[STATIC REWRITE] /expenses/static/js/main.e78c8868.js -> /static/js/main.e78c8868.js
+[REQUEST] 2026-01-17T11:31:46.899Z | GET /api/auth/me | auth_header=present
+[REQUEST] 2026-01-17T11:31:46.913Z | GET /expenses/logo192.png | auth_header=missing
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/auth/me
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH/ME] SUCCESS | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true
+[STATIC REWRITE] /expenses/static/js/4689.ab0223d9.chunk.js -> /static/js/4689.ab0223d9.chunk.js
+[STATIC REWRITE] /expenses/static/js/1238.f71cd858.chunk.js -> /static/js/1238.f71cd858.chunk.js
+[STATIC REWRITE] /expenses/static/js/8895.84af89ac.chunk.js -> /static/js/8895.84af89ac.chunk.js
+[STATIC REWRITE] /expenses/static/js/2906.da98a236.chunk.js -> /static/js/2906.da98a236.chunk.js
+[REQUEST] 2026-01-17T11:31:51.098Z | GET /api/accounts | auth_header=present
+[REQUEST] 2026-01-17T11:31:51.099Z | GET /api/expenses?from=&to=&account_code=&category= | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/accounts
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=accounting action=view GET /api/accounts
+[REQUEST] 2026-01-17T11:31:52.948Z | GET /api/settings/settings_branding | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branding
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=expenses action=view GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/expenses
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[STATIC REWRITE] /pos/china_town/static/js/5336.5e275e4a.chunk.js -> /static/js/5336.5e275e4a.chunk.js
+[REQUEST] 2026-01-17T11:31:55.394Z | GET /api/pos/table-state?branch=china_town | auth_header=present
+[REQUEST] 2026-01-17T11:31:55.396Z | GET /api/pos/tables-layout?branch=china_town | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/table-state
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:56.323Z | GET /api/orders?branch=china_town&table=5&status=DRAFT%2COPEN | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/orders
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=sales action=view GET /api/orders
+[ORDERS] GET /api/orders - Found 0 orders for branch=china_town, table=5, status=DRAFT,OPEN
+[ORDERS] Returning 0 orders with lines parsed
+[STATIC REWRITE] /pos/china_town/tables/static/js/8970.1991c26f.chunk.js -> /static/js/8970.1991c26f.chunk.js
+[STATIC REWRITE] /pos/china_town/tables/static/js/5418.56689fb2.chunk.js -> /static/js/5418.56689fb2.chunk.js
+[STATIC REWRITE] /pos/china_town/tables/static/js/7026.7d7f743f.chunk.js -> /static/js/7026.7d7f743f.chunk.js
+[REQUEST] 2026-01-17T11:31:57.524Z | GET /api/products | auth_header=present
+[REQUEST] 2026-01-17T11:31:57.527Z | GET /api/branches | auth_header=present
+[REQUEST] 2026-01-17T11:31:57.529Z | GET /api/partners?type=customer | auth_header=present
+[REQUEST] 2026-01-17T11:31:57.531Z | GET /api/settings/settings_branch_china_town | auth_header=present
+[REQUEST] 2026-01-17T11:31:57.534Z | GET /api/orders?branch=china_town&table=5&status=DRAFT%2COPEN | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/products
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/branches
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=products action=view GET /api/products
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:58.283Z | GET /api/pos/table-state?branch=china_town | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/table-state
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/tables-layout
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:31:59.397Z | GET /api/pos/table-state?branch=china_town | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/pos/table-state
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branch_china_town
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/orders
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=clients action=view GET /
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=sales action=view GET /api/orders
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/partners
+[ORDERS] GET /api/orders - Found 0 orders for branch=china_town, table=5, status=DRAFT,OPEN
+[ORDERS] Returning 0 orders with lines parsed
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUEST] 2026-01-17T11:32:06.149Z | POST /api/pos/saveDraft | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true POST /api/pos/saveDraft
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[AUTHORIZE] ALLOWED: Admin bypass | userId=1 screen=sales action=create POST /api/pos/saveDraft
+[POS] saveDraft - Request received | userId= 1 email= fysl71443@gmail.com
+[POS] saveDraft - branch=china_town, table=5, order_id=null, raw_lines_count=3
+[POS] saveDraft - Full payload: {"branch":"china_town","table":"5","lines_count":0,"items_count":3}
+[POS] saveDraft - Converted lines: 4 items (1 meta + 3 items)
+[POS] saveDraft - Sample item: {"type":"item","product_id":137,"id":137,"name":"┘å┘ê╪»┘ä╪▓╪¿╪¡╪▒┘è╪¬","qty":1,"quantity":1,"price":32.17,"discount":0}
+[POS] saveDraft - Creating new order for branch=china_town, table=5
+[POS] saveDraft - SUCCESS - Created order 29, lines type: object
+[POS] saveDraft - Returning 4 lines for new order 29
+[POS] saveDraft - Response includes order_id: 29, invoice: null, total_amount: 103.9945, lines: 4, items: 3
+[REQUEST] 2026-01-17T11:32:07.264Z | GET /api/settings/settings_branding | auth_header=present
+[AUTH] SUCCESS: User authenticated | userId=1 email=fysl71443@gmail.com role=admin isAdmin=true GET /api/settings/settings_branding
+[AUTH] Permissions loaded (optional) | userId=1 screens=11 globalActions=55
+[REQUIRE_ADMIN] Checking admin access | userId=1 role=admin isAdmin=true
+[REQUIRE_ADMIN] ALLOWED: Admin access granted | userId=1
+[STATIC REWRITE] /expenses/static/css/main.e13aa8b4.css -> /static/css/main.e13aa8b4.css
+[SPA FALLBACK] Serving index.html for frontend route: /.well-known/appspecific/com.chrome.devtools.json
+[STATIC REWRITE] /pos/china_town/static/js/5336.5e275e4a.chunk.js.map -> /static/js/5336.5e275e4a.chunk.js.map
+[STATIC REWRITE] /pos/china_town/tables/static/js/8970.1991c26f.chunk.js.map -> /static/js/8970.1991c26f.chunk.js.map
+[STATIC REWRITE] /pos/china_town/tables/static/js/7026.7d7f743f.chunk.js.map -> /static/js/7026.7d7f743f.chunk.js.map
+[STATIC REWRITE] /pos/china_town/tables/static/js/5418.56689fb2.chunk.js.map -> /static/js/5418.56689fb2.chunk.js.map
+[STATIC REWRITE] /expenses/static/js/8895.84af89ac.chunk.js.map -> /static/js/8895.84af89ac.chunk.js.map
+[STATIC REWRITE] /expenses/static/js/1238.f71cd858.chunk.js.map -> /static/js/1238.f71cd858.chunk.js.map
+[STATIC REWRITE] /expenses/static/js/2906.da98a236.chunk.js.map -> /static/js/2906.da98a236.chunk.js.map
+[STATIC REWRITE] /expenses/static/js/main.e78c8868.js.map -> /static/js/main.e78c8868.js.map
+[STATIC REWRITE] /expenses/static/js/4689.ab0223d9.chunk.js.map -> /static/js/4689.ab0223d9.chunk.js.map
+[STATIC REWRITE] /expenses/static/css/main.e13aa8b4.css.map -> /static/css/main.e13aa8b4.css.map

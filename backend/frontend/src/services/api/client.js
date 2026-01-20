@@ -1,16 +1,42 @@
 import axios from 'axios';
 import { normalizeArray } from '../../utils/normalize';
 
-// In development mode (npm start), use backend server on port 5000
-// Frontend Dev Server runs on port 4000, Backend API on port 5000
-// In production, use window.location.origin
-const API_BASE = process.env.REACT_APP_API_URL || (typeof window !== 'undefined' ? (window.__API__ || (process.env.NODE_ENV === 'development' ? 'http://localhost:5000/api' : (window.location.origin + '/api'))) : 'http://localhost:5000/api')
+// CRITICAL: Determine API base URL
+// In development (npm start on port 4000), connect to backend on port 5000
+// In production (served from backend), use same origin
+function getApiBase() {
+  // 1. Check for explicit environment variable
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  
+  // 2. Check for runtime override
+  if (typeof window !== 'undefined' && window.__API__) {
+    return window.__API__;
+  }
+  
+  // 3. Check if running on development port (4000)
+  if (typeof window !== 'undefined') {
+    const port = window.location.port;
+    // If running on port 4000 (React dev server), use backend on 5000
+    if (port === '4000' || port === '3000') {
+      return 'http://localhost:5000/api';
+    }
+    // Otherwise, use same origin (production mode)
+    return window.location.origin + '/api';
+  }
+  
+  // 4. Fallback for SSR/Node environment
+  return 'http://localhost:5000/api';
+}
 
-// CRITICAL: Log API_BASE in development for debugging
-if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
+const API_BASE = getApiBase();
+
+// CRITICAL: Always log API_BASE for debugging
+if (typeof window !== 'undefined') {
   console.log('[API] API_BASE configured:', API_BASE);
+  console.log('[API] window.location.port:', window.location.port);
   console.log('[API] NODE_ENV:', process.env.NODE_ENV);
-  console.log('[API] REACT_APP_API_URL:', process.env.REACT_APP_API_URL || '(not set)');
 }
 
 /**
@@ -44,10 +70,35 @@ const api = axios.create({
   withCredentials: false
 });
 
-// 2. Request Interceptor: Inject Token
+// 2. Request Interceptor: Inject Token + Block invoice_items calls
 // CRITICAL: Always read token from localStorage at request time (not at instance creation)
 // This ensures token is always fresh, even if it was set after axios instance was created
 api.interceptors.request.use((config) => {
+  // 🚫 BLOCK any calls to /invoice_items/ endpoint
+  // This endpoint causes 404 errors - use invoice.lines from invoices.get() or issueInvoice response instead
+  if (config.url && config.url.includes('/invoice_items/')) {
+    const invoiceId = config.url.split('/invoice_items/')[1]?.split('?')[0]?.split('/')[0];
+    const error = new Error(
+      `🚫 ممنوع استدعاء /invoice_items/ في المبيعات. استخدم invoice.lines من response بدلاً من ذلك.\n` +
+      `❌ DO NOT call /invoice_items/${invoiceId}. Use invoice.lines from invoices.get(id) or issueInvoice response.\n` +
+      `✅ Example: const invoice = await invoices.get(id); const items = invoice.lines.filter(l => l.type === 'item');`
+    );
+    // Capture full stack trace
+    const stackTrace = new Error().stack;
+    error.stack = error.stack + '\n\n📍 Full call stack:\n' + stackTrace;
+    console.error('[API] 🚫 BLOCKED /invoice_items/ call:', {
+      url: config.url,
+      method: config.method,
+      invoiceId: invoiceId,
+      error: error.message,
+      stack: stackTrace
+    });
+    // Log to console with full details
+    console.trace('[API] 🚫 BLOCKED /invoice_items/ - Full stack trace:');
+    // Return a rejected promise to prevent the request
+    return Promise.reject(error);
+  }
+  
   // Always read token fresh from localStorage for each request
   const token = localStorage.getItem('token');
   const isPublicEndpoint = config.url?.includes('/auth/login') || 
@@ -57,6 +108,16 @@ api.interceptors.request.use((config) => {
   // Token should be available by the time any API call is made (ProtectedRoute ensures this)
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+    
+    // OPTIMIZATION: Send permissions in header to avoid database queries on every request
+    // Permissions are loaded once at login and cached in localStorage
+    try {
+      const permissionsCache = localStorage.getItem('user_permissions_cache');
+      if (permissionsCache) {
+        config.headers['X-User-Permissions'] = permissionsCache;
+      }
+    } catch {}
+    
     // Log for debugging (only for important endpoints or in development)
     if (process.env.NODE_ENV === 'development' || 
         config.url?.includes('/permissions') || 
@@ -195,13 +256,17 @@ export async function request(path, options = {}) {
     // CRITICAL: Normalize response to ensure arrays are always arrays
     // This prevents "o.map is not a function" errors
     // BUT: For endpoints that return objects (not arrays), don't normalize
+    // Check if path matches single object endpoints (not array/list endpoints)
     const isObjectResponse = path.includes('/auth/login') || 
                             path.includes('/auth/register') || 
                             path.includes('/auth/me') ||
                             path.includes('/pos/saveDraft') || 
+                            path.includes('/pos/save-draft') ||
                             path.includes('/saveDraft') ||
                             path.includes('/pos/issueInvoice') ||
-                            path.includes('/issueInvoice');
+                            path.includes('/pos/issue-invoice') ||
+                            path.includes('/issueInvoice') ||
+                            (/^\/invoices\/\d+$/.test(path) && !path.includes('?')); // Single invoice GET like /invoices/12
     if (isObjectResponse) {
       // These endpoints return objects (e.g., { token, user, ... }) - return as-is
       return response.data;

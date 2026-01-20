@@ -121,8 +121,16 @@ export function AuthProvider({ children }) {
           console.log('[AuthContext] Loading permissions for non-admin user (optional)...');
           try {
             const pm = await apiUsers.permissions(userId);
-            setPermissionsMap(normalizePerms(pm || {}));
+            const normalizedPerms = normalizePerms(pm || {});
+            setPermissionsMap(normalizedPerms);
             setPermissionsLoaded(true);
+            
+            // OPTIMIZATION: Cache permissions in localStorage to send with every request
+            // This avoids database queries on every API call
+            try {
+              localStorage.setItem('user_permissions_cache', JSON.stringify(normalizedPerms));
+            } catch {}
+            
             console.log('[AuthContext] Permissions loaded successfully');
           } catch (permErr) {
             // Permission loading failure does NOT fail authentication
@@ -139,7 +147,11 @@ export function AuthProvider({ children }) {
       }
     } catch (e) {
       console.error('[AuthContext] Error loading user:', e);
-      try { localStorage.removeItem('token'); localStorage.removeItem('auth_user') } catch {}
+      try { 
+        localStorage.removeItem('token'); 
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('user_permissions_cache'); // Remove permissions cache on error
+      } catch {}
       setUser(null);
       setToken(null);
       setPermissionsMap({});
@@ -152,8 +164,11 @@ export function AuthProvider({ children }) {
   }, []); // Empty deps - function is stable, uses refs for state tracking
 
   useEffect(() => {
-    // Only load once on mount
-    loadUser();
+    // Only load once on mount - prevent unnecessary re-fetching
+    // User and permissions are cached in state, so we don't need to reload on every render
+    if (!user && !loadingUserRef.current) {
+      loadUser();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty deps - only run once on mount
 
@@ -185,7 +200,13 @@ export function AuthProvider({ children }) {
       lastRefreshedUserIdRef.current = id;
       console.log('[AuthContext] Refreshing permissions...');
       const pm = await apiUsers.permissions(id);
-      setPermissionsMap(normalizePerms(pm || {}));
+      const normalizedPerms = normalizePerms(pm || {});
+      setPermissionsMap(normalizedPerms);
+      
+      // OPTIMIZATION: Update permissions cache in localStorage
+      try {
+        localStorage.setItem('user_permissions_cache', JSON.stringify(normalizedPerms));
+      } catch {}
       setPermissionsLoaded(true);
       console.log('[AuthContext] Permissions refreshed successfully');
     } catch (e) {
@@ -263,6 +284,8 @@ export function AuthProvider({ children }) {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('user_permissions_cache'); // Remove permissions cache on logout
     localStorage.removeItem('auth_user');
     localStorage.removeItem('remember');
     setUser(null);

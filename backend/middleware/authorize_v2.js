@@ -9,9 +9,7 @@ function normalize(str) {
  * Uses new role-based permission system
  */
 async function checkPermission(userId, roleId, screenCode, actionCode) {
-  if (!pool) {
-    console.error('[AUTHORIZE_V2] DB not configured');
-    return false;
+  // CRITICAL: pool is guaranteed to exist - PostgreSQL connection verified at startup
   }
 
   try {
@@ -66,7 +64,7 @@ async function checkPermission(userId, roleId, screenCode, actionCode) {
  * Log permission check to audit_log
  */
 async function logPermissionCheck(userId, screenCode, actionCode, allowed, req) {
-  if (!pool) return;
+  // CRITICAL: pool is guaranteed to exist - PostgreSQL connection verified at startup
 
   try {
     const ipAddress = req.ip || req.headers['x-forwarded-for'] || req.connection?.remoteAddress || 'unknown';

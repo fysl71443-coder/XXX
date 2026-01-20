@@ -1,0 +1,224 @@
+#!/usr/bin/env node
+/**
+ * إصلاح المصروفات القديمة التي لا تحتوي على journal_entry_id
+ */
+
+import dotenv from 'dotenv';
+import pg from 'pg';
+
+dotenv.config();
+
+const { Pool } = pg;
+const dbPool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes('localhost') ? false : { rejectUnauthorized: false }
+});
+
+async function getAccountIdByNumber(accountNumber) {
+  if (!accountNumber) return null;
+  try {
+    const { rows } = await dbPool.query(
+      'SELECT id FROM accounts WHERE account_code = $1 OR account_number = $1 LIMIT 1',
+      [accountNumber]
+    );
+    return rows && rows[0] ? rows[0].id : null;
+  } catch (e) {
+    console.error(`[FIX] Error getting account ${accountNumber}:`, e.message);
+    return null;
+  }
+}
+
+async function fixOldExpenses() {
+  try {
+    console.log('🔍 البحث عن مصروفات بدون journal_entry_id...');
+    
+    // Find expenses that are posted but don't have journal_entry_id
+    const { rows: expenses } = await dbPool.query(`
+      SELECT id, invoice_number, type, amount, total, account_code, 
+             partner_id, description, status, branch, date, payment_method, items
+      FROM expenses
+      WHERE status = 'posted' 
+        AND (journal_entry_id IS NULL OR journal_entry_id = 0)
+        AND total > 0
+      ORDER BY id
+    `);
+    
+    console.log(`📊 وجد ${expenses.length} مصروف بدون journal entry`);
+    
+    if (expenses.length === 0) {
+      console.log('✅ لا توجد مصروفات تحتاج إصلاح');
+      return;
+    }
+    
+    let fixed = 0;
+    let failed = 0;
+    
+    for (const expense of expenses) {
+      const client = await dbPool.connect();
+      try {
+        await client.query('BEGIN');
+        
+        let accountCode = expense.account_code;
+        if (!accountCode) {
+          // CRITICAL FIX: Use default expense account if missing
+          // Try to find a default expense account (5xxx series)
+          const { rows: defaultAccountRows } = await dbPool.query(
+            `SELECT account_code FROM accounts 
+             WHERE (account_code LIKE '5%' OR account_code LIKE '52%' OR account_code LIKE '53%')
+             AND type = 'expense'
+             ORDER BY account_code
+             LIMIT 1`
+          );
+          
+          if (defaultAccountRows && defaultAccountRows[0]) {
+            accountCode = defaultAccountRows[0].account_code;
+            console.log(`⚠️ Expense #${expense.id}: لا يوجد account_code - استخدام الحساب الافتراضي ${accountCode}`);
+            // Update expense with default account code
+            await client.query('UPDATE expenses SET account_code = $1 WHERE id = $2', [accountCode, expense.id]);
+          } else {
+            // Use a hardcoded default
+            accountCode = '5210'; // General expenses
+            console.log(`⚠️ Expense #${expense.id}: لا يوجد account_code - استخدام الحساب الافتراضي ${accountCode}`);
+            await client.query('UPDATE expenses SET account_code = $1 WHERE id = $2', [accountCode, expense.id]);
+          }
+        }
+        
+        // Get expense account ID
+        const expenseAccountId = await getAccountIdByNumber(accountCode);
+        
+        // Get payment account ID
+        let paymentAccountId = null;
+        const paymentMethod = String(expense.payment_method || 'cash').toLowerCase();
+        if (paymentMethod === 'bank') {
+          paymentAccountId = await getAccountIdByNumber('1121');
+        } else {
+          paymentAccountId = await getAccountIdByNumber('1111');
+        }
+        
+        if (!expenseAccountId || !paymentAccountId) {
+          console.log(`⚠️ Expense #${expense.id}: لا يمكن العثور على الحسابات - تم التخطي`);
+          await client.query('ROLLBACK');
+          failed++;
+          continue;
+        }
+        
+        // Parse items if exists
+        let items = [];
+        if (expense.items) {
+          try {
+            items = typeof expense.items === 'string' ? JSON.parse(expense.items) : expense.items;
+            if (!Array.isArray(items)) items = [];
+          } catch (e) {
+            items = [];
+          }
+        }
+        
+        const total = Number(expense.total || expense.amount || 0);
+        
+        // Calculate totals for balance validation
+        let totalDebit = 0;
+        let totalCredit = total;
+        
+        if (items.length > 0) {
+          for (const item of items) {
+            totalDebit += Number(item.amount || 0);
+          }
+        } else {
+          totalDebit = total;
+        }
+        
+        // Validate balance
+        if (Math.abs(totalDebit - totalCredit) > 0.01) {
+          console.log(`⚠️ Expense #${expense.id}: القيد غير متوازن (Debit: ${totalDebit}, Credit: ${totalCredit}) - تم التخطي`);
+          await client.query('ROLLBACK');
+          failed++;
+          continue;
+        }
+        
+        // Create journal entry
+        const entryDescription = expense.type 
+          ? `مصروف #${expense.id} - ${expense.type}` 
+          : `مصروف #${expense.id}${expense.description ? ' - ' + expense.description : ''}`;
+        
+        const { rows: entryRows } = await client.query(
+          `INSERT INTO journal_entries(description, date, reference_type, reference_id, status, branch)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, entry_number`,
+          [
+            entryDescription,
+            expense.date || new Date().toISOString().slice(0, 10),
+            'expense',
+            expense.id,
+            'posted',
+            expense.branch || 'china_town'
+          ]
+        );
+        
+        const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+        
+        if (!entryId) {
+          console.log(`❌ Expense #${expense.id}: فشل إنشاء journal entry`);
+          await client.query('ROLLBACK');
+          failed++;
+          continue;
+        }
+        
+        // Create postings
+        if (items.length > 0) {
+          for (const item of items) {
+            const itemAmount = Number(item.amount || 0);
+            const itemAccountId = await getAccountIdByNumber(item.account_code);
+            if (itemAccountId && itemAmount > 0) {
+              await client.query(
+                `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+                 VALUES ($1, $2, $3, $4)`,
+                [entryId, itemAccountId, itemAmount, 0]
+              );
+            }
+          }
+          await client.query(
+            `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+             VALUES ($1, $2, $3, $4)`,
+            [entryId, paymentAccountId, 0, total]
+          );
+        } else {
+          await client.query(
+            `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+             VALUES ($1, $2, $3, $4)`,
+            [entryId, expenseAccountId, total, 0]
+          );
+          await client.query(
+            `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+             VALUES ($1, $2, $3, $4)`,
+            [entryId, paymentAccountId, 0, total]
+          );
+        }
+        
+        // Link expense to journal entry
+        await client.query('UPDATE expenses SET journal_entry_id = $1 WHERE id = $2', [entryId, expense.id]);
+        
+        await client.query('COMMIT');
+        console.log(`✅ Expense #${expense.id}: تم إنشاء journal entry #${entryId}`);
+        fixed++;
+        
+      } catch (e) {
+        await client.query('ROLLBACK');
+        console.error(`❌ Expense #${expense.id}: خطأ - ${e.message}`);
+        failed++;
+      } finally {
+        client.release();
+      }
+    }
+    
+    console.log(`\n📊 النتائج:`);
+    console.log(`✅ تم إصلاح: ${fixed}`);
+    console.log(`❌ فشل: ${failed}`);
+    console.log(`📝 إجمالي: ${expenses.length}`);
+    
+  } catch (e) {
+    console.error('❌ خطأ عام:', e);
+  } finally {
+    await dbPool.end();
+  }
+}
+
+fixOldExpenses().catch(console.error);

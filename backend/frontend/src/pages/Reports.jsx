@@ -18,12 +18,12 @@ import Modal from '../ui/Modal'
 import { t } from '../utils/i18n'
 
 const accountingReports = [
-  { id: 'trial-balance', titleAr: 'ميزان المراجعة', titleEn: 'Trial Balance', icon: FaBalanceScale, target: '/accounts?report=trial-balance' },
-  { id: 'income-statement', titleAr: 'قائمة الدخل', titleEn: 'Income Statement', icon: FaChartLine, target: '/accounts?report=income-statement' },
-  { id: 'balance-sheet', titleAr: 'المركز المالي', titleEn: 'Balance Sheet', icon: FaMoneyBill, target: '/accounts?report=balance-sheet' },
-  { id: 'cash-flow', titleAr: 'التدفقات النقدية', titleEn: 'Cash Flow', icon: FaMoneyBill, target: '/accounting?view=cash' },
-  { id: 'account-statement', titleAr: 'كشف حساب', titleEn: 'Account Statement', icon: FaFileAlt, target: '/accounting?view=statement' },
-  { id: 'ledger', titleAr: 'دفتر الأستاذ', titleEn: 'General Ledger', icon: FaFileAlt, target: '/accounts?report=ledger' }
+  { id: 'trial-balance', titleAr: 'ميزان المراجعة', titleEn: 'Trial Balance', icon: FaBalanceScale, target: '/accounts' },
+  { id: 'income-statement', titleAr: 'قائمة الدخل', titleEn: 'Income Statement', icon: FaChartLine, target: '/accounts' },
+  { id: 'balance-sheet', titleAr: 'المركز المالي', titleEn: 'Balance Sheet', icon: FaMoneyBill, target: '/accounts' },
+  { id: 'cash-flow', titleAr: 'التدفقات النقدية', titleEn: 'Cash Flow', icon: FaMoneyBill, target: '/accounts' },
+  { id: 'account-statement', titleAr: 'كشف حساب', titleEn: 'Account Statement', icon: FaFileAlt, target: '/accounts' },
+  { id: 'ledger', titleAr: 'دفتر الأستاذ', titleEn: 'General Ledger', icon: FaFileAlt, target: '/accounts' }
 ]
 
 const crossModuleReports = [
@@ -113,11 +113,25 @@ export default function Reports() {
       return
     }
     const params = new URLSearchParams()
-    if (selectedPeriod && selectedPeriod !== 'كل الفترات') params.append('period', selectedPeriod)
+    if (selectedPeriod && selectedPeriod !== 'كل الفترات') {
+      // Convert period to from/to dates
+      if (/^\d{4}-\d{2}$/.test(selectedPeriod)) {
+        const [y, m] = selectedPeriod.split('-')
+        params.append('from', `${y}-${m}-01`)
+        const d = new Date(Number(y), Number(m), 0)
+        const mm = String(d.getMonth()+1).padStart(2,'0')
+        const dd = String(d.getDate()).padStart(2,'0')
+        params.append('to', `${y}-${mm}-${dd}`)
+      } else {
+        params.append('period', selectedPeriod)
+      }
+    }
     if (selectedBranch && selectedBranch !== 'كل الفروع') params.append('branch', selectedBranch)
     if (selectedCurrency) params.append('currency', selectedCurrency)
     
-    navigate(`${report.target}${params.toString() ? '&' + params.toString() : ''}`)
+    // CRITICAL: Add view parameter for /accounts route
+    const separator = report.target.includes('?') ? '&' : '?'
+    navigate(`${report.target}${separator}view=${report.id === 'trial-balance' ? 'trial' : report.id === 'income-statement' ? 'income' : report.id === 'balance-sheet' ? 'balance' : report.id === 'cash-flow' ? 'cash' : report.id === 'account-statement' ? 'statement' : report.id === 'ledger' ? 'ledger' : 'account'}${params.toString() ? '&' + params.toString() : ''}`)
   }
 
 
@@ -628,6 +642,12 @@ export default function Reports() {
       {crossModuleData && crossModuleData.reportId==='sales-by-branch' && (
         <div className="mt-6 p-4 border rounded-lg bg-green-50">
           <h3 className="font-semibold mb-2">{lang==='ar'?'ملخص: المبيعات حسب الفروع':'Summary: Sales by Branch'}</h3>
+          {/* CRITICAL: Show warnings if unbalanced entries found */}
+          {crossModuleData.data?.warnings && crossModuleData.data.warnings.length > 0 && (
+            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              {crossModuleData.data.warnings.map((w, i) => <div key={i}>{w}</div>)}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full border text-sm">
               <thead>
@@ -667,6 +687,12 @@ export default function Reports() {
       {crossModuleData && crossModuleData.reportId==='expenses-by-branch' && (
         <div className="mt-6 p-4 border rounded-lg bg-red-50">
           <h3 className="font-semibold mb-2">{lang==='ar'?'ملخص: المصروفات حسب الفروع':'Summary: Expenses by Branch'}</h3>
+          {/* CRITICAL: Show warnings if unbalanced entries found */}
+          {crossModuleData.data?.warnings && crossModuleData.data.warnings.length > 0 && (
+            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+              {crossModuleData.data.warnings.map((w, i) => <div key={i}>{w}</div>)}
+            </div>
+          )}
           <div className="overflow-x-auto">
             <table className="min-w-full border text-sm">
               <thead>
@@ -697,18 +723,24 @@ export default function Reports() {
       {crossModuleData && crossModuleData.reportId==='sales-expenses' && (
             <div className="mt-6 p-4 border rounded-lg bg-purple-50">
               <h3 className="font-semibold mb-2">{lang==='ar'?'ملخص: المبيعات مقابل المشتريات':'Summary: Sales vs Purchases'}</h3>
+              {/* CRITICAL: Show warnings if unbalanced entries found */}
+              {crossModuleData.data?.warnings && crossModuleData.data.warnings.length > 0 && (
+                <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                  {crossModuleData.data.warnings.map((w, i) => <div key={i}>{w}</div>)}
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3 text-sm">
-                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'المبيعات (صافي)':'Sales (Net)'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.sales_net ?? crossModuleData.data?.sales)} {selectedCurrency}</div></div>
-                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'المبيعات (شامل الضريبة)':'Sales (Gross)'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.sales_gross ?? (Number(crossModuleData.data?.sales||0)+Number(crossModuleData.data?.vat_total||0)))} {selectedCurrency}</div></div>
-                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'الضريبة':'Tax'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.vat_total)} {selectedCurrency}</div></div>
-                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'الخصم':'Discount'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.discount_total)} {selectedCurrency}</div></div>
-                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'المصروفات':'Expenses'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.expenses)} {selectedCurrency}</div></div>
+                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'المبيعات (صافي)':'Sales (Net)'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.totals?.sales_net ?? crossModuleData.data?.totals?.sales ?? crossModuleData.data?.sales_net ?? crossModuleData.data?.sales)} {selectedCurrency}</div></div>
+                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'المبيعات (شامل الضريبة)':'Sales (Gross)'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.totals?.sales_gross ?? (Number(crossModuleData.data?.totals?.sales||crossModuleData.data?.sales||0)+Number(crossModuleData.data?.totals?.vat_total||crossModuleData.data?.vat_total||0)))} {selectedCurrency}</div></div>
+                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'الضريبة':'Tax'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.totals?.vat_total ?? crossModuleData.data?.vat_total)} {selectedCurrency}</div></div>
+                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'الخصم':'Discount'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.totals?.discount_total ?? crossModuleData.data?.discount_total)} {selectedCurrency}</div></div>
+                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'المصروفات':'Expenses'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.totals?.expenses ?? crossModuleData.data?.expenses)} {selectedCurrency}</div></div>
               </div>
               <div className="mt-3 text-xs text-gray-700">{lang==='ar'? (crossModuleData.data?.tax_inclusive? 'الأرقام شاملة الضريبة':'الأرقام صافية بعد الضريبة') : (crossModuleData.data?.tax_inclusive? 'Amounts include tax':'Amounts are net of tax')}</div>
               <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'الصافي':'Net'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.net)} {selectedCurrency}</div></div>
+                <div className="p-3 bg-white rounded border"><div className="text-gray-500">{lang==='ar'?'الصافي':'Net'}</div><div className="text-lg font-bold">{fmt(crossModuleData.data?.totals?.net ?? crossModuleData.data?.net)} {selectedCurrency}</div></div>
               </div>
-                {(Number(crossModuleData?.data?.sales||0)===0 && Number(crossModuleData?.data?.expenses||0)===0) && (
+                {(Number(crossModuleData?.data?.totals?.sales||crossModuleData?.data?.sales||0)===0 && Number(crossModuleData?.data?.totals?.expenses||crossModuleData?.data?.expenses||0)===0) && (
                 <div className="mt-3 text-xs text-gray-700">{lang==='ar'?"لا توجد قيود منشورة للفترة المحددة":"No posted entries for selected period"}</div>
               )}
             </div>

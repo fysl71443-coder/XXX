@@ -479,10 +479,22 @@ useEffect(() => {
         const alt = (invObj && Array.isArray(invObj.lines)) ? invObj.lines : []
         itemsList = alt
       }
-      // Final attempt: fetch items via /invoice_items/:id
+      // Final attempt: fetch items via /invoices/:id (uses invoices.lines)
       if (!itemsList || itemsList.length === 0) {
-        const itemsResp = await invoices.items(r.id).catch(()=>({ items: [] }))
-        itemsList = Array.isArray(itemsResp.items) ? itemsResp.items : []
+        try {
+          const fullInv = await invoices.get(r.id).catch(()=>null)
+          if (fullInv) {
+            let lines = [];
+            if (Array.isArray(fullInv?.lines)) {
+              lines = fullInv.lines;
+            } else if (typeof fullInv?.lines === 'string') {
+              try { lines = JSON.parse(fullInv.lines); } catch { lines = []; }
+            }
+            itemsList = Array.isArray(lines) ? lines.filter(l => l && l.type === 'item') : []
+          }
+        } catch {
+          itemsList = []
+        }
       }
       setSupInvDetails(invObj || r)
       setSupInvItems(itemsList)
@@ -790,7 +802,7 @@ useEffect(() => {
                 {supInvLoading ? (
                   <tr><td className="p-2 text-sm text-gray-600" colSpan={supInvActiveTab==='aging'?10:9}>{lang==='ar'?'جار التحميل...':'Loading...'}</td></tr>
                 ) : (
-                  (supInvActiveTab==='aging' ? viewSupInvRows : (supInvActiveTab==='due' ? supInvRows.filter(rr => { const rem = Number(rr.outstanding_amount||Math.max(0,(rr.ledger_total||0)-(rr.paid_amount||0))); const isPosted = rr.has_posted_journal===true || String(rr.status||'').toLowerCase()==='issued'; return isPosted && rem>0 }) : (supInvActiveTab==='paid' ? supInvRows.filter(rr => { const rem = Number(rr.outstanding_amount||Math.max(0,(rr.ledger_total||0)-(rr.paid_amount||0))); return rem===0 && Number(rr.paid_amount||0)>0 }) : supInvRows))).map(r => (
+                  (supInvActiveTab==='aging' ? viewSupInvRows : (supInvActiveTab==='due' ? supInvRows.filter(rr => { const rem = Number(rr.outstanding_amount||0); const isPosted = rr.has_posted_journal===true || String(rr.derived_status||rr.status||'').toLowerCase()==='posted' || String(rr.status||'').toLowerCase()==='issued'; return isPosted && rem>0 }) : (supInvActiveTab==='paid' ? supInvRows.filter(rr => { const rem = Number(rr.outstanding_amount||0); return rem===0 && Number(rr.paid_amount||0)>0 }) : supInvRows))).map(r => (
                     <tr key={r.id} className="border-b hover:bg-gray-50">
                       <td className="p-2">{r.invoice_number||r.id}</td>
                       <td className="p-2">{(r.partner && r.partner.name) || items.find(p=>p.id===(r.partner_id || (r.partner && r.partner.id)))?.name || '-'}</td>
@@ -798,7 +810,7 @@ useEffect(() => {
                       <td className="p-2">{Number(r.total||0).toLocaleString('en-US')}</td>
                       <td className="p-2">{Number(r.discount_total||r.discount_amount||0).toLocaleString('en-US')}</td>
                       <td className="p-2">{Number(r.paid_amount||0).toLocaleString('en-US')}</td>
-                      <td className="p-2">{Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0))).toLocaleString('en-US')}</td>
+                      <td className="p-2">{Number(r.outstanding_amount||0).toLocaleString('en-US')}</td>
                       {supInvActiveTab==='aging' ? ( (()=>{
                         function days(d){ const x = Math.ceil((Date.now() - new Date(d).getTime())/(1000*60*60*24)); return x<0?0:x }
                         const dd = days(r.date)
@@ -1035,20 +1047,20 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {(invRows||[]).filter(r => Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0)))>0).map(r => (
+                      {(invRows||[]).filter(r => Number(r.outstanding_amount||0)>0).map(r => (
                         <tr key={r.id} className="border-b">
                           <td className="p-2">{r.invoice_number||r.id}</td>
                           <td className="p-2">{selected?.name||'-'}</td>
                           <td className="p-2">{r.date}</td>
                           <td className="p-2">{Number(r.total||0).toLocaleString('en-US')}</td>
                           <td className="p-2">{Number(r.paid_amount||0).toLocaleString('en-US')}</td>
-                          <td className="p-2">{Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0))).toLocaleString('en-US')}</td>
+                          <td className="p-2">{Number(r.outstanding_amount||0).toLocaleString('en-US')}</td>
                           <td className="p-2">{(() => { const d=new Date(r.date); const days=Math.floor((Date.now()-d.getTime())/86400000); return days<=30?'0–30':(days<=60?'31–60':(days<=90?'61–90':'+90')) })()}</td>
                           <td className="p-2">{Number(r.tax||0).toLocaleString('en-US')}</td>
                           <td className="p-2">{(() => { const base = String(r.derived_status||'draft').toLowerCase(); const raw = String(r.status||'').toLowerCase(); const effective = raw==='cancelled' ? 'cancelled' : base; return <StatusBadge status={effective} /> })()}</td>
                         </tr>
                       ))}
-                      {!(invRows||[]).filter(r => Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0)))>0).length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={9}>{lang==='ar'?'لا توجد فواتير مستحقة':'No due invoices'}</td></tr>)}
+                      {!(invRows||[]).filter(r => Number(r.outstanding_amount||0)>0).length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={9}>{lang==='ar'?'لا توجد فواتير مستحقة':'No due invoices'}</td></tr>)}
                     </tbody>
                   </table>
                 </div>
@@ -1070,7 +1082,7 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {(invRows||[]).filter(r => Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0)))>0).map(r => (
+                      {(invRows||[]).filter(r => Number(r.outstanding_amount||0)>0).map(r => (
                         <tr key={r.id} className="border-b">
                           <td className="p-2">{r.invoice_number||r.id}</td>
                           <td className="p-2">{selected?.name||'-'}</td>
@@ -1078,11 +1090,11 @@ useEffect(() => {
                           <td className="p-2">{Number(r.total||0).toLocaleString('en-US')}</td>
                           <td className="p-2">{Number(r.discount_total||r.discount_amount||0).toLocaleString('en-US')}</td>
                           <td className="p-2">{Number(r.paid_amount||0).toLocaleString('en-US')}</td>
-                          <td className="p-2">{Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0))).toLocaleString('en-US')}</td>
+                          <td className="p-2">{Number(r.outstanding_amount||0).toLocaleString('en-US')}</td>
                           <td className="p-2">{Number(r.tax||0).toLocaleString('en-US')}</td>
                         </tr>
                       ))}
-                      {!(invRows||[]).filter(r => Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0)))>0).length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={8}>{lang==='ar'?'لا توجد فواتير مستحقة':'No due invoices'}</td></tr>)}
+                      {!(invRows||[]).filter(r => Number(r.outstanding_amount||0)>0).length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={8}>{lang==='ar'?'لا توجد فواتير مستحقة':'No due invoices'}</td></tr>)}
                     </tbody>
                   </table>
                 </div>
@@ -1104,7 +1116,7 @@ useEffect(() => {
                       </tr>
                     </thead>
                     <tbody>
-                      {(invRows||[]).filter(r => Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0)))===0 && Number(r.paid_amount||0)>0).map(r => {
+                      {(invRows||[]).filter(r => Number(r.outstanding_amount||0)===0 && Number(r.paid_amount||0)>0).map(r => {
                         const pays = (payRows||[]).filter(p => Number(p.invoice_id||0)===Number(r.id))
                         const last = pays.length ? pays.reduce((a,b)=> new Date(a.date)>new Date(b.date)?a:b) : null
                         return (
@@ -1120,7 +1132,7 @@ useEffect(() => {
                           </tr>
                         )
                       })}
-                      {!(invRows||[]).filter(r => Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0)))===0 && Number(r.paid_amount||0)>0).length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={8}>{lang==='ar'?'لا توجد فواتير مدفوعة':'No paid invoices'}</td></tr>)}
+                      {!(invRows||[]).filter(r => Number(r.outstanding_amount||0)===0 && Number(r.paid_amount||0)>0).length && (<tr><td className="p-2 text-sm text-gray-600" colSpan={8}>{lang==='ar'?'لا توجد فواتير مدفوعة':'No paid invoices'}</td></tr>)}
                     </tbody>
                   </table>
                 </div>
@@ -1158,7 +1170,7 @@ useEffect(() => {
                             <td className="p-2">{Number(r.discount_total||r.discount_amount||0).toLocaleString('en-US')}</td>
                             <td className="p-2">{Number(r.tax||0).toLocaleString('en-US')}</td>
                             <td className="p-2">{Number(r.paid_amount||0).toLocaleString('en-US')}</td>
-                            <td className="p-2">{Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0))).toLocaleString('en-US')}</td>
+                            <td className="p-2">{Number(r.outstanding_amount||0).toLocaleString('en-US')}</td>
                             <td className="p-2">
                               {(() => {
                                 const isPosted = r.has_posted_journal === true || String(r.status||'').toLowerCase()==='issued'
@@ -1186,7 +1198,7 @@ useEffect(() => {
                       const cur = agg.get(pid) || { supplier: (selected?.name||items.find(p=>String(p.id)===pid)?.name||'-'), total: 0, paid: 0, remaining: 0, count: 0 }
                       cur.total += Number(r.total||0)
                       cur.paid += Number(r.paid_amount||0)
-                      cur.remaining += Number(r.outstanding_amount||Math.max(0,(r.ledger_total||0)-(r.paid_amount||0)))
+                      cur.remaining += Number(r.outstanding_amount||0)
                       cur.count += 1
                       agg.set(pid, cur)
                     })
@@ -1240,7 +1252,7 @@ useEffect(() => {
           <div className="grid grid-cols-2 gap-2 text-sm mb-3">
             <div>{lang==='ar'?'رقم الفاتورة':'Invoice No.'}: {(supInvDetails?.invoice_number||supInvDetails?.id||selectedSupInv?.invoice_number||selectedSupInv?.id)}</div>
             <div>{lang==='ar'?'التاريخ':'Date'}: {(supInvDetails?.date||selectedSupInv?.date)}</div>
-            {(() => { const inv = supInvDetails || selectedSupInv; const total = Number(inv?.total||0); const paid = Number(inv?.paid_amount||0); const outstanding = Number(inv?.outstanding_amount||Math.max(total - paid, 0)); const raw = String(inv?.status||'').toLowerCase(); const basePs = String(inv?.payment_status||'').toLowerCase(); const calc = (outstanding<=0 && total>0) ? 'paid' : ((paid>0 && outstanding>0) ? 'partial' : 'unpaid'); const ps = raw==='cancelled' ? 'cancelled' : (basePs || calc); const label = lang==='ar' ? (ps==='paid' ? 'مدفوعة' : (ps==='partial' ? 'مدفوعة جزئياً' : (ps==='unpaid' ? 'غير مدفوعة' : 'ملغاة'))) : (ps==='paid' ? 'Paid' : (ps==='partial' ? 'Partial' : (ps==='unpaid' ? 'Unpaid' : 'Cancelled'))); const cls = ps==='paid' ? 'bg-green-50 text-green-700 border-green-200' : (ps==='partial' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : (ps==='unpaid' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-gray-50 text-gray-700 border-gray-200')); return (<div>{lang==='ar'?'الحالة':'Status'}: <span className={`text-xs px-2 py-0.5 rounded border ${cls}`}>{label}</span></div>) })()}
+            {(() => { const inv = supInvDetails || selectedSupInv; const total = Number(inv?.total||0); const paid = Number(inv?.paid_amount||0); const outstanding = Number(inv?.outstanding_amount||0); const raw = String(inv?.status||'').toLowerCase(); const basePs = String(inv?.payment_status||'').toLowerCase(); const calc = (outstanding<=0 && total>0) ? 'paid' : ((paid>0 && outstanding>0) ? 'partial' : 'unpaid'); const ps = raw==='cancelled' ? 'cancelled' : (basePs || calc); const label = lang==='ar' ? (ps==='paid' ? 'مدفوعة' : (ps==='partial' ? 'مدفوعة جزئياً' : (ps==='unpaid' ? 'غير مدفوعة' : 'ملغاة'))) : (ps==='paid' ? 'Paid' : (ps==='partial' ? 'Partial' : (ps==='unpaid' ? 'Unpaid' : 'Cancelled'))); const cls = ps==='paid' ? 'bg-green-50 text-green-700 border-green-200' : (ps==='partial' ? 'bg-yellow-50 text-yellow-700 border-yellow-200' : (ps==='unpaid' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-gray-50 text-gray-700 border-gray-200')); return (<div>{lang==='ar'?'الحالة':'Status'}: <span className={`text-xs px-2 py-0.5 rounded border ${cls}`}>{label}</span></div>) })()}
             <div>{lang==='ar'?'قبل الضريبة':'Subtotal'}: {Number(((supInvDetails?.total??selectedSupInv?.total)||0) - ((supInvDetails?.tax??selectedSupInv?.tax)||0)).toLocaleString('en-US')}</div>
             <div>{lang==='ar'?'الخصم':'Discount'}: {Number((supInvDetails?.discount_total??supInvDetails?.discount_amount??selectedSupInv?.discount_total??selectedSupInv?.discount_amount)||0).toLocaleString('en-US')}</div>
             <div>{lang==='ar'?'الضريبة':'VAT'}: {Number((supInvDetails?.tax??selectedSupInv?.tax)||0).toLocaleString('en-US')}</div>

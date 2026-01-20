@@ -273,14 +273,14 @@ export default function Expenses(){
   const bankDropdownOptions = useMemo(() => {
     const flat = flatten(tree)
     const candidates = allBankAccounts.length ? allBankAccounts : flat
-    const codes = new Set(['1010','1120','1130'])
+    const codes = new Set(['1111','1122','1123','1124','1120'])
     return candidates.filter(a => String(a.type||'').toLowerCase()==='bank' || codes.has(String(a.account_code)))
   }, [tree, allBankAccounts])
   
   const withdrawOptions = useMemo(() => {
     const flat = flatten(tree)
     const mapByCode = new Map(flat.map(a => [String(a.account_code), a]))
-    const preferred = ['1010','1110','1120','1130'].map(c => mapByCode.get(c)).filter(Boolean)
+    const preferred = ['1111','1122','1123','1124','1120'].map(c => mapByCode.get(c)).filter(Boolean)
     const rest = flat.filter(a => {
       const t = String(a.type||'').toLowerCase()
       const isCashOrBank = t==='cash' || t==='bank' || t==='equity'
@@ -314,14 +314,14 @@ export default function Expenses(){
        // Smart Linking Preview
        let drCode = null
        const pt = form.payment_details?.payment_type
-       if (pt === 'supplier') drCode = '2410' // Suppliers
-       else if (pt === 'salary') drCode = '2430' // Accrued Payroll
-       else if (pt === 'vat') drCode = '2130' // VAT Settlement
+       if (pt === 'supplier') drCode = '2111' // موردون
+       else if (pt === 'salary') drCode = '2121' // رواتب مستحقة
+       else if (pt === 'vat') drCode = '2141' // ضريبة القيمة المضافة – مستحقة
        else if (pt === 'gov') {
-          if (form.payment_details.gov_entity === 'GOSI') drCode = '2431'
-          else drCode = '2420' // Accrued Expenses for others (Zakat, Labor, etc)
+          if (form.payment_details.gov_entity === 'GOSI') drCode = '2131' // التأمينات الاجتماعية (GOSI)
+          else drCode = '2130' // مستحقات حكومية
        }
-       else if (pt === 'utility') drCode = '2420' // Accrued Expenses
+       else if (pt === 'utility') drCode = '2130' // مستحقات حكومية (للخدمات الحكومية)
        else drCode = form.account_code // Fallback
        
        const dr = getAccountByCode(drCode) || { name: lang==='ar'?'حساب الالتزام':'Liability Account', account_code: drCode || '????' }
@@ -351,7 +351,7 @@ export default function Expenses(){
     } else if (form.expense_type==='deposit') {
       const bank = bankAccounts[0]
       const cash = cashAccounts[0]
-      setForm(prev => ({ ...prev, payment_method: 'bank', account_code: bank ? bank.account_code : (prev.account_code||'1010'), payment_account_code: cash ? cash.account_code : (prev.payment_account_code||'1110') }))
+      setForm(prev => ({ ...prev, payment_method: 'bank', account_code: bank ? bank.account_code : (prev.account_code||'1121'), payment_account_code: cash ? cash.account_code : (prev.payment_account_code||'1111') }))
     } else if (form.expense_type==='payment') {
       // Default for payment
       setForm(prev => ({ ...prev, payment_method: 'bank' }))
@@ -367,7 +367,7 @@ export default function Expenses(){
     const method = String(form.payment_method||'cash').toLowerCase()
     if (method==='cash') {
       const cash = cashAccounts[0]
-      setForm(prev => ({ ...prev, payment_account_code: cash ? cash.account_code : '1110' }))
+      setForm(prev => ({ ...prev, payment_account_code: cash ? cash.account_code : '1111' }))
     } else if (method==='bank') {
       setForm(prev => ({ ...prev, payment_account_code: '' }))
     }
@@ -384,7 +384,7 @@ export default function Expenses(){
       if (isBank){ setForm({ ...form, account_code: cashDefault, payment_account_code: acc.account_code }) }
       else { setForm({ ...form, account_code: acc.account_code, payment_account_code: bankDefault }) }
     } else if (t==='deposit'){
-      const cashDefault = (accounts.find(a => String(a.type||'').toLowerCase()==='cash')?.account_code) || '1110'
+      const cashDefault = (accounts.find(a => String(a.type||'').toLowerCase()==='cash')?.account_code) || '1111'
       setForm({ ...form, account_code: acc.account_code, payment_account_code: cashDefault })
     } else {
       // expense: keep selected debit account in form and sync first item
@@ -544,14 +544,14 @@ export default function Expenses(){
              return code // Return code anyway, backend might find it if frontend list is incomplete
           }
 
-          if (form.payment_details.payment_type === 'supplier') finalAccountCode = findAcc('2410', ['مورد', 'Supplier', 'Trade Payable'])
-          else if (form.payment_details.payment_type === 'salary') finalAccountCode = findAcc('2430', ['رواتب', 'Payroll', 'Salaries', 'Accrued'])
-          else if (form.payment_details.payment_type === 'vat') finalAccountCode = findAcc('2130', ['ضريبة', 'VAT', 'Settlement'])
+          if (form.payment_details.payment_type === 'supplier') finalAccountCode = findAcc('2111', ['مورد', 'Supplier', 'Trade Payable'])
+          else if (form.payment_details.payment_type === 'salary') finalAccountCode = findAcc('2121', ['رواتب', 'Payroll', 'Salaries', 'Accrued'])
+          else if (form.payment_details.payment_type === 'vat') finalAccountCode = findAcc('2141', ['ضريبة', 'VAT', 'Settlement'])
           else if (form.payment_details.payment_type === 'gov') {
-             if (form.payment_details.gov_entity === 'GOSI') finalAccountCode = findAcc('2431', ['تأمينات', 'GOSI', 'Social'])
-             else finalAccountCode = findAcc('2420', ['مستحقة', 'Accrued'])
+             if (form.payment_details.gov_entity === 'GOSI') finalAccountCode = findAcc('2131', ['تأمينات', 'GOSI', 'Social'])
+             else finalAccountCode = findAcc('2130', ['مستحقة', 'Accrued', 'حكومية'])
           }
-          else if (form.payment_details.payment_type === 'utility') finalAccountCode = findAcc('2420', ['مستحقة', 'Accrued'])
+          else if (form.payment_details.payment_type === 'utility') finalAccountCode = findAcc('2130', ['مستحقة', 'Accrued', 'حكومية'])
           else finalAccountCode = form.account_code || '2000' 
       } else if (form.expense_type === 'expense') {
           finalAccountCode = itemsPayload[0]?.account_code
@@ -572,10 +572,8 @@ export default function Expenses(){
           expense_type: form.expense_type, 
           attachments, 
           items: form.expense_type==='expense' ? itemsPayload : undefined,
-          payment_details: form.expense_type==='payment' ? form.payment_details : undefined,
-          // ✅ ترحيل تلقائي عند الإنشاء
-          auto_post: true,
-          status: 'posted'
+          payment_details: form.expense_type==='payment' ? form.payment_details : undefined
+          // ✅ Backend will create as draft, then post automatically, and delete if posting fails
       }
       
       if (editingId) {
@@ -583,8 +581,28 @@ export default function Expenses(){
         setToast(lang==='ar'?'تم تعديل الفاتورة':'Invoice updated')
         setEditingId(null)
       } else {
-        await apiExpenses.create(payload)
-        setToast(lang==='ar'?'تم إنشاء الفاتورة':'Invoice created')
+        // ✅ Backend handles: create as draft → post automatically → delete if posting fails
+        try {
+          const createdExpense = await apiExpenses.create(payload)
+          
+          if (!createdExpense || !createdExpense.id) {
+            setError(lang==='ar'?'فشل إنشاء المصروف':'Failed to create expense')
+            return
+          }
+          
+          // ✅ Backend already posted the expense automatically
+          // If posting failed, backend deleted the expense and returned error
+          if (createdExpense.status === 'posted') {
+            setToast(lang==='ar'?'تم إنشاء وترحيل المصروف بنجاح':'Expense created and posted successfully')
+          } else {
+            setError(lang==='ar'?'لم يتم ترحيل المصروف':'Expense was not posted') // Should not happen
+          }
+        } catch (createError) {
+          // Backend already deleted expense if posting failed
+          const errorDetails = createError?.response?.data?.details || createError?.response?.data?.error || createError?.message || 'unknown'
+          setError(lang==='ar'?`فشل إنشاء/ترحيل المصروف: ${errorDetails}`:`Failed to create/post expense: ${errorDetails}`)
+          return
+        }
       }
       const resetPaymentDetails = {
         payment_type: '',

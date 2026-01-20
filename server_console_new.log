@@ -1,0 +1,16 @@
+
+> backend@1.0.0 start
+> node server.js
+
+[dotenv@17.2.3] injecting env (7) from .env -- tip: ≡ƒöÉ prevent building .env in docker: https://dotenvx.com/prebuild
+[SCHEMA] Database pool not configured, skipping expenses columns setup
+[SERVER] Started on port 4000 | NODE_ENV=development
+[SERVER] Build path: C:\Users\DELL\Documents\augment-projects\XXX\backend\frontend\build
+[SERVER] JWT_SECRET: configured
+[SERVER] Database: NOT configured
+[REQUEST] 2026-01-17T11:23:55.333Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com
+[REQUEST] 2026-01-17T11:23:56.274Z | POST /api/auth/login | auth_header=missing
+[LOGIN] Attempt | email=fysl71443@gmail.com
+[LOGIN] ERROR: DB not configured | email=fysl71443@gmail.com

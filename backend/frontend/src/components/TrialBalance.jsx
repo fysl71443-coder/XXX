@@ -15,12 +15,23 @@ export default function TrialBalance() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
-      const rep = await apiReports.trialBalance({ ...(from?{ from }:{}), ...(to?{ to }:{} ) })
-      setItems(Array.isArray(rep.items) ? rep.items : [])
+      const params = {}
+      if (from) params.from = from
+      if (to) params.to = to
+      const rep = await apiReports.trialBalance(params)
+      console.log('[TrialBalance] Response:', rep)
+      const itemsArray = Array.isArray(rep.items) ? rep.items : (Array.isArray(rep) ? rep : [])
+      setItems(itemsArray)
       setTotals(rep.totals || null)
-      setError(null)
+      if (itemsArray.length === 0 && !rep.totals) {
+        setError('no_data')
+      } else {
+        setError(null)
+      }
     } catch (e) {
+      console.error('[TrialBalance] Error loading:', e)
       setError('request_failed')
       setItems([])
       setTotals(null)
@@ -64,8 +75,13 @@ export default function TrialBalance() {
       const debit = self.debit + agg.debit
       const credit = self.credit + agg.credit
       const ending = self.ending + agg.ending
+      // Always include accounts that have children (parent accounts)
+      // For leaf accounts, include them if they have any movement OR if they're in the trial balance data
       const hasPeriodMovement = Math.abs(debit) > 0.0001 || Math.abs(credit) > 0.0001
-      const include = children.length || hasPeriodMovement
+      const hasBeginningBalance = Math.abs(beginning) > 0.0001
+      const hasEndingBalance = Math.abs(ending) > 0.0001
+      const isInTrialBalance = tbMap.has(Number(node.id))
+      const include = children.length > 0 || hasPeriodMovement || hasBeginningBalance || hasEndingBalance || isInTrialBalance
       if (!include) return null
       return { id: node.id, account_code: node.account_code || node.account_number, name: node.name, type: node.type, beginning, debit, credit, ending, children }
     }
@@ -110,7 +126,7 @@ export default function TrialBalance() {
     return (
       <>
         <tr className="border-b hover:bg-gray-50">
-          <td className="p-2">{String(node.account_code||'')}</td>
+          <td className="p-2">{String(node.account_code || node.account_number || '')}</td>
           <td className="p-2">
             <div className="flex items-center">
               <div style={{ width: level*16 }}></div>
@@ -183,8 +199,16 @@ export default function TrialBalance() {
           <input type="checkbox" checked={showOps} onChange={e=>setShowOps(e.target.checked)} />
         </div>
       </div>
-      {error ? (
-        <div className="text-red-600 text-sm">Failed to load trial balance.</div>
+      {error === 'request_failed' ? (
+        <div className="text-red-600 text-sm p-3 bg-red-50 rounded">
+          <div className="font-semibold">Failed to load trial balance</div>
+          <div className="text-xs mt-1">Please check server connection and console for details.</div>
+        </div>
+      ) : error === 'no_data' ? (
+        <div className="text-amber-600 text-sm p-3 bg-amber-50 rounded">
+          <div className="font-semibold">No data found</div>
+          <div className="text-xs mt-1">Make sure there are posted journal entries in the selected period.</div>
+        </div>
       ) : null}
       <table className="w-full text-right border-collapse">
         <thead>

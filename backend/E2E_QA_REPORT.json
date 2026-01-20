@@ -1,0 +1,592 @@
+{
+  "startTime": "2026-01-19T16:40:13.584Z",
+  "screens": {
+    "Accounting": {
+      "name": "Accounting",
+      "startTime": "2026-01-19T16:41:51.760Z",
+      "actions": [
+        {
+          "name": "List Accounts",
+          "startTime": "2026-01-19T16:41:51.761Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:41:54.626Z"
+        },
+        {
+          "name": "Get Account Tree",
+          "startTime": "2026-01-19T16:41:54.627Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:41:55.389Z"
+        },
+        {
+          "name": "Get Trial Balance",
+          "startTime": "2026-01-19T16:41:55.389Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:41:56.120Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/accounts",
+          "timestamp": "2026-01-19T16:41:54.626Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/accounts",
+          "timestamp": "2026-01-19T16:41:55.389Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/trial-balance",
+          "timestamp": "2026-01-19T16:41:56.120Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:41:56.120Z"
+    },
+    "Daily Journal": {
+      "name": "Daily Journal",
+      "startTime": "2026-01-19T16:41:56.120Z",
+      "actions": [
+        {
+          "name": "List Journal Entries",
+          "startTime": "2026-01-19T16:41:56.121Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:41:57.228Z"
+        },
+        {
+          "name": "Create Journal Entry",
+          "startTime": "2026-01-19T16:41:57.228Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:41:59.854Z"
+        },
+        {
+          "name": "Post Journal Entry",
+          "startTime": "2026-01-19T16:41:59.854Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:00.594Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/journal",
+          "timestamp": "2026-01-19T16:41:57.228Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/journal",
+          "timestamp": "2026-01-19T16:41:59.854Z",
+          "success": false,
+          "status": 500,
+          "error": "server_error"
+        }
+      ],
+      "issues": [
+        {
+          "type": "create_entry_failed",
+          "severity": "HIGH",
+          "error": "server_error"
+        }
+      ],
+      "status": "FAIL",
+      "endTime": "2026-01-19T16:42:00.594Z"
+    },
+    "Customers": {
+      "name": "Customers",
+      "startTime": "2026-01-19T16:42:00.595Z",
+      "actions": [
+        {
+          "name": "List Customers",
+          "startTime": "2026-01-19T16:42:00.596Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:01.375Z"
+        },
+        {
+          "name": "Get Customer Aging",
+          "startTime": "2026-01-19T16:42:01.375Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:02.469Z"
+        },
+        {
+          "name": "Create Customer",
+          "startTime": "2026-01-19T16:42:02.469Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:10.835Z"
+        },
+        {
+          "name": "Create Customer Invoice",
+          "startTime": "2026-01-19T16:42:10.835Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:25.492Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/customers",
+          "timestamp": "2026-01-19T16:42:01.375Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/customers/aging",
+          "timestamp": "2026-01-19T16:42:02.469Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/partners",
+          "timestamp": "2026-01-19T16:42:05.412Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/invoices",
+          "timestamp": "2026-01-19T16:42:18.234Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:42:25.492Z"
+    },
+    "Suppliers": {
+      "name": "Suppliers",
+      "startTime": "2026-01-19T16:42:25.492Z",
+      "actions": [
+        {
+          "name": "List Suppliers",
+          "startTime": "2026-01-19T16:42:25.492Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:26.601Z"
+        },
+        {
+          "name": "Get Supplier Aging",
+          "startTime": "2026-01-19T16:42:26.601Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:27.688Z"
+        },
+        {
+          "name": "Create Supplier",
+          "startTime": "2026-01-19T16:42:27.688Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:34.109Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/partners",
+          "timestamp": "2026-01-19T16:42:26.601Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/suppliers/aging",
+          "timestamp": "2026-01-19T16:42:27.688Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/partners",
+          "timestamp": "2026-01-19T16:42:30.597Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:42:34.109Z"
+    },
+    "Supplier Invoices": {
+      "name": "Supplier Invoices",
+      "startTime": "2026-01-19T16:42:34.109Z",
+      "actions": [
+        {
+          "name": "List Supplier Invoices",
+          "startTime": "2026-01-19T16:42:34.109Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:38.657Z"
+        },
+        {
+          "name": "Create Supplier Invoice",
+          "startTime": "2026-01-19T16:42:38.657Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:44.639Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/supplier-invoices",
+          "timestamp": "2026-01-19T16:42:38.657Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/supplier-invoices",
+          "timestamp": "2026-01-19T16:42:43.141Z",
+          "success": true,
+          "status": 201
+        },
+        {
+          "method": "POST",
+          "path": "/api/supplier-invoices/8/post",
+          "timestamp": "2026-01-19T16:42:44.639Z",
+          "success": false,
+          "status": 500,
+          "error": "server_error"
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:42:44.639Z"
+    },
+    "Products": {
+      "name": "Products",
+      "startTime": "2026-01-19T16:42:44.639Z",
+      "actions": [
+        {
+          "name": "List Products",
+          "startTime": "2026-01-19T16:42:44.639Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:45.659Z"
+        },
+        {
+          "name": "Create Product",
+          "startTime": "2026-01-19T16:42:45.659Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:46.404Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/products",
+          "timestamp": "2026-01-19T16:42:45.659Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/products",
+          "timestamp": "2026-01-19T16:42:46.404Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:42:46.404Z"
+    },
+    "Expenses": {
+      "name": "Expenses",
+      "startTime": "2026-01-19T16:42:46.404Z",
+      "actions": [
+        {
+          "name": "List Expenses",
+          "startTime": "2026-01-19T16:42:46.405Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:42:47.503Z"
+        },
+        {
+          "name": "Create Expense",
+          "startTime": "2026-01-19T16:42:47.503Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:05.428Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/expenses",
+          "timestamp": "2026-01-19T16:42:47.503Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/expenses",
+          "timestamp": "2026-01-19T16:42:50.436Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/expenses/7/post",
+          "timestamp": "2026-01-19T16:42:57.772Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:43:05.428Z"
+    },
+    "POS": {
+      "name": "POS",
+      "startTime": "2026-01-19T16:43:05.428Z",
+      "actions": [
+        {
+          "name": "Get Branches",
+          "startTime": "2026-01-19T16:43:05.429Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:05.793Z"
+        },
+        {
+          "name": "Get POS Tables Layout",
+          "startTime": "2026-01-19T16:43:05.793Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:06.526Z"
+        },
+        {
+          "name": "Get POS Table State",
+          "startTime": "2026-01-19T16:43:06.526Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:07.275Z"
+        },
+        {
+          "name": "POS Workflow: Create Draft Order",
+          "startTime": "2026-01-19T16:43:07.275Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:11.782Z"
+        },
+        {
+          "name": "POS Workflow: Issue Invoice",
+          "startTime": "2026-01-19T16:43:11.782Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:12.546Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/branches",
+          "timestamp": "2026-01-19T16:43:05.793Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/pos/tables-layout",
+          "timestamp": "2026-01-19T16:43:06.526Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/pos/table-state",
+          "timestamp": "2026-01-19T16:43:07.275Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "POST",
+          "path": "/api/pos/save-draft",
+          "timestamp": "2026-01-19T16:43:11.782Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:43:12.546Z"
+    },
+    "Reports": {
+      "name": "Reports",
+      "startTime": "2026-01-19T16:43:12.546Z",
+      "actions": [
+        {
+          "name": "Get Income Statement",
+          "startTime": "2026-01-19T16:43:12.546Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:12.549Z"
+        },
+        {
+          "name": "Get Sales vs Expenses",
+          "startTime": "2026-01-19T16:43:12.549Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:13.372Z"
+        },
+        {
+          "name": "Get Ledger Summary",
+          "startTime": "2026-01-19T16:43:13.372Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:13.377Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/reports/income-statement",
+          "timestamp": "2026-01-19T16:43:12.549Z",
+          "success": false,
+          "status": 404,
+          "error": "Request failed with status code 404"
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/sales-vs-expenses",
+          "timestamp": "2026-01-19T16:43:13.372Z",
+          "success": true,
+          "status": 200
+        },
+        {
+          "method": "GET",
+          "path": "/api/reports/ledger-summary",
+          "timestamp": "2026-01-19T16:43:13.377Z",
+          "success": false,
+          "status": 404,
+          "error": "Request failed with status code 404"
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:43:13.377Z"
+    },
+    "Employees": {
+      "name": "Employees",
+      "startTime": "2026-01-19T16:43:13.378Z",
+      "actions": [
+        {
+          "name": "List Employees",
+          "startTime": "2026-01-19T16:43:13.378Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:14.509Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/employees",
+          "timestamp": "2026-01-19T16:43:14.509Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:43:14.509Z"
+    },
+    "Settings": {
+      "name": "Settings",
+      "startTime": "2026-01-19T16:43:14.509Z",
+      "actions": [
+        {
+          "name": "List Settings",
+          "startTime": "2026-01-19T16:43:14.509Z",
+          "apiCalls": [],
+          "success": true,
+          "error": null,
+          "endTime": "2026-01-19T16:43:16.136Z"
+        }
+      ],
+      "apiCalls": [
+        {
+          "method": "GET",
+          "path": "/api/settings",
+          "timestamp": "2026-01-19T16:43:16.136Z",
+          "success": true,
+          "status": 200
+        }
+      ],
+      "issues": [],
+      "status": "PASS",
+      "endTime": "2026-01-19T16:43:16.136Z"
+    }
+  },
+  "issues": [
+    {
+      "type": "create_entry_failed",
+      "severity": "HIGH",
+      "error": "server_error",
+      "screen": "Daily Journal"
+    }
+  ],
+  "summary": {
+    "totalScreens": 11,
+    "passedScreens": 10,
+    "failedScreens": 1,
+    "totalActions": 29,
+    "passedActions": 29,
+    "failedActions": 0,
+    "criticalIssues": 1,
+    "mediumIssues": 0,
+    "lowIssues": 0
+  },
+  "endTime": "2026-01-19T16:44:54.316Z",
+  "duration": 280732
+}

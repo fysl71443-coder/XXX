@@ -34,6 +34,17 @@ export default function Login() {
       if (remember) try { localStorage.setItem('remember', '1') } catch {}
       navigate(next)
     } catch (err) {
+      console.error('[LOGIN] Error details:', err);
+      // Network errors
+      if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK' || err?.message?.includes('Failed to fetch')) {
+        setError(lang==='ar'?'لا يمكن الاتصال بالخادم. تأكد من أن الخادم يعمل على http://localhost:4000':'Cannot connect to server. Make sure server is running on http://localhost:4000')
+        return
+      }
+      // Server errors
+      if (err?.status === 500 || err?.code === 'server_error') {
+        setError(lang==='ar'?'خطأ في الخادم. يرجى المحاولة لاحقاً':'Server error. Please try again later')
+        return
+      }
       if (err?.code === 'no_users') {
         try {
           const reg = await apiAuth.register({ name: 'Admin', email, password })
@@ -42,7 +53,10 @@ export default function Login() {
           if (remember) try { localStorage.setItem('remember', '1') } catch {}
           navigate(next)
           return
-        } catch (e2) { setError(lang==='ar'?'فشل إنشاء المدير لأول مرة':'Failed to bootstrap the first admin') }
+        } catch (e2) { 
+          console.error('[LOGIN] Register failed:', e2);
+          setError(lang==='ar'?'فشل إنشاء المدير لأول مرة':'Failed to bootstrap the first admin') 
+        }
       } else if (err?.code === 'invalid_credentials') {
         setError(lang==='ar'?'بيانات الدخول غير صحيحة':'Invalid email or password')
       } else if (err?.message === 'invalid_credentials') {
@@ -54,11 +68,16 @@ export default function Login() {
           if (remember) try { localStorage.setItem('remember', '1') } catch {}
           navigate(next)
           return
-        } catch (_) { setError(lang==='ar'?'تعذر تسجيل الدخول':'Unable to sign in') }
+        } catch (_) { 
+          console.error('[LOGIN] Bootstrap failed:', _);
+          setError(lang==='ar'?'تعذر تسجيل الدخول':'Unable to sign in') 
+        }
       } else if (err?.code === 'blocked' || err?.code === 'too_many_attempts') {
         setError(lang==='ar'?'تم حجب المستخدم بعد تعدد المحاولات. تواصل مع المدير':'User is blocked after too many attempts. Contact admin')
       } else {
-        setError(lang==='ar'?'تعذر تسجيل الدخول':'Unable to sign in')
+        // Show more detailed error message
+        const errorMsg = err?.message || err?.details || (lang==='ar'?'تعذر تسجيل الدخول':'Unable to sign in')
+        setError(errorMsg)
       }
     }
   }

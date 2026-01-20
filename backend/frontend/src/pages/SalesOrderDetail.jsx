@@ -290,7 +290,7 @@ export default function SalesOrderDetail(){
       try {
         const invs = await apiInvoices.list({ partner_id: cid, type: 'sale', from: dt })
         const pays = await apiPayments.list({ partner_id: cid, from: dt })
-        const jres = await apiJournal.list({ partner_ids: String(cid), from: dt })
+        const jres = await apiJournal.list({ partner_ids: String(cid), from: dt, status: 'posted' })
         const invItems = (invs?.items||invs||[]).map(x=>({ date: x.date, text: `${lang==='ar'?'فاتورة':'Invoice'} ${x.invoice_number||x.id} ${x.status||''}` }))
         const payItems = (pays?.items||pays||[]).map(p=>({ date: p.date, text: `${lang==='ar'?'دفعة':'Payment'} ${Number(p.amount||0).toFixed(2)} ${lang==='ar'?'ريال':'SR'} ${p.invoice?.invoice_number? (lang==='ar'?'لفاتورة':'for invoice')+` ${p.invoice.invoice_number}` : ''}` }))
         const jrItems = (jres?.items||jres||[]).map(e=>({ date: e.date, text: e.description || (lang==='ar'?'قيد يومية':'Journal Entry') }))

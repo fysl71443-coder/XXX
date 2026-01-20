@@ -35,16 +35,72 @@ export default function BusinessDaySalesReport(){
     setError('')
     try {
       const dSel = String(date||'').trim()
-      const china = await reports.businessDaySales({ branch: 'china_town', date: dSel })
-      const india = await reports.businessDaySales({ branch: 'place_india', date: dSel })
-      setDataBoth({ china_town: china, place_india: india })
-      setMulti({ items: [
-        { branch: 'china_town', summary: china.summary },
-        { branch: 'place_india', summary: india.summary }
-      ] })
+      // ✅ Use single API call with branch='all' to get all branches aggregated
+      const allBranchesData = await reports.businessDaySales({ branch: 'all', date: dSel })
+      
+      // ✅ If API returns data grouped by branch, use it directly
+      // Otherwise, split data by branch for backward compatibility
+      if (allBranchesData.branches && Array.isArray(allBranchesData.branches)) {
+        // New format: API returns branches array
+        const branchesMap = {}
+        allBranchesData.branches.forEach(b => {
+          if (b.branch === 'china_town') branchesMap.china_town = b
+          if (b.branch === 'place_india') branchesMap.place_india = b
+        })
+        setDataBoth({ 
+          china_town: branchesMap.china_town || { invoices: [], items: [], summary: { invoices_count:0, total_sales:0, total_tax:0, total_discount:0, items_count:0, cash_total:0, bank_total:0 } },
+          place_india: branchesMap.place_india || { invoices: [], items: [], summary: { invoices_count:0, total_sales:0, total_tax:0, total_discount:0, items_count:0, cash_total:0, bank_total:0 } }
+        })
+        setMulti({ items: allBranchesData.branches.map(b => ({ branch: b.branch, summary: b.summary })) })
+      } else {
+        // ✅ API returns all invoices, split by branch
+        const allInvoices = allBranchesData.invoices || allBranchesData.items || []
+        
+        // Split invoices by branch based on branch field or account_code
+        const chinaInvoices = allInvoices.filter(inv => {
+          const invBranch = String(inv.branch || '').toLowerCase()
+          return invBranch === 'china_town' || invBranch.includes('china')
+        })
+        
+        const indiaInvoices = allInvoices.filter(inv => {
+          const invBranch = String(inv.branch || '').toLowerCase()
+          return invBranch === 'place_india' || invBranch.includes('india') || invBranch.includes('place')
+        })
+        
+        // Calculate summaries for each branch
+        const chinaSummary = {
+          invoices_count: chinaInvoices.length,
+          total_sales: chinaInvoices.reduce((sum, inv) => sum + Number(inv.total_sales || (Number(inv.revenue_amount || inv.amount || 0) + Number(inv.tax_amount || 0))), 0),
+          total_tax: chinaInvoices.reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0),
+          total_discount: chinaInvoices.reduce((sum, inv) => sum + Number(inv.discount_amount || 0), 0),
+          items_count: chinaInvoices.length,
+          cash_total: chinaInvoices.reduce((sum, inv) => sum + Number(inv.cash_amount || 0), 0),
+          bank_total: chinaInvoices.reduce((sum, inv) => sum + Number(inv.bank_amount || 0), 0)
+        }
+        
+        const indiaSummary = {
+          invoices_count: indiaInvoices.length,
+          total_sales: indiaInvoices.reduce((sum, inv) => sum + Number(inv.total_sales || (Number(inv.revenue_amount || inv.amount || 0) + Number(inv.tax_amount || 0))), 0),
+          total_tax: indiaInvoices.reduce((sum, inv) => sum + Number(inv.tax_amount || 0), 0),
+          total_discount: indiaInvoices.reduce((sum, inv) => sum + Number(inv.discount_amount || 0), 0),
+          items_count: indiaInvoices.length,
+          cash_total: indiaInvoices.reduce((sum, inv) => sum + Number(inv.cash_amount || 0), 0),
+          bank_total: indiaInvoices.reduce((sum, inv) => sum + Number(inv.bank_amount || 0), 0)
+        }
+        
+        setDataBoth({ 
+          china_town: { invoices: chinaInvoices, items: chinaInvoices, summary: chinaSummary },
+          place_india: { invoices: indiaInvoices, items: indiaInvoices, summary: indiaSummary }
+        })
+        setMulti({ items: [
+          { branch: 'china_town', summary: chinaSummary },
+          { branch: 'place_india', summary: indiaSummary }
+        ] })
+      }
     } catch (e) {
+      console.error('[BusinessDaySalesReport] Load error:', e)
       setDataBoth({ china_town: null, place_india: null })
-      setError(e?.code || e?.status || 'failed')
+      setError(e?.code || e?.status || e?.message || 'request_failed')
     } finally { setLoading(false) }
   }
 

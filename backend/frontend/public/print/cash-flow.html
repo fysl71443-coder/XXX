@@ -75,27 +75,58 @@
     if (from) meta.push(`من: ${from}`); if (to) meta.push(`إلى: ${to}`)
     document.getElementById('meta').textContent = meta.join(' • ')
 
-    const params = new URLSearchParams(); if (from) params.set('from', from); if (to) params.set('to', to); params.set('posted','1')
+    const params = new URLSearchParams()
+    if (from) params.set('from', from)
+    if (to) params.set('to', to)
+    
     let rows = []
     try {
       const res = await authFetch(`${API_BASE}/reports/cash-flow${params.toString()?`?${params.toString()}`:''}`)
-      rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res) ? res : [])
-    } catch {}
-    const tbody = document.querySelector('#tbl tbody'); tbody.innerHTML = ''
-    if (!rows || rows.length===0){ const tr=document.createElement('tr'); const td=document.createElement('td'); td.colSpan=2; td.textContent='لا توجد بيانات للتدفقات النقدية للفترة المحددة'; tr.appendChild(td); tbody.appendChild(tr); document.getElementById('net').textContent = fmt(0); setTimeout(()=>window.print(), 200); return }
+      if (!res) {
+        throw new Error('No response from server')
+      }
+      rows = Array.isArray(res.items) ? res.items : (Array.isArray(res) ? res : [])
+    } catch (err) {
+      console.error('[CASH FLOW] Fetch error:', err)
+      throw err
+    }
+    
+    const tbody = document.querySelector('#tbl tbody')
+    tbody.innerHTML = ''
+    
+    if (!rows || rows.length === 0) {
+      const tr = document.createElement('tr')
+      const td = document.createElement('td')
+      td.colSpan = 2
+      td.textContent = 'لا توجد بيانات للتدفقات النقدية للفترة المحددة'
+      tr.appendChild(td)
+      tbody.appendChild(tr)
+      document.getElementById('net').textContent = fmt(0)
+      setTimeout(() => window.print(), 200)
+      return
+    }
+    
     let net = 0
-    rows.forEach(r=>{
-      const tr=document.createElement('tr')
-      const name = r.name || r.item || ''
-      const amount = Number(r.amount||0)
+    rows.forEach(r => {
+      const tr = document.createElement('tr')
+      const name = String(r.name || r.item || '').trim()
+      const amount = Number(r.amount || 0)
       net += amount
-      ;[name, fmt(amount)].forEach(v=>{ const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) })
+      ;[name || '', fmt(amount)].forEach(v => {
+        const td = document.createElement('td')
+        td.textContent = String(v)
+        tr.appendChild(td)
+      })
       tbody.appendChild(tr)
     })
+    
     document.getElementById('net').textContent = fmt(net)
-    setTimeout(()=>window.print(), 200)
+    setTimeout(() => window.print(), 200)
   }
-  load().catch(()=>{ alert('فشل الطباعة. يرجى المحاولة مرة أخرى.') })
+  load().catch((err) => {
+    console.error('[CASH FLOW] Load error:', err)
+    alert('فشل الطباعة. يرجى المحاولة مرة أخرى.\n' + (err?.message || ''))
+  })
 </script>
 </body>
 </html>
