@@ -5796,6 +5796,7 @@ async function handleIssueInvoice(req, res) {
         type: 'item',
         product_id: item.product_id ?? item.item_id ?? item.id ?? null,
         name: String(item.name || ''),
+        name_en: String(item.name_en || ''), // Preserve bilingual name
         qty: Number(item.qty ?? item.quantity ?? 0),
         price: Number(item.price ?? item.unit_price ?? 0),
         discount: Number(item.discount ?? 0)
