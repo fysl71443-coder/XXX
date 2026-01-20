@@ -5843,7 +5843,7 @@ async function handleIssueInvoice(req, res) {
             } else if (key === 'product_id') {
               const numValue = Number(value);
               clean[key] = isNaN(numValue) ? null : numValue;
-            } else if (key === 'type' || key === 'name') {
+            } else if (key === 'type' || key === 'name' || key === 'name_en') {
               // String fields - ensure they're strings
               clean[key] = String(value || '');
             } else {
@@ -5884,6 +5884,7 @@ async function handleIssueInvoice(req, res) {
             type: 'item',
             product_id: isNaN(productId) ? null : productId,
             name: String(it.name || ''),
+            name_en: String(it.name_en || ''), // Preserve bilingual name
             qty: isNaN(qty) ? 0 : qty,
             price: isNaN(price) ? 0 : price,
             discount: isNaN(discount) ? 0 : discount
