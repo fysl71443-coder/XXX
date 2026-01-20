@@ -520,8 +520,13 @@ export default function POSInvoice(){
     })() 
   },[orderId]) // OPTIMIZATION: Only depend on orderId, not loading states
   useEffect(()=>{},[products, selectedCategory])
-  function splitBilingual(label){
+  function splitBilingual(label, nameEn = null){
     const s = String(label||'')
+    // If name_en is provided separately, use it
+    if (nameEn && String(nameEn).trim()) {
+      return { en: String(nameEn).trim(), ar: s.trim() }
+    }
+    // Otherwise, try to split the label
     if (s.includes(' - ')) { const [en, ar] = s.split(' - '); return { en: en.trim(), ar: ar.trim() } }
     if (s.includes(' / ')) { const [en, ar] = s.split(' / '); return { en: en.trim(), ar: ar.trim() } }
     return { en: s.trim(), ar: '' }
@@ -559,9 +564,24 @@ export default function POSInvoice(){
   function addItem(p){
     const base = Array.isArray(itemsRef.current) ? itemsRef.current : []
     const idx = base.findIndex(it => String(it.product_id||it.id||'') === String(p.id) || String(it.name||'') === String(p.name))
+    // Get bilingual names
+    const nm = splitBilingual(p.name, p.name_en)
     const next = (function(){
-      if (idx >= 0) { return base.map((it, i) => i === idx ? { ...it, qty: Number(it.qty||0) + 1 } : it) }
-      return [...base, { product_id: p.id, name: p.name, qty: 1, price: Number(p.price||0), discount: 0 }]
+      if (idx >= 0) { 
+        return base.map((it, i) => i === idx ? { 
+          ...it, 
+          qty: Number(it.qty||0) + 1,
+          name_en: it.name_en || nm.en || ''
+        } : it) 
+      }
+      return [...base, { 
+        product_id: p.id, 
+        name: p.name, 
+        name_en: nm.en || p.name_en || '',
+        qty: 1, 
+        price: Number(p.price||0), 
+        discount: 0 
+      }]
     })()
     itemsRef.current = next
     setItems(next)
@@ -1965,13 +1985,15 @@ export default function POSInvoice(){
                     { id: 'p1', name: 'منتج 1', category: 'عام', price: 10 },
                     { id: 'p2', name: 'منتج 2', category: 'عام', price: 5 },
                   ]); const filtered = base.filter(p=> String(p.category||'عام').trim() === String(selectedCategory||'').trim()); const list = filtered.length>0 ? filtered : base; return list })().map(p=> {
-                    const nm = splitBilingual(p.name)
+                    const nm = splitBilingual(p.name, p.name_en)
                     return (
-                      <button data-testid={`product-btn-${p.id}`} key={p.id} className="relative p-2 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-primary-300 transition-colors text-right h-20 flex flex-col justify-center" style={{ fontFamily: 'Cairo, sans-serif' }} onClick={()=> { ensureOrderThenAdd(p) }}>
-                        {countById.get(String(p.id))>0 ? (<span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full">{countById.get(String(p.id))}</span>) : null}
-                        <div className="text-base">{mealIcon(p)} <span className="font-medium text-gray-800">{nm.en}</span></div>
-                        {nm.ar ? (<div className="text-xs text-gray-600">{nm.ar}</div>) : null}
-                        <div className="text-xs text-gray-500">{currencyCode} {Number(p.price||0).toFixed(2)}</div>
+                      <button data-testid={`product-btn-${p.id}`} key={p.id} className="relative p-3 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-primary-300 transition-colors text-right min-h-[100px] flex flex-col justify-between" style={{ fontFamily: 'Cairo, sans-serif' }} onClick={()=> { ensureOrderThenAdd(p) }}>
+                        {countById.get(String(p.id))>0 ? (<span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{countById.get(String(p.id))}</span>) : null}
+                        <div className="flex-1 flex flex-col justify-center gap-1">
+                          <div className="text-lg font-semibold text-gray-800 leading-tight">{mealIcon(p)} {nm.en || p.name}</div>
+                          {nm.ar ? (<div className="text-sm text-gray-600 leading-tight">{nm.ar}</div>) : null}
+                        </div>
+                        <div className="text-sm font-bold text-primary-600 mt-1">{currencyCode} {Number(p.price||0).toFixed(2)}</div>
                       </button>
                     )
                   })}
@@ -1983,13 +2005,15 @@ export default function POSInvoice(){
               <div className="mt-3">
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 p-3" data-ready={loadingProducts ? 'false' : 'true'}>
                   {(function(){ const filtered = products.filter(p=> String(p.category||'عام').trim() === String(selectedCategory||'').trim()); const list = filtered.length>0 ? filtered : products; return list })().map(p=> {
-                    const nm = splitBilingual(p.name)
+                    const nm = splitBilingual(p.name, p.name_en)
                     return (
-                      <button data-testid={`product-btn-${p.id}`} key={p.id} className="relative p-2 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-primary-300 transition-colors text-right h-20 flex flex-col justify-center" style={{ fontFamily: 'Cairo, sans-serif' }} onClick={()=> { ensureOrderThenAdd(p) }}>
-                        {countById.get(String(p.id))>0 ? (<span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full">{countById.get(String(p.id))}</span>) : null}
-                        <div className="text-base">{mealIcon(p)} <span className="font-medium text-gray-800">{nm.en}</span></div>
-                        {nm.ar ? (<div className="text-xs text-gray-600">{nm.ar}</div>) : null}
-                        <div className="text-xs text-gray-500">{currencyCode} {Number(p.price||0).toFixed(2)}</div>
+                      <button data-testid={`product-btn-${p.id}`} key={p.id} className="relative p-3 bg-white border rounded-lg shadow-sm hover:shadow-md hover:border-primary-300 transition-colors text-right min-h-[100px] flex flex-col justify-between" style={{ fontFamily: 'Cairo, sans-serif' }} onClick={()=> { ensureOrderThenAdd(p) }}>
+                        {countById.get(String(p.id))>0 ? (<span className="absolute -top-1 -left-1 bg-amber-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">{countById.get(String(p.id))}</span>) : null}
+                        <div className="flex-1 flex flex-col justify-center gap-1">
+                          <div className="text-lg font-semibold text-gray-800 leading-tight">{mealIcon(p)} {nm.en || p.name}</div>
+                          {nm.ar ? (<div className="text-sm text-gray-600 leading-tight">{nm.ar}</div>) : null}
+                        </div>
+                        <div className="text-sm font-bold text-primary-600 mt-1">{currencyCode} {Number(p.price||0).toFixed(2)}</div>
                       </button>
                     )
                   })}
@@ -2111,21 +2135,33 @@ export default function POSInvoice(){
                     </tr>
                   </thead>
                   <tbody data-testid="receipt-items" data-ready={safeItems.length > 0 ? 'true' : 'false'}>
-                    {safeItems.map((it, i)=> (
-                    <tr data-testid="invoice-row" key={i} className="border-b hover:bg-gray-50 transition-colors">
-                      <td className="p-2 text-right">{it.name}</td>
-                      <td className="p-2 text-center">
-                        <div className="inline-flex items-center gap-2">
-                          <button className="h-6 w-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center" onClick={()=>{ const q = Number(it.qty||0); if (q<=1) removeItem(i); else updateItem(i, o=> ({ qty: q-1 })) }} aria-label="decrease">−</button>
-                          <span className="min-w-[2ch] text-center">{Number(it.qty||0)}</span>
-                          <button className="h-6 w-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center" onClick={()=> updateItem(i, o=> ({ qty: Number(o.qty||0)+1 }))} aria-label="increase">+</button>
-                        </div>
-                      </td>
-                      <td className="p-2 text-right">
-                        <Money value={Number(it.qty||0) * Number(it.price||0)} />
-                      </td>
-                    </tr>
-                  ))}
+                    {safeItems.map((it, i)=> {
+                      // Get product from products list to get name_en if not in item
+                      const product = products.find(p => String(p.id) === String(it.product_id || it.id))
+                      const itemNameEn = it.name_en || product?.name_en || ''
+                      const itemNameAr = it.name || ''
+                      const nm = splitBilingual(itemNameAr, itemNameEn)
+                      
+                      return (
+                      <tr data-testid="invoice-row" key={i} className="border-b hover:bg-gray-50 transition-colors">
+                        <td className="p-2 text-right">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="font-semibold text-gray-800">{nm.en || itemNameAr}</div>
+                            {nm.ar && nm.ar !== nm.en ? (<div className="text-sm text-gray-600">{nm.ar}</div>) : null}
+                          </div>
+                        </td>
+                        <td className="p-2 text-center">
+                          <div className="inline-flex items-center gap-2">
+                            <button className="h-6 w-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center" onClick={()=>{ const q = Number(it.qty||0); if (q<=1) removeItem(i); else updateItem(i, o=> ({ qty: q-1 })) }} aria-label="decrease">−</button>
+                            <span className="min-w-[2ch] text-center font-semibold">{Number(it.qty||0)}</span>
+                            <button className="h-6 w-6 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-700 flex items-center justify-center" onClick={()=> updateItem(i, o=> ({ qty: Number(o.qty||0)+1 }))} aria-label="increase">+</button>
+                          </div>
+                        </td>
+                        <td className="p-2 text-right">
+                          <Money value={Number(it.qty||0) * Number(it.price||0)} />
+                        </td>
+                      </tr>
+                    )})}
                   {safeItems.length > 0 && (
                     <>
                       <tr className="border-t-2 border-gray-400 bg-gray-50">
