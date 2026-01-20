@@ -5300,25 +5300,60 @@ app.get("/ar/summary", authenticateToken, authorize("reports","view"), async (re
 // POS Tables Layout - both paths
 async function handleGetTablesLayout(req, res) {
   try {
-    const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
-    const key = `pos_tables_layout_${branch}`;
-    const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [key]);
+    let branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
+    
+    // CRITICAL: Normalize branch name to handle variations (palace_india -> place_india)
+    const normalizeBranch = (b) => {
+      const s = String(b || '').trim().toLowerCase().replace(/\s+/g, '_');
+      if (s === 'palace_india' || s === 'palce_india') return 'place_india';
+      return s;
+    };
+    
+    const normalizedBranch = normalizeBranch(branch);
+    const key = `pos_tables_layout_${normalizedBranch}`;
+    
+    // Try normalized branch first, then try original branch name
+    let { rows } = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [key]);
+    
+    // If not found with normalized name, try original branch name
+    if (!rows || !rows[0] || !rows[0].value) {
+      const originalKey = `pos_tables_layout_${branch}`;
+      const result = await pool.query('SELECT value FROM settings WHERE key = $1 LIMIT 1', [originalKey]);
+      rows = result.rows;
+    }
+    
     const v = rows && rows[0] ? rows[0].value : null;
-    const out = v && v.rows ? v : { rows: [] };
+    const out = v && (v.rows || v.sections) ? v : { rows: [] };
     res.json(out);
-  } catch (e) { res.json({ rows: [] }); }
+  } catch (e) { 
+    console.error('[POS] tables-layout get error:', e);
+    res.json({ rows: [] }); 
+  }
 }
 app.get("/pos/tables-layout", authenticateToken, handleGetTablesLayout);
 app.get("/api/pos/tables-layout", authenticateToken, handleGetTablesLayout);
 
 async function handlePutTablesLayout(req, res) {
   try {
-    const branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
-    const key = `pos_tables_layout_${branch}`;
+    let branch = String(req.query?.branch || req.user?.default_branch || 'china_town');
+    
+    // CRITICAL: Normalize branch name to handle variations (palace_india -> place_india)
+    const normalizeBranch = (b) => {
+      const s = String(b || '').trim().toLowerCase().replace(/\s+/g, '_');
+      if (s === 'palace_india' || s === 'palce_india') return 'place_india';
+      return s;
+    };
+    
+    const normalizedBranch = normalizeBranch(branch);
+    const key = `pos_tables_layout_${normalizedBranch}`;
     const value = req.body || {};
+    
     await pool.query('INSERT INTO settings(key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()', [key, value]);
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
+  } catch (e) { 
+    console.error('[POS] tables-layout save error:', e);
+    res.status(500).json({ error: "server_error" }); 
+  }
 }
 app.put("/pos/tables-layout", authenticateToken, authorize("sales","edit"), handlePutTablesLayout);
 app.put("/api/pos/tables-layout", authenticateToken, authorize("sales","edit"), handlePutTablesLayout);
