@@ -3,7 +3,29 @@ import pdfFonts from 'pdfmake/build/vfs_fonts'
 import { initPdfFonts } from './font-loader'
 const cairoBase64 = ""
 
-const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:4000/api'
+// Determine API base URL - same logic as client.js
+function getApiBase() {
+  // 1. Check for explicit environment variable
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  // 2. Check for runtime override
+  if (typeof window !== 'undefined' && window.__API__) {
+    return window.__API__;
+  }
+  // 3. Check if running on development port (4000 or 3000)
+  if (typeof window !== 'undefined') {
+    const port = window.location.port;
+    if (port === '4000' || port === '3000') {
+      return 'http://localhost:5000/api';
+    }
+    // Otherwise, use same origin (production mode)
+    return window.location.origin + '/api';
+  }
+  // 4. Fallback for SSR/Node environment
+  return 'http://localhost:5000/api';
+}
+const API_BASE = getApiBase()
 
 function toBase64(buffer){
   let binary=''

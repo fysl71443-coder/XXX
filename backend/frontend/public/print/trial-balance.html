@@ -65,7 +65,21 @@
   </tfoot>
   </table>
 <script>
-  const API_BASE = (window.__API__||'http://localhost:4000/api')
+  // Determine API base URL - same logic as client.js
+  function getApiBase() {
+    // 1. Check for explicit window override
+    if (window.__API__) {
+      return window.__API__;
+    }
+    // 2. Check if running on development port (4000 or 3000)
+    const port = window.location.port;
+    if (port === '4000' || port === '3000') {
+      return 'http://localhost:5000/api';
+    }
+    // 3. Use same origin (production mode)
+    return window.location.origin + '/api';
+  }
+  const API_BASE = getApiBase()
   function qp(k){ return new URLSearchParams(location.search).get(k) }
   function fmt(n){ try { return Number(n||0).toFixed(2) } catch { return '0.00' } }
   function labelOpType(t){ const v=String(t||''); if(v==='invoice') return 'بيع'; if(v==='supplier_invoice') return 'مورد'; if(v==='expense_invoice') return 'مصروف'; if(v==='payment') return 'سداد/تحصيل'; if(v==='payroll_run') return 'مسير رواتب'; if(!v||v==='manual') return 'يدوي'; return v }

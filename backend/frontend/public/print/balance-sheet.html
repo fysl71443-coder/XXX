@@ -65,7 +65,14 @@
   </tfoot>
 </table>
 <script>
-  const API_BASE = (window.__API__||'http://localhost:4000/api')
+  // Determine API base URL - same logic as client.js
+  function getApiBase() {
+    if (window.__API__) return window.__API__;
+    const port = window.location.port;
+    if (port === '4000' || port === '3000') return 'http://localhost:5000/api';
+    return window.location.origin + '/api';
+  }
+  const API_BASE = getApiBase()
   function qp(k){ return new URLSearchParams(location.search).get(k) }
   function fmt(n){ try { return Number(n||0).toFixed(2) } catch { return '0.00' } }
   function prepareAndPrint(){ const bar=document.querySelector('.no-print'); if(bar) bar.style.display='none'; window.print() }
