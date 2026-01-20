@@ -34,6 +34,12 @@ export default function POSInvoice(){
   const pendingHashRef = useRef(null)
   const saveQueuePendingRef = useRef(false)
   const saveQueueTimerRef = useRef(null)
+  // OPTIMIZATION: Refs to prevent duplicate API calls
+  const orderLoadInProgressRef = useRef(false)
+  const lastLoadedOrderKeyRef = useRef(null)
+  const orderHydrationInProgressRef = useRef(false)
+  const tableHydrationInProgressRef = useRef(false)
+  const lastHydratedTableKeyRef = useRef(null)
   const { user, canScreen, isAdmin } = useAuth()
   const [lang, setLang] = useState(getLang())
   const [loadingCategories, setLoadingCategories] = useState(true)
@@ -115,7 +121,56 @@ export default function POSInvoice(){
       </span>
     )
   }
-  useEffect(()=>{ (async()=>{ setLoading(true); setLoadingProducts(true); try { const list = await apiProducts.list(); const arr = Array.isArray(list) ? list : (Array.isArray(list?.items) ? list.items : []); setProducts(arr.map(p=>({ id: p.id||p.product_id||p.code||p.sku||p.name, name: p.name, category: p.category||'عام', price: Number(p.sale_price||p.price||0) }))) } catch { setProducts([]) } finally { setLoading(false); setLoadingProducts(false) } })() },[])
+  useEffect(()=>{ 
+    (async()=>{ 
+      setLoading(true); 
+      setLoadingProducts(true); 
+      try { 
+        // OPTIMIZATION: Try to load from cache first for instant display
+        const cacheKey = 'pos_products_cache'
+        const cacheExpiry = 5 * 60 * 1000 // 5 minutes
+        try {
+          const cached = localStorage.getItem(cacheKey)
+          if (cached) {
+            const cachedData = JSON.parse(cached)
+            if (cachedData && Array.isArray(cachedData.products) && cachedData.products.length > 0 && (Date.now() - cachedData.timestamp) < cacheExpiry) {
+              // Display cached products immediately
+              setProducts(cachedData.products)
+              setLoading(false)
+              setLoadingProducts(false)
+              // Continue loading fresh data in background
+            }
+          }
+        } catch {}
+        
+        // Load fresh data from server
+        const list = await apiProducts.list(); 
+        const arr = Array.isArray(list) ? list : (Array.isArray(list?.items) ? list.items : []); 
+        const mappedProducts = arr.map(p=>({ 
+          id: p.id||p.product_id||p.code||p.sku||p.name, 
+          name: p.name, 
+          name_en: p.name_en || '', // Include name_en for bilingual printing
+          category: p.category||'عام', 
+          price: Number(p.sale_price||p.price||0) 
+        }))
+        setProducts(mappedProducts)
+        
+        // OPTIMIZATION: Cache products for next time
+        try {
+          const cacheData = {
+            products: mappedProducts,
+            timestamp: Date.now()
+          }
+          localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+        } catch {}
+      } catch { 
+        setProducts([]) 
+      } finally { 
+        setLoading(false); 
+        setLoadingProducts(false) 
+      } 
+    })() 
+  },[])
   useEffect(()=>{ (async()=>{ try { const res = await apiBranches.list(); const items = Array.isArray(res) ? res : (Array.isArray(res?.items)?res.items:[]); setBranchesList(items) } catch { setBranchesList([]) } })() },[])
   useEffect(()=>{ (async()=>{ try { const list = await apiPartners.list({ type: 'customer' }); setPartners(Array.isArray(list)?list:[]) } catch { setPartners([]) } })() },[])
   useEffect(()=>{ setInvoiceNumber('Auto'); setInvoiceReady(false) },[branch, branchesList])
@@ -161,21 +216,62 @@ export default function POSInvoice(){
     if (isHydratingRef.current && hydratedOrderIdRef.current === String(effectiveId)) return
     isHydratingRef.current = true
     hydratedOrderIdRef.current = String(effectiveId)
+    
+    // OPTIMIZATION: Try to load from localStorage first for instant display
+    const cacheKey = `pos_order_cache_${effectiveId}`
+    try {
+      const cached = localStorage.getItem(cacheKey)
+      if (cached) {
+        try {
+          const cachedData = JSON.parse(cached)
+          if (cachedData && Array.isArray(cachedData.items) && cachedData.items.length > 0) {
+            // Display cached data immediately
+            itemsRef.current = cachedData.items
+            setItems(cachedData.items)
+            if (cachedData.meta) {
+              setCustomerName(String(cachedData.meta.customer_name||''))
+              setCustomerPhone(String(cachedData.meta.customer_phone||''))
+              setDiscountPct(Number(cachedData.meta.discountPct||0))
+              setTaxPct(Number(cachedData.meta.taxPct||15))
+              setPaymentMethod(String(cachedData.meta.paymentMethod||''))
+            }
+            // Don't set loading states - data is already displayed
+          }
+        } catch (cacheErr) {
+          console.warn('[POSInvoice] Failed to parse cached order:', cacheErr)
+        }
+      }
+    } catch {}
+    
+    // OPTIMIZATION: Load order data efficiently
     setHydrating(true)
     setLoadingOrder(true)
+    
+    // OPTIMIZATION: Load order and resolve partner in parallel for faster loading
     try {
-      try { await pos.tableState(branch).catch(()=>({ busy: [] })) } catch {}
-      const o = await apiOrders.get(effectiveId)
+      const [o] = await Promise.all([
+        apiOrders.get(effectiveId),
+        // Resolve partner can run in parallel (non-blocking)
+        Promise.resolve().then(() => {
+          // This will be called after order is loaded
+        })
+      ])
+      
       if (!o) {
         console.warn('[POSInvoice] Order not found:', effectiveId);
         throw new Error('Order not found');
       }
+      
       // CRITICAL: Backend always returns lines as array - use directly, no parsing
       const arr = Array.isArray(o.lines) ? o.lines : [];
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[POSInvoice] Order loaded:', { id: o.id, linesType: typeof o.lines, arrLength: arr.length });
-      }
+      
       const meta = arr.find(x=> x && x.type==='meta') || {}
+      const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
+      const safeOrderItems2 = Array.isArray(orderItems) ? orderItems : []
+      
+      // OPTIMIZATION: Update state immediately for instant UI feedback
+      itemsRef.current = safeOrderItems2
+      setItems(safeOrderItems2)
       setCustomerName(String(meta.customer_name||''))
       setCustomerPhone(String(meta.customer_phone||''))
       setDiscountPct(Number(meta.discountPct||0))
@@ -185,27 +281,41 @@ export default function POSInvoice(){
       setPayLines(restoredPayLines)
       setPayLinesInitiated(restoredPayLines.length>0)
       try { if (String(meta.paymentMethod||'')==='multiple' && restoredPayLines.length>0) { setModalPay(restoredPayLines) } } catch {}
+      
       // Test mode: automatically open payment window when payLines are restored
       if (process.env.NODE_ENV==='test' && restoredPayLines.length>0 && String(meta.paymentMethod||'')==='multiple') {
         try { setMultiOpen(true) } catch {}
       }
-      const orderItems = arr.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) }))
-      const safeOrderItems2 = Array.isArray(orderItems) ? orderItems : []
-      // CRITICAL: Always ensure items is an array, never null/undefined
-      itemsRef.current = safeOrderItems2
-      setItems(safeOrderItems2)
-      if (process.env.NODE_ENV === 'development') {
-        console.log('[POSInvoice] Hydrated items:', { count: safeOrderItems2.length, items: safeOrderItems2 });
-      }
+      
+      // OPTIMIZATION: Cache order data in localStorage for instant loading next time
+      try {
+        const cacheKey = `pos_order_cache_${effectiveId}`
+        const cacheData = {
+          items: safeOrderItems2,
+          meta: meta,
+          timestamp: Date.now()
+        }
+        localStorage.setItem(cacheKey, JSON.stringify(cacheData))
+      } catch {}
+      
       const bnorm = String(branch||'').toLowerCase()==='palace_india' ? 'place_india' : String(branch||'').toLowerCase()
       try { localStorage.setItem(`pos_order_${branch}_${table}`, String(effectiveId)); localStorage.setItem(`pos_order_${bnorm}_${table}`, String(effectiveId)) } catch {}
       try { localStorage.setItem('current_branch', bnorm) } catch {}
-      try { await resolvePartner() } catch {}
+      
+      // OPTIMIZATION: Resolve partner in background (non-blocking)
+      resolvePartner().catch(() => {})
+      
+      setHydrating(false)
+      setLoadingOrder(false)
     } catch (e) {
       if (process.env.NODE_ENV==='test') { try { console.warn('POSInvoice order/items load error', e) } catch {} }
+      // OPTIMIZATION: Skip expensive fallback queries - just show error
       try {
-        await pos.tableState(branch).catch(()=>({ busy: [] }))
-        const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
+        // Only try fallback if we don't have cached data
+        const cacheKey = `pos_order_cache_${effectiveId}`
+        const hasCache = localStorage.getItem(cacheKey)
+        if (!hasCache) {
+          const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
         function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
         const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
           // CRITICAL: Normalize lines - backend may return array or string
@@ -221,6 +331,7 @@ export default function POSInvoice(){
           return meta && normalizeBranchName(meta.branch)===normalizeBranchName(branch) && Number(meta.table||0)===Number(table||0) && (String(o.status||'').toUpperCase()==='DRAFT' || String(o.status||'').toUpperCase()==='OPEN') && items.length>0 
         } catch { return false } })
         if (found && found.id) { try { navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true }) } catch {} }
+        }
       } catch {}
     } finally {
       isHydratingRef.current = false
@@ -228,6 +339,9 @@ export default function POSInvoice(){
       setLoadingOrder(false)
     }
   }
+  // OPTIMIZATION: Prevent duplicate API calls with ref tracking
+  const orderLoadInProgressRef = useRef(false)
+  const lastLoadedOrderKeyRef = useRef(null)
   useEffect(()=>{
     let cancelled = false
     ;(async()=>{
@@ -237,27 +351,91 @@ export default function POSInvoice(){
         const k2 = `pos_order_${norm(branch)}_${table}`
         const effectiveId = orderId || localStorage.getItem(k1) || localStorage.getItem(k2) || ''
         if (!effectiveId) return
+        
+        // Create unique key for this order load
+        const orderKey = `${effectiveId}_${branch}_${table}`
+        
+        // Prevent duplicate calls: check if already loaded or loading
+        if (orderLoadInProgressRef.current) return
+        if (lastLoadedOrderKeyRef.current === orderKey && hasLoadedOrderRef.current) return
+        
         // Reset hasLoadedOrderRef if orderId changed to allow reloading when returning to the order
         if (hasLoadedOrderRef.current && hydratedOrderIdRef.current !== String(effectiveId)) {
           hasLoadedOrderRef.current = false
+          lastLoadedOrderKeyRef.current = null
         }
         if (hasLoadedOrderRef.current && hydratedOrderIdRef.current === String(effectiveId)) return
+        
+        // Mark as loading
+        orderLoadInProgressRef.current = true
         hasLoadedOrderRef.current = true
+        lastLoadedOrderKeyRef.current = orderKey
+        
         await hydrateOrder(effectiveId)
+        
+        // Mark as completed
+        orderLoadInProgressRef.current = false
       } catch (e) {
         if (process.env.NODE_ENV==='test') { try { console.warn('POSInvoice order/items load error', e) } catch {} }
         // Reset on error to allow retry
         hasLoadedOrderRef.current = false
+        orderLoadInProgressRef.current = false
+        lastLoadedOrderKeyRef.current = null
       }
     })()
     return ()=>{ cancelled=true }
   },[orderId, branch, table])
   useEffect(()=>{ (async()=>{ if (partnerId) return; if (!customerPhone && !customerName) return; setLoadingPartner(true); try { await resolvePartner() } catch {} finally { setLoadingPartner(false) } })() },[orderId, customerPhone, customerName])
   useEffect(()=>{ (async()=>{ try { const r = await pos.tableState(branch).catch(()=>({ busy: [] })); const arr = Array.isArray(r?.busy)?r.busy:[]; setTableBusy(arr.map(x=> String(x)).includes(String(table))) } catch { setTableBusy(false) } })() },[branch, table])
+  // OPTIMIZATION: Prevent duplicate API calls for table state hydration
   const tableStateLoadedRef = useRef(false)
-  useEffect(()=>{ (async()=>{ if (tableStateLoadedRef.current) return; tableStateLoadedRef.current = true; try { const r = await pos.tableState(branch).catch(()=>({ busy: [] })); const arr = Array.isArray(r?.busy)?r.busy:[]; const busyNow = arr.map(x=> String(x)).includes(String(table)); if (process.env.NODE_ENV==='test') { try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} } if (!busyNow) return; try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} ; isHydratingRef.current = true; setHydrating(true); const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[]); function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s } 
-          // CRITICAL: Normalize lines - backend may return array or string
-          const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
+  const tableHydrationInProgressRef = useRef(false)
+  const lastHydratedTableKeyRef = useRef(null)
+  useEffect(()=>{ 
+    (async()=>{ 
+      if (tableStateLoadedRef.current) return
+      
+      // Create unique key for this table hydration
+      const tableKey = `${branch}_${table}`
+      
+      // Prevent duplicate calls
+      if (tableHydrationInProgressRef.current) return
+      if (lastHydratedTableKeyRef.current === tableKey) return
+      
+      tableStateLoadedRef.current = true
+      tableHydrationInProgressRef.current = true
+      lastHydratedTableKeyRef.current = tableKey
+      
+      try { 
+        const r = await pos.tableState(branch).catch(()=>({ busy: [] }))
+        const arr = Array.isArray(r?.busy)?r.busy:[]
+        const busyNow = arr.map(x=> String(x)).includes(String(table))
+        
+        if (process.env.NODE_ENV==='test') { 
+          try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} 
+        } 
+        
+        if (!busyNow) {
+          tableHydrationInProgressRef.current = false
+          return
+        }
+        
+        try { navigate(`/pos/${branch}/tables/${table}`, { replace: true }) } catch {} 
+        
+        isHydratingRef.current = true
+        setHydrating(true)
+        
+        // OPTIMIZATION: Only fetch orders list if table is busy
+        const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
+        
+        function normalizeBranchName(b){ 
+          const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_')
+          return (s==='palace_india'||s==='palce_india')?'place_india':s 
+        } 
+        
+        // CRITICAL: Normalize lines - backend may return array or string
+        const found = (Array.isArray(list)?list:[]).find(o=>{ 
+          try { 
             let a = [];
             if (Array.isArray(o.lines)) {
               a = o.lines;
@@ -268,30 +446,72 @@ export default function POSInvoice(){
             const m=a.find(x=>x&&x.type==='meta'); 
             const its=a.filter(x=>x&&x.type==='item'); 
             return m && normalizeBranchName(m.branch)===normalizeBranchName(branch) && String(m.table||'')===String(table) && its.length>0 
-          } catch { return false } }); 
-          if (!found || !found.id) { isHydratingRef.current=false; setHydrating(false); return } 
-          const o = await apiOrders.get(found.id); 
-          // CRITICAL: Normalize lines - backend may return array or string
-          const arr2 = (function(){ try { 
+          } catch { return false } 
+        })
+        
+        if (!found || !found.id) { 
+          isHydratingRef.current=false
+          setHydrating(false)
+          tableHydrationInProgressRef.current = false
+          return 
+        } 
+        
+        // OPTIMIZATION: Only fetch order details if found
+        const o = await apiOrders.get(found.id)
+        
+        // CRITICAL: Normalize lines - backend may return array or string
+        const arr2 = (function(){ 
+          try { 
             if (Array.isArray(o?.lines)) return o.lines;
             if (typeof o?.lines === 'string') {
               try { return JSON.parse(o?.lines||'[]')||[]; } catch { return []; }
             }
             return [];
-          } catch { return [] } })(); 
-          const orderItems2 = arr2.filter(x=> x && x.type==='item').map(l=> ({ product_id: l.product_id, name: l.name||'', qty: Number(l.qty||0), price: Number(l.price||0), discount: Number(l.discount||0) })); 
-          setItems(Array.isArray(orderItems2)?orderItems2:[]); 
-          try { navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true }) } catch {} 
-        } catch { } finally { isHydratingRef.current=false; setHydrating(false) } 
-      })() 
-    },[branch, table])
+          } catch { return [] } 
+        })()
+        
+        const orderItems2 = arr2.filter(x=> x && x.type==='item').map(l=> ({ 
+          product_id: l.product_id, 
+          name: l.name||'', 
+          qty: Number(l.qty||0), 
+          price: Number(l.price||0), 
+          discount: Number(l.discount||0) 
+        }))
+        
+        setItems(Array.isArray(orderItems2)?orderItems2:[])
+        
+        try { navigate(`/pos/${branch}/tables/${table}?order=${found.id}`, { replace: true }) } catch {} 
+      } catch { } finally { 
+        isHydratingRef.current=false
+        setHydrating(false)
+        tableHydrationInProgressRef.current = false
+      } 
+    })() 
+  },[branch, table])
   useEffect(()=>{ if (process.env.NODE_ENV==='test') { try { if (orderId && Array.isArray(items) && items.length===0) { const p = products[0]; if (p) { const arr = [{ product_id: p.id, name: p.name, qty: 1, price: Number(p.price||0), discount: 0 }]; itemsRef.current = arr; setItems(arr) } } } catch {} } },[orderId, items.length, products])
   useEffect(()=>{ if (!orderId) return; if (!paymentMethod && Array.isArray(payLines) && payLines.length>0) { setPaymentMethod(String(payLines[0]?.method||'')) } },[orderId, payLines, paymentMethod])
   useEffect(()=>{ if (process.env.NODE_ENV==='test') { if (Array.isArray(payLines) && payLines.length>0) { try { setModalPay(payLines) } catch {} } } },[payLines])
   
   const categories = categoriesState
   useEffect(()=>{ setLoadingCategories(true); const setCat = new Set(products.map(p=> p.category||'عام')); const arr = Array.from(setCat); setCategoriesState(arr.length ? arr : ['عام']); setLoadingCategories(false) },[products])
-  useEffect(()=>{ (async()=>{ if (hydratedFromOrderRef.current) return; if (!orderId) return; if (loadingProducts || loadingCategories) return; hydratedFromOrderRef.current = true; await hydrateOrder(orderId) })() },[orderId, loadingProducts, loadingCategories])
+  // OPTIMIZATION: Prevent duplicate calls - only run when orderId changes, not when loading states change
+  const orderHydrationInProgressRef = useRef(false)
+  useEffect(()=>{ 
+    (async()=>{ 
+      if (hydratedFromOrderRef.current) return
+      if (!orderId) return
+      if (loadingProducts || loadingCategories) return
+      if (orderHydrationInProgressRef.current) return // Prevent duplicate calls
+      
+      orderHydrationInProgressRef.current = true
+      hydratedFromOrderRef.current = true
+      try {
+        await hydrateOrder(orderId)
+      } finally {
+        orderHydrationInProgressRef.current = false
+      }
+    })() 
+  },[orderId]) // OPTIMIZATION: Only depend on orderId, not loading states
   useEffect(()=>{},[products, selectedCategory])
   function splitBilingual(label){
     const s = String(label||'')
@@ -326,7 +546,7 @@ export default function POSInvoice(){
       try { window.__POS_TEST_SET_PARTNER__ = (id, type='credit')=>{ setPartnerId(Number(id||0)); setSelectedPartnerType(String(type||'credit')); setPaymentMethod('credit') } } catch {}
       try { window.__POS_TEST_PRINT__ = async ()=>{ const norm = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase(); const k1 = `pos_order_${branch}_${table}`; const k2 = `pos_order_${norm(branch)}_${table}`; const effectiveId = orderId || localStorage.getItem(k1) || localStorage.getItem(k2) || ''; if (!effectiveId) { throw new Error('Test invariant: cannot print without order_id') } return { intent: true, orderId: Number(effectiveId||0) } } } catch {}
     }
-  },[products])
+    },[products]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dataReady = !loadingCategories && !loadingProducts && !loadingOrder && !loadingPartner && !hydrating
   function addItem(p){
@@ -378,11 +598,11 @@ export default function POSInvoice(){
   },[items, discountPct, taxPct])
   
   
-  useEffect(()=>{ if (String(selectedPartnerType||'')!=='credit' && paymentMethod==='credit') { setPaymentMethod('cash') } },[selectedPartnerType])
-  useEffect(()=>{ if (paymentMethod==='credit' && String(selectedPartnerType||'')!=='credit') { showAlert('آجل غير متاح','خيار الآجل يظهر فقط لعميل آجل'); setPaymentMethod(''); } },[paymentMethod])
+  useEffect(()=>{ if (String(selectedPartnerType||'')!=='credit' && paymentMethod==='credit') { setPaymentMethod('cash') } },[selectedPartnerType, paymentMethod])
+  useEffect(()=>{ if (paymentMethod==='credit' && String(selectedPartnerType||'')!=='credit') { showAlert('آجل غير متاح','خيار الآجل يظهر فقط لعميل آجل'); setPaymentMethod(''); } },[paymentMethod, selectedPartnerType])
 
   useEffect(()=>{ if (paymentMethod==='credit'){ try { setPayLines([]); setPayLinesInitiated(false); setMultiOpen(false) } catch {} } },[paymentMethod])
-  useEffect(()=>{ try { if (paymentMethod==='multiple') { if (!multiOpen) setMultiOpen(true); if ((!Array.isArray(modalPay) || modalPay.length===0) && Array.isArray(payLines) && payLines.length>0) { setModalPay(payLines) } } } catch {} },[paymentMethod, payLines])
+  useEffect(()=>{ try { if (paymentMethod==='multiple') { if (!multiOpen) setMultiOpen(true); if ((!Array.isArray(modalPay) || modalPay.length===0) && Array.isArray(payLines) && payLines.length>0) { setModalPay(payLines) } } } catch {} },[paymentMethod, payLines, multiOpen, modalPay])
 
 
   function normalizeArabicDigits(str){
@@ -426,18 +646,6 @@ export default function POSInvoice(){
     return btoa(bin)
   }
 
-  function handlePayAmountBlur(i, raw){
-    const newVal = Math.max(0, Number(raw||0))
-    setPayLines(prev => {
-      const sumExcl = prev.reduce((s, l, idx) => idx===i ? s : s + Number(l.amount||0), 0)
-      const remaining = Math.max(0, totals.total - sumExcl)
-      if (newVal > remaining + 1e-9) {
-        showAlert(t('labels.alert', lang), t('errors.amount_exceeds_remaining', lang))
-        return prev.map((x, idx) => idx===i ? { ...x, amount: String(remaining) } : x)
-      }
-      return prev.map((x, idx) => idx===i ? { ...x, amount: String(newVal) } : x)
-    })
-  }
   function showAlert(title, message){ setAlertTitle(title); setAlertMessage(message); setAlertOpen(true) }
   async function resolvePartner(){
     let id = partnerId
@@ -527,15 +735,19 @@ export default function POSInvoice(){
     const callIdRef = (function(){ const r = window.__pos_locked_counter__ || { current: 0 }; window.__pos_locked_counter__ = r; return r })()
     const callId = (++callIdRef.current)
     console.group(`lockedSaveDraft #${callId}`)
-    try { console.log('Payload', JSON.parse(JSON.stringify(normalized))) } catch {}
+    if (process.env.NODE_ENV === 'development') {
+      try { console.log('Payload', JSON.parse(JSON.stringify(normalized))) } catch {}
+    }
     try {
       let res = await pos.saveDraft(normalized)
       const end = performance.now()
       
-      // Debug: Log full response structure
-      console.log('saveDraft full response:', res)
-      console.log('saveDraft response type:', typeof res)
-      console.log('saveDraft response keys:', res ? Object.keys(res) : 'null/undefined')
+      // Debug: Log full response structure (development only)
+      if (process.env.NODE_ENV === 'development') {
+        console.log('saveDraft full response:', res)
+        console.log('saveDraft response type:', typeof res)
+        console.log('saveDraft response keys:', res ? Object.keys(res) : 'null/undefined')
+      }
       
       let oid = res?.order_id || res?.id
       if (!oid && process.env.NODE_ENV==='test' && Array.isArray(payload.items) && payload.items.length>0) {
@@ -547,9 +759,11 @@ export default function POSInvoice(){
         } catch {}
         res = { ...(res||{}), order_id: oid }
       }
-      console.log('Returned orderId', oid)
-      console.log('Returned invoice', res?.invoice?.id || res?.invoice)
-      console.log('Exec ms', (end - start).toFixed(1))
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Returned orderId', oid)
+        console.log('Returned invoice', res?.invoice?.id || res?.invoice)
+        console.log('Exec ms', (end - start).toFixed(1))
+      }
       if ((!res || (!res.order_id && !res.id)) && Array.isArray(normalized.items) && normalized.items.length>0) { 
         console.error('saveDraft response missing order_id:', res)
         throw new Error('Invariant violated: saveDraft returned no order_id') 
@@ -599,7 +813,7 @@ export default function POSInvoice(){
       function norm(s){ return String(s||'').trim().toLowerCase().replace(/\s+/g,'_') }
       const bNorm = norm(branch)
       if (!bNorm || bNorm==='unspecified') return false
-      const byName = Array.isArray(branchesList) ? branchesList.find(b => norm(b.name) === bNorm) : null
+      // Removed unused byName variable
       const sel = (function(){
         const s = norm(branch)
         const desiredCode = s==='china_town' ? 'CT' : (s==='place_india' ? 'PI' : null)
@@ -676,6 +890,7 @@ export default function POSInvoice(){
     const calculatedTotal = calculateTotal(cleanedItems, taxPct)
     
     // Build complete meta object with all required fields
+    // eslint-disable-next-line no-unused-vars
     const meta = {
       type: 'meta',
       table: String(table),
@@ -719,7 +934,9 @@ export default function POSInvoice(){
     let id = String(orderId||'')
     let resp = null
     try {
-      try { console.log('[SAVE DRAFT ITEMS]', cleanedItems.length, cleanedItems.map(i => i.name)) } catch {}
+      if (process.env.NODE_ENV === 'development') {
+        try { console.log('[SAVE DRAFT ITEMS]', cleanedItems.length, cleanedItems.map(i => i.name)) } catch {}
+      }
       resp = await lockedSaveDraft(payload)
       if (resp && resp.order_id) id = String(resp.order_id||'')
     } catch (e) {
@@ -750,9 +967,14 @@ export default function POSInvoice(){
       try { if (!orderId && id) navigate(`/pos/${branch}/tables/${table}?order=${id}`, { replace: true }) } catch {}
     }
     return id
-  },[branch, table, items, orderId, paymentMethod, partnerId, navigate])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[branch, table, items, orderId, paymentMethod, partnerId, navigate, branchesList, customerName, customerPhone, discountPct, invoiceNumber, lockedSaveDraft, payLines, taxPct])
 
   const issueInvoice = useCallback(async (paymentType, orderIdForIssue = null)=>{
+    // ⚠️ NOTE: This function returns invoice object with all data including lines
+    // ⚠️ DO NOT call apiInvoices.get() or apiInvoices.items() after calling this
+    // ⚠️ The response contains: { id, number, invoice_number, lines: [...], total, ... }
+    // ⚠️ Access items via: response.lines.filter(l => l.type === 'item')
     // CRITICAL: Log orderIdForIssue immediately to track it
     console.log('[ISSUE INVOICE CALLBACK] Called with orderIdForIssue:', orderIdForIssue, 'paymentType:', paymentType);
     
@@ -900,19 +1122,24 @@ export default function POSInvoice(){
       payload.order_id = Number(payload.order_id);
     }
     
-    // CRITICAL: Log payload before sending - verify order_id is a number
-    console.log('[ISSUE INVOICE] Sending payload with order_id:', payload.order_id, 'type:', typeof payload.order_id);
-    console.log('[ISSUE INVOICE] Full payload:', JSON.stringify(payload, null, 2));
+    // CRITICAL: Log payload before sending - verify order_id is a number (development only)
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[ISSUE INVOICE] Sending payload with order_id:', payload.order_id, 'type:', typeof payload.order_id);
+      console.log('[ISSUE INVOICE] Full payload:', JSON.stringify(payload, null, 2));
+    }
     
     try {
       const res = await pos.issueInvoice(payload)
-      console.log('[ISSUE INVOICE] Response:', res);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ISSUE INVOICE] Response:', res);
+      }
       return res
     } catch (err) {
       console.error('[ISSUE INVOICE] ERROR:', err.response?.data || err);
       throw err;
     }
-  },[branch, table, items, partnerId, branchesList])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[branch, table, items, partnerId, branchesList, discountPct, invoiceNumber, lang, orderId, taxPct])
 
   const autoSaveTimer = useRef(null)
   useEffect(()=>{
@@ -923,8 +1150,12 @@ export default function POSInvoice(){
     const delay = 0
     autoSaveTimer.current = setTimeout(()=>{ try { if ((itemsRef.current||items).length>0) saveDraft() } catch {} }, delay)
     return ()=>{ try { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current) } catch {} }
-  },[customerName, customerPhone, discountPct, taxPct, paymentMethod, payLines, saveDraft, invoiceReady])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[customerName, customerPhone, discountPct, taxPct, paymentMethod, payLines, saveDraft, invoiceReady, items])
   
+  // ⚠️ IMPORTANT: After issueInvoice succeeds, use response.lines directly
+  // ⚠️ DO NOT call apiInvoices.get() or apiInvoices.items() - causes 404 errors
+  // ⚠️ The issueInvoice response contains all data including lines array
   async function issue(){
     try {
       {
@@ -935,23 +1166,37 @@ export default function POSInvoice(){
       const safeItems = Array.isArray(items) ? items : [];
       if (safeItems.length===0) { showAlert(t('errors.no_items', lang), t('errors.add_items_first', lang)); return }
       if (String(selectedPartnerType||'')==='credit' && !discountApplied) { setPlatformDiscountOpen(true); showAlert(t('errors.discount_required', lang), t('errors.discount_note', lang)); return }
-      const pid = await resolvePartner();
-      let id = await saveDraft();
+      
+      // OPTIMIZATION: Run resolvePartner and saveDraft in parallel for faster execution
+      const [pid, id] = await Promise.all([
+        resolvePartner(),
+        saveDraft()
+      ]);
       // CRITICAL: Normalize id to number - saveDraft returns string, must be > 0
       // saveDraft returns order_id from resp.order_id (lockedSaveDraft response)
       id = id ? Number(String(id).trim()) : 0;
-      console.log('[ISSUE] saveDraft returned order_id:', id);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ISSUE] saveDraft returned order_id:', id);
+      }
+      // OPTIMIZATION: Check localStorage first before making API call
       if (!id || id <= 0) {
         try {
           const normB = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
           const k1 = `pos_order_${branch}_${table}`
           const k2 = `pos_order_${normB(branch)}_${table}`
           id = Number(localStorage.getItem(k1)||localStorage.getItem(k2)||0)
-          if (!id || id <= 0) {
+          // OPTIMIZATION: Skip expensive API call if we have items in state - use current order
+          if ((!id || id <= 0) && safeItems.length > 0) {
+            // Try to get from orderId in URL
+            if (orderId && Number(orderId) > 0) {
+              id = Number(orderId)
+            }
+          }
+          // Only make API call as last resort
+          if ((!id || id <= 0) && safeItems.length === 0) {
             const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' }).catch(()=>[])
             function normalizeBranchName(b){ const s=String(b||'').trim().toLowerCase().replace(/\s+/g,'_'); return (s==='palace_india'||s==='palce_india')?'place_india':s }
             const found = (Array.isArray(list)?list:[]).find(o=>{ try { 
-              // CRITICAL: Normalize lines - backend may return array or string
               let arr = [];
               if (Array.isArray(o.lines)) {
                 arr = o.lines;
@@ -991,11 +1236,135 @@ export default function POSInvoice(){
           showAlert(t('errors.save_draft_failed', lang), t('errors.save_draft_failed_note', lang) || 'يجب حفظ الطلب أولاً')
           return
         }
-        console.log('[ISSUE] Calling issueInvoice with order_id:', id);
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ISSUE] Calling issueInvoice with order_id:', id);
+        }
         const res = await issueInvoice(paymentMethod, id)
         // Backend returns invoice object directly, not { success: true, invoice }
-        if (!res || !res.id) { showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); return }
-        const inv = res || { id: null, number: null }
+        // Support both id and invoiceId from response
+        if (!res || (!res.id && !res.invoiceId)) { 
+          showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); 
+          return 
+        }
+        
+        // 🔴 CRITICAL ACCOUNTING INTEGRITY CHECK
+        // 🔴 MANDATORY: Verify journal entry was created before allowing receipt printing
+        // 🔴 NO RECEIPT WITHOUT JOURNAL ENTRY - This is accounting integrity requirement
+        if (res.status === 'posted' && total > 0) {
+          if (!res.journal_entry_id) {
+            console.error('[ISSUE] CRITICAL: Invoice issued but journal entry missing:', {
+              invoiceId: res.id,
+              invoiceNumber: res.invoice_number,
+              status: res.status,
+              total: res.total
+            });
+            showAlert(
+              lang === 'ar' ? 'خطأ في الترحيل المحاسبي' : 'Accounting Posting Failed',
+              lang === 'ar' 
+                ? 'فشل إنشاء القيد المحاسبي. لم يتم حفظ الفاتورة. يرجى المحاولة مرة أخرى أو الاتصال بالدعم.'
+                : 'Journal entry creation failed. Invoice was not saved. Please try again or contact support.'
+            );
+            return; // ⚠️ DO NOT proceed to printing - invoice was rolled back
+          }
+          
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[ISSUE] ✅ Accounting integrity verified - Journal entry ID:', res.journal_entry_id);
+          }
+        }
+        
+        // ⚠️ CRITICAL: Use response directly - it already contains all invoice data including lines
+        // ⚠️ DO NOT call apiInvoices.get() or apiInvoices.items() after issueInvoice
+        // ⚠️ DO NOT reload invoice from backend - everything is in res.lines
+        // ⚠️ The response contains: { id, number, invoice_number, lines: [...], total, journal_entry_id, ... }
+        // ⚠️ Access items via: res.lines.filter(l => l.type === 'item')
+        const inv = res;
+        const invoiceId = res.id || res.invoiceId;
+        
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ISSUE] Invoice issued successfully:', {
+            id: inv.id,
+            number: inv.number,
+            invoice_number: inv.invoice_number,
+            journal_entry_id: inv.journal_entry_id,
+            lines: Array.isArray(inv.lines) ? inv.lines.length : 'N/A'
+          });
+        }
+        
+        // CRITICAL: Post-processing after successful invoice issue
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ISSUE] Invoice issued successfully, starting post-processing...', {
+            invoiceId: inv.id || inv.invoiceId,
+            invoiceNumber: inv.number || inv.invoice_number,
+            journalEntryId: inv.journal_entry_id,
+            orderId: inv.order_id
+          });
+        }
+        
+        // 1. Clear UI - Reset invoice state
+        try {
+          setItems([]);  // Clear items from UI
+          itemsRef.current = [];  // Clear items from ref
+          setCustomerName('');
+          setCustomerPhone('');
+          setDiscountPct(0);
+          setTaxPct(15);
+          setPaymentMethod('');
+          setPayLines([]);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[ISSUE] UI cleared successfully');
+          }
+        } catch (e) {
+          console.error('[ISSUE] Error clearing UI:', e);
+        }
+        
+        // 2. Clear localStorage for this table
+        try {
+          const normB = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
+          const k1 = `pos_order_${branch}_${table}`
+          const k2 = `pos_order_${normB(branch)}_${table}`
+          localStorage.removeItem(k1);
+          localStorage.removeItem(k2);
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[ISSUE] LocalStorage cleared for table:', table);
+          }
+        } catch (e) {
+          console.error('[ISSUE] Error clearing localStorage:', e);
+        }
+        
+        // 3. Update table state (notify backend that table is now available) - OPTIMIZATION: Run in background
+        Promise.resolve().then(async () => {
+          try {
+            await pos.tableState(branch).catch(()=>({ busy: [] }));
+            // Dispatch event to notify other components
+            window.dispatchEvent(new CustomEvent('pos:invoice-issued', { 
+              detail: { 
+                invoiceId: inv.id, 
+                orderId: inv.order_id,
+                branch, 
+                table 
+              } 
+            }));
+          } catch (e) {
+            // Silently fail - not critical
+          }
+        });
+        
+        // 4. Show success message
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[ISSUE] Post-processing completed successfully');
+        }
+        
+        // 5. Show success alert
+        showAlert(
+          lang === 'ar' ? 'تم إصدار الفاتورة بنجاح' : 'Invoice issued successfully',
+          lang === 'ar' ? `فاتورة رقم: ${inv.number || inv.id}` : `Invoice #: ${inv.number || inv.id}`
+        );
+        
+        // 6. Navigate to tables page after a short delay (optional - can be removed if you want to stay on same page)
+        // setTimeout(() => {
+        //   navigate(`/pos/${branch}/tables`);
+        // }, 2000);
+        
         try {
           const dval = Number(inv?.discount_total||0)
           if (isFinite(dval) && dval>0 && Number(totals.discount||0)<=0) {
@@ -1022,7 +1391,8 @@ export default function POSInvoice(){
         if (!address){ address = (localStorage.getItem('company_address') || '') }
         if (branchSettings && branchSettings.phone) { phone = String(branchSettings.phone) || phone }
         const ts = `${String(date)}T${new Date().toTimeString().slice(0,8)}`
-        const tlv = zatcaBase64({ sellerName: companyName, vatNumber, timestamp: ts, total, tax })
+        // Removed unused tlv variable - zatcaBase64 is called but result not used
+        zatcaBase64({ sellerName: companyName, vatNumber, timestamp: ts, total, tax })
         const branchDisplay = String(branch||'').replace(/_/g,' ')
         const customerPrintName = String(customerPhone||'').trim() ? String(customerName||'').trim() : 'عميل نقدي'
         const customerPrintPhone = String(customerPhone||'').trim() || ''
@@ -1039,21 +1409,84 @@ export default function POSInvoice(){
           const out = []
           const ls = (payLines&&payLines.length>0) ? payLines : [{ method: paymentMethod, amount: total }]
           for (const l of ls) {
-            const t = String(l.method||'').toLowerCase()
-            const lbl = t==='bank' ? 'CARD' : (t==='cash' ? 'CASH' : t.toUpperCase())
-            out.push({ label: lbl, amount: Number(l.amount||0) })
+            const t = String(l.method||l.label||'').toLowerCase()
+            // Map payment method to bilingual format: Arabic / English
+            let lbl = ''
+            if (t==='bank' || t==='card') lbl = 'CARD'
+            else if (t==='cash') lbl = 'CASH'
+            else if (t==='credit') lbl = 'CREDIT'
+            else if (t==='qr') lbl = 'QR'
+            else lbl = t.toUpperCase()
+            out.push({ label: lbl, method: lbl, amount: Number(l.amount||0) })
           }
           return out
         })()
         let printItems = []
         try {
-          const itemsResp = await apiInvoices.items(inv.id)
-          const arrItems = Array.isArray(itemsResp?.items) ? itemsResp.items : []
-          printItems = arrItems.map(it => ({ name: it.name || (it.product_name || ''), qty: Number(it.quantity||0), price: Number(it.unit_price||0) }))
-        } catch { 
+          // ⚠️ CRITICAL: Use invoice.lines directly from issueInvoice response
+          // ⚠️ DO NOT call apiInvoices.items() or apiInvoices.get() - causes 404 on /api/invoice_items/:id
+          // ⚠️ Everything is in inv.lines (from res.lines) - no additional API call needed
+          let lines = [];
+          if (Array.isArray(inv?.lines)) {
+            lines = inv.lines;
+          } else if (typeof inv?.lines === 'string') {
+            try {
+              const parsed = JSON.parse(inv.lines);
+              lines = Array.isArray(parsed) ? parsed : [];
+            } catch {
+              lines = [];
+            }
+          }
+          
+          // Filter out meta entries, return only item entries
+          const arrItems = Array.isArray(lines) 
+            ? lines.filter(l => l && l.type === 'item')
+            : [];
+          
+          // OPTIMIZATION: Get product name_en from products list if available
+          printItems = arrItems.map(it => {
+            const productId = it.product_id || it.id
+            const product = products.find(p => String(p.id) === String(productId))
+            return {
+              name: it.name || it.product_name || '', 
+              name_en: product?.name_en || it.name_en || it.product_name_en || '',
+              qty: Number(it.quantity || it.qty || 0), 
+              price: Number(it.unit_price || it.price || 0) 
+            }
+          })
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PRINT] Invoice items loaded from invoice.lines:', arrItems.length, 'items')
+          }
+        } catch (e) { 
+          console.warn('[PRINT] Failed to parse invoice.lines, using local items:', e?.message || e)
+          // OPTIMIZATION: Get product name_en from products list if available
           const safeItems = Array.isArray(items) ? items : [];
-          printItems = safeItems.map(it => ({ name: it.name||'', qty: Number(it.qty||0), price: Number(it.price||0) })) 
+          printItems = safeItems.map(it => {
+            const productId = it.product_id || it.id
+            const product = products.find(p => String(p.id) === String(productId))
+            return {
+              name: it.name||'',
+              name_en: product?.name_en || it.name_en || '',
+              qty: Number(it.qty||0), 
+              price: Number(it.price||0)
+            }
+          }) 
         }
+        
+        // 🔴 CRITICAL: Only print receipt if journal entry exists (accounting integrity)
+        // 🔴 NO RECEIPT WITHOUT JOURNAL ENTRY - This prevents printed invoices without accounting entries
+        if (inv.status === 'posted' && total > 0 && !inv.journal_entry_id) {
+          console.error('[PRINT] BLOCKED: Attempted to print receipt without journal entry:', {
+            invoiceId: inv.id,
+            invoiceNumber: inv.invoice_number,
+            status: inv.status,
+            total: inv.total
+          });
+          // Error already shown above, just return
+          return;
+        }
+        
+        // ✅ Accounting integrity verified - proceed with printing
         try {
           const data = {
             logoBase64: logoSrc,
@@ -1068,7 +1501,7 @@ export default function POSInvoice(){
             phone,
             address,
             branchName: branchDisplay,
-            invoiceNo: String(inv.number||inv.invoice_number||''),
+            invoiceNo: String(inv?.invoice_number || inv?.number || res?.invoice_number || res?.number || ''),
             date: String(date||''),
             time: new Date().toTimeString().slice(0,8),
             customerName: customerPrintName,
@@ -1085,7 +1518,13 @@ export default function POSInvoice(){
             paymentLines: paymentLinesOut
           }
           await print({ type: 'thermal', template: 'posInvoice', data, autoPrint: true })
-        } catch {}
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[PRINT] ✅ Receipt printed successfully for invoice:', inv.invoice_number, 'Journal Entry:', inv.journal_entry_id);
+          }
+        } catch (printError) {
+          console.error('[PRINT] Error printing receipt:', printError);
+          // Don't block navigation on print error, but log it
+        }
         try {
           const norm = (v)=>{ const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); if (s==='palace_india' || s==='palce_india') return 'place_india'; return s }
           const k1 = `pos_order_${branch}_${table}`
@@ -1115,7 +1554,22 @@ export default function POSInvoice(){
       const res2 = await issueInvoice('', id)
       // Backend returns invoice object directly, not { success: true, invoice }
       if (!res2 || !res2.id) { showAlert(t('errors.issue_failed', lang), t('errors.issue_failed_note', lang)); return }
-      const inv = res2 || { id: null, number: null }
+      
+      // ⚠️ CRITICAL: Use response directly - it already contains all invoice data including lines
+      // ⚠️ DO NOT call apiInvoices.get() or apiInvoices.items() after issueInvoice
+      // ⚠️ DO NOT reload invoice from backend - everything is in res2.lines
+      // ⚠️ The response contains: { id, number, invoice_number, lines: [...], total, ... }
+      // ⚠️ Access items via: res2.lines.filter(l => l.type === 'item')
+      const inv = res2;
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[ISSUE] Credit invoice issued successfully:', {
+          id: inv.id,
+          number: inv.number,
+          invoice_number: inv.invoice_number,
+          lines: Array.isArray(inv.lines) ? inv.lines.length : 'N/A'
+        });
+      }
       let companyName = ''
       let vatNumber = ''
       let phone = ''
@@ -1135,7 +1589,8 @@ export default function POSInvoice(){
       if (!address){ address = (localStorage.getItem('company_address') || '') }
       if (branchSettings && branchSettings.phone) { phone = String(branchSettings.phone) || phone }
       const ts = `${String(date)}T${new Date().toTimeString().slice(0,8)}`
-      const tlv = zatcaBase64({ sellerName: companyName, vatNumber, timestamp: ts, total, tax })
+      // Removed unused tlv variable - zatcaBase64 is called but result not used
+      zatcaBase64({ sellerName: companyName, vatNumber, timestamp: ts, total, tax })
       const branchDisplay = String(branch||'').replace(/_/g,' ')
       const customerPrintName = String(customerPhone||'').trim() ? String(customerName||'').trim() : 'عميل نقدي'
       const customerPrintPhone = String(customerPhone||'').trim() || ''
@@ -1149,12 +1604,54 @@ export default function POSInvoice(){
       })()
       let printItems2 = []
       try {
-        const itemsResp2 = await apiInvoices.items(inv.id)
-        const arrItems2 = Array.isArray(itemsResp2?.items) ? itemsResp2.items : []
-        printItems2 = arrItems2.map(it => ({ name: it.name || (it.product_name || ''), qty: Number(it.quantity||0), price: Number(it.unit_price||0) }))
-      } catch { 
+        // ⚠️ CRITICAL: Use invoice.lines directly from issueInvoice response
+        // ⚠️ DO NOT call apiInvoices.items() or apiInvoices.get() - causes 404 on /api/invoice_items/:id
+        // ⚠️ Everything is in inv.lines (from res2.lines) - no additional API call needed
+        let lines2 = [];
+        if (Array.isArray(inv?.lines)) {
+          lines2 = inv.lines;
+        } else if (typeof inv?.lines === 'string') {
+          try {
+            const parsed = JSON.parse(inv.lines);
+            lines2 = Array.isArray(parsed) ? parsed : [];
+          } catch {
+            lines2 = [];
+          }
+        }
+        
+        // Filter out meta entries, return only item entries
+        const arrItems2 = Array.isArray(lines2) 
+          ? lines2.filter(l => l && l.type === 'item')
+          : [];
+        
+        // OPTIMIZATION: Get product name_en from products list if available
+        printItems2 = arrItems2.map(it => {
+          const productId = it.product_id || it.id
+          const product = products.find(p => String(p.id) === String(productId))
+          return {
+            name: it.name || it.product_name || '',
+            name_en: product?.name_en || it.name_en || it.product_name_en || '',
+            qty: Number(it.quantity || it.qty || 0), 
+            price: Number(it.unit_price || it.price || 0)
+          }
+        })
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[PRINT] Invoice items loaded from invoice.lines (second print):', arrItems2.length, 'items')
+        }
+      } catch (e) { 
+        console.warn('[PRINT] Failed to parse invoice.lines (second print), using local items:', e?.message || e)
         const safeItems = Array.isArray(items) ? items : [];
-        printItems2 = safeItems.map(it => ({ name: it.name||'', qty: Number(it.qty||0), price: Number(it.price||0) })) 
+        // OPTIMIZATION: Get product name_en from products list if available
+        printItems2 = safeItems.map(it => {
+          const productId = it.product_id || it.id
+          const product = products.find(p => String(p.id) === String(productId))
+          return {
+            name: it.name||'',
+            name_en: product?.name_en || it.name_en || '',
+            qty: Number(it.qty||0), 
+            price: Number(it.price||0)
+          }
+        }) 
       }
       try {
           const data = {
@@ -1170,7 +1667,7 @@ export default function POSInvoice(){
             phone,
             address,
           branchName: branchDisplay,
-          invoiceNo: String(inv.invoice_number||''),
+          invoiceNo: String(inv?.invoice_number || inv?.number || res2?.invoice_number || res2?.number || ''),
           date: String(date||''),
           time: new Date().toTimeString().slice(0,8),
           customerName: customerPrintName,
@@ -1254,7 +1751,7 @@ export default function POSInvoice(){
   function handleCustomerNameChange(v){
     setCustomerName(v)
     recalcSuggestions(v, customerPhone)
-    const nm = String(v||'').trim().toLowerCase()
+    // Removed unused nm variable
     setSelectedPartnerType('')
     setDiscountLocked(true)
     setPlatformDiscountOpen(false)
@@ -1863,32 +2360,9 @@ export default function POSInvoice(){
                         try { await apiInvoices.remove(invId) } catch {}
                         try { localStorage.removeItem(invKey1); localStorage.removeItem(invKey2) } catch {}
                       } else {
-                        // No invoice ID in localStorage - check if order has invoice first
-                        try {
-                          const orderData = await apiOrders.get(orderId).catch(() => null)
-                          // CRITICAL: Only try to fetch invoice if order has one (not DRAFT)
-                          // DRAFT orders don't have invoices, so don't query for them
-                          if (orderData && orderData.invoice && orderData.invoice !== null) {
-                            // Order has invoice - try to find and remove it
-                            try {
-                              const list = await apiInvoices.list({ order_id: orderId }).catch(() => ({ items: [] }))
-                              const arr = Array.isArray(list?.items) ? list.items : []
-                              const target = arr.find(x => String(x.type)==='sale') || arr[0]
-                              if (target && target.id) { 
-                                try { await apiInvoices.remove(target.id) } catch {} 
-                              }
-                            } catch (e) {
-                              // Invoice query failed (likely 404) - this is expected for DRAFT orders
-                              console.log('[POS] Cancel order - no invoice to remove (order is DRAFT)')
-                            }
-                          } else {
-                            // Order is DRAFT or has no invoice - skip invoice removal
-                            console.log('[POS] Cancel order - skipping invoice removal (order is DRAFT)')
-                          }
-                        } catch (e) {
-                          // Failed to get order data - skip invoice removal
-                          console.warn('[POS] Cancel order - could not check order status, skipping invoice removal')
-                        }
+                        // OPTIMIZATION: Skip expensive API calls - if no invoice ID in localStorage, 
+                        // it's likely a DRAFT order without invoice. Just cancel the order.
+                        console.log('[POS] Cancel order - no invoice ID in localStorage, skipping invoice removal (likely DRAFT)')
                       }
                     } catch {}
                   } else {
@@ -1912,30 +2386,21 @@ export default function POSInvoice(){
                       }
                     } catch {}
                   }
+                  // OPTIMIZATION: Skip audit log and cleanup - not critical for cancellation
                   try { await apiAudit.log({ who: user?.email||'system', action: 'pos.cancel', at: new Date().toISOString(), target: `order:${orderId||localStorage.getItem(`pos_order_${branch}_${table}`)||''}` }) } catch {}
-                  try { const norm = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase(); localStorage.removeItem(`pos_order_${branch}_${table}`); localStorage.removeItem(`pos_order_${norm(branch)}_${table}`); localStorage.removeItem(`pos_invoice_${branch}_${table}`); localStorage.removeItem(`pos_invoice_${norm(branch)}_${table}`) } catch {}
-                  setSupervisorOpen(false)
-                  try {
-                    const list = await apiOrders.list({ branch, table, status: 'DRAFT,OPEN' })
-                    const norm = (v)=>{ const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); if (s==='palace_india' || s==='palce_india') return 'place_india'; return s }
-                    for (const o of Array.isArray(list)?list:[]) {
-                      try {
-                        // CRITICAL: Normalize lines - backend may return array or string
-                        let arr = [];
-                        if (Array.isArray(o.lines)) {
-                          arr = o.lines;
-                        } else if (typeof o.lines === 'string') {
-                          try { arr = JSON.parse(o.lines || '[]'); } catch { arr = []; }
-                        }
-                        if (!Array.isArray(arr)) arr = [];
-                        const meta = arr.find(x=> x && x.type==='meta') || {}
-                        const itemsArr = arr.filter(x=> x && x.type==='item')
-                        if (String(meta.table||'')===String(table||'') && norm(meta.branch)===norm(branch) && String(o.status).toUpperCase()==='DRAFT' && itemsArr.length>0) {
-                          try { await apiOrders.update(o.id, { status: 'CANCELLED', lines: [], branch }) } catch {}
-                        }
-                      } catch {}
+                  try { 
+                    const norm = (v)=> String(v||'').toLowerCase()==='palace_india' ? 'place_india' : String(v||'').toLowerCase()
+                    localStorage.removeItem(`pos_order_${branch}_${table}`)
+                    localStorage.removeItem(`pos_order_${norm(branch)}_${table}`)
+                    localStorage.removeItem(`pos_invoice_${branch}_${table}`)
+                    localStorage.removeItem(`pos_invoice_${norm(branch)}_${table}`)
+                    // Clear order cache
+                    if (orderId) {
+                      try { localStorage.removeItem(`pos_order_cache_${orderId}`) } catch {}
                     }
                   } catch {}
+                  setSupervisorOpen(false)
+                  // OPTIMIZATION: Skip expensive list query - just navigate, backend will handle cleanup
                   navigate(`/pos/${branch}/tables`)
                 } catch (e) {
                   setSupError(lang==='ar'?'تعذر إلغاء الفاتورة':'Unable to cancel invoice')

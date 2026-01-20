@@ -109,6 +109,146 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Bootstrap endpoint - load all initial data in one request
+app.get("/api/bootstrap", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    // OPTIMIZATION: Load all data in parallel for faster response
+    const [
+      settings,
+      branches,
+      products,
+      partners,
+      permissions
+    ] = await Promise.all([
+      // Load company settings
+      pool.query("SELECT key, value FROM settings WHERE key LIKE 'settings_%'").then(r => {
+        const result = {};
+        (r.rows || []).forEach(row => {
+          try {
+            result[row.key] = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+          } catch {
+            result[row.key] = row.value;
+          }
+        });
+        return result;
+      }).catch(() => ({})),
+      
+      // Load branches
+      pool.query("SELECT id, name, code, address, phone FROM branches ORDER BY name").then(r => r.rows || []).catch(() => []),
+      
+      // Load products (active only, limit to 1000 for performance)
+      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
+      
+      // Load partners (customers only, limit to 500)
+      pool.query("SELECT id, name, phone, type, customer_type FROM partners WHERE type LIKE '%عميل%' OR type LIKE '%customer%' ORDER BY name LIMIT 500").then(r => r.rows || []).catch(() => []),
+      
+      // Load user permissions
+      pool.query(`
+        SELECT screen_code, branch_code, action_code, allowed
+        FROM user_permissions
+        WHERE user_id = $1
+      `, [userId]).then(r => {
+        const result = {};
+        (r.rows || []).forEach(row => {
+          const key = `${row.screen_code}_${row.action_code}`;
+          result[key] = row.allowed;
+        });
+        return result;
+      }).catch(() => ({}))
+    ]);
+
+    res.json({
+      settings,
+      branches,
+      products,
+      partners,
+      permissions,
+      timestamp: Date.now()
+    });
+  } catch (e) {
+    console.error('[BOOTSTRAP] Error:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Bootstrap endpoint - load all initial data in one request
+app.get("/api/bootstrap", authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+
+    // OPTIMIZATION: Load all data in parallel for faster response
+    const [
+      settings,
+      branches,
+      products,
+      partners,
+      permissions
+    ] = await Promise.all([
+      // Load company settings
+      pool.query("SELECT key, value FROM settings WHERE key LIKE 'settings_%'").then(r => {
+        const result = {};
+        (r.rows || []).forEach(row => {
+          try {
+            result[row.key] = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
+          } catch {
+            result[row.key] = row.value;
+          }
+        });
+        return result;
+      }).catch(() => ({})),
+      
+      // Load branches
+      pool.query("SELECT id, name, code, address, phone FROM branches ORDER BY name").then(r => r.rows || []).catch(() => []),
+      
+      // Load products (active only, limit to 1000 for performance)
+      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
+      
+      // Load partners (customers only, limit to 500)
+      pool.query("SELECT id, name, phone, type, customer_type FROM partners WHERE type LIKE '%عميل%' OR type LIKE '%customer%' ORDER BY name LIMIT 500").then(r => r.rows || []).catch(() => []),
+      
+      // Load user permissions
+      pool.query(`
+        SELECT s.code as screen_code, a.code as action_code, COALESCE(up.allowed, true) as allowed
+        FROM users u
+        LEFT JOIN role_permissions rp ON rp.role_id = u.role_id
+        LEFT JOIN screens s ON s.id = rp.screen_id
+        LEFT JOIN actions a ON a.id = rp.action_id
+        LEFT JOIN user_permissions up ON up.user_id = u.id AND up.screen_code = s.code AND up.action_code = a.code
+        WHERE u.id = $1
+      `, [userId]).then(r => {
+        const result = {};
+        (r.rows || []).forEach(row => {
+          if (row.screen_code && row.action_code) {
+            const key = `${row.screen_code}_${row.action_code}`;
+            result[key] = row.allowed;
+          }
+        });
+        return result;
+      }).catch(() => ({}))
+    ]);
+
+    res.json({
+      settings,
+      branches,
+      products,
+      partners,
+      permissions,
+      timestamp: Date.now()
+    });
+  } catch (e) {
+    console.error('[BOOTSTRAP] Error:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
 // 2.5️⃣ CRITICAL: SPA Fallback for Frontend Routes
 // This MUST come before API routes to prevent conflicts
 // Frontend routes like /employees/cards, /clients/create, etc. should serve index.html
