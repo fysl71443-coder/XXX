@@ -361,3 +361,17 @@ export const periods = {
   close: (period, admin_password) => request(`/accounting-periods/${encodeURIComponent(period)}/close`, { method: 'POST', body: JSON.stringify({ admin_password }) }),
   summary: (period) => request(`/accounting-periods/${encodeURIComponent(period)}/summary`)
 }
+
+// Receipts API - الإيصالات المطبوعة
+export const receipts = {
+  list: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return safeList(() => request(`/receipts${query ? `?${query}` : ''}`))
+  },
+  get: (id) => request(`/receipts/${id}`),
+  markPrinted: (id) => request(`/receipts/${id}/mark-printed`, { method: 'POST' }),
+  stats: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request(`/receipts/stats${query ? `?${query}` : ''}`)
+  }
+}

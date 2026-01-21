@@ -7,6 +7,7 @@ import { t, getLang } from '../utils/i18n'
 import { useOrder } from '../hooks/useOrder'
 import { useInvoice } from '../hooks/useInvoice'
 import { usePayments } from '../hooks/usePayments'
+import { PrintedReceiptsButton } from '../components/PrintedReceiptsModal'
 export default function POSInvoice(){
   const navigate = useNavigate()
   const { branch, table } = useParams()
@@ -1579,6 +1580,14 @@ export default function POSInvoice(){
             paymentLines: paymentLinesOut
           }
           await print({ type: 'thermal', template: 'posInvoice', data, autoPrint: true })
+          // Mark order as printed
+          try {
+            const token = localStorage.getItem('token')
+            await fetch(`/api/receipts/${id}/mark-printed`, {
+              method: 'POST',
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+          } catch {}
           if (process.env.NODE_ENV === 'development') {
             console.log('[PRINT] ✅ Receipt printed successfully for invoice:', inv.invoice_number, 'Journal Entry:', inv.journal_entry_id);
           }
@@ -1982,6 +1991,7 @@ export default function POSInvoice(){
         <div className="col-span-12 flex items-center justify-between">
           <div className="text-xl font-bold"><span className="text-gray-700">Table #{table}</span> — <span className="text-primary-700">{branch?.replace(/_/g,' ')}</span></div>
           <div className="flex items-center gap-2">
+            <PrintedReceiptsButton branchId={branch} className="px-3 py-2 text-sm" />
             <button data-testid="back-to-tables" className="px-3 py-2 border rounded bg-white hover:bg-gray-50" onClick={()=> backToTables()}>{t('labels.tables', lang)}</button>
             <button className="px-3 py-2 border rounded bg-white hover:bg-gray-50" onClick={()=> backNavigate()}>{t('labels.back', lang)}</button>
             <button className="px-3 py-2 border rounded bg-white hover:bg-gray-50" onClick={()=> backToHome()}>{t('labels.home', lang)}</button>

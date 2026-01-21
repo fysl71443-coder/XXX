@@ -11,7 +11,7 @@ import { useAuth } from '../context/AuthContext';
 import { 
   FaUpload, FaFileExcel, FaFileCsv, FaCheckCircle, 
   FaTimesCircle, FaHome, FaArrowRight, FaDownload,
-  FaExclamationTriangle, FaEdit, FaSave
+  FaExclamationTriangle, FaEdit, FaSave, FaSync
 } from 'react-icons/fa';
 import { useNavigate } from 'react-router-dom';
 import * as XLSX from 'xlsx';
