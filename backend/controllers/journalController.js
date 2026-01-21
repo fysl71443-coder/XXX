@@ -11,7 +11,21 @@ auditService.ensureAuditTable().catch(e => console.warn('[JOURNAL] Could not ens
  */
 export async function list(req, res) {
   try {
-    console.log('[JOURNAL] GET /api/journal - Starting request');
+    console.log('[JOURNAL] GET /api/journal - Starting request', req.query);
+    
+    // First check if table exists
+    const tableCheck = await pool.query(`
+      SELECT EXISTS (
+        SELECT FROM information_schema.tables 
+        WHERE table_name = 'journal_entries'
+      ) as exists
+    `);
+    
+    if (!tableCheck.rows[0]?.exists) {
+      console.log('[JOURNAL] Table journal_entries does not exist!');
+      return res.json({ items: [], total: 0 });
+    }
+    
     const {
       status, page = 1, pageSize = 20, from, to, type, source,
       reference_prefix, search, account_id, account_ids, accounts_scope,
@@ -73,7 +87,8 @@ export async function list(req, res) {
       params.push(effectiveTo);
     }
     if (search) {
-      query += ` AND (je.description ILIKE $${paramIndex++} OR je.entry_number::text LIKE $${paramIndex++})`;
+      query += ` AND (je.description ILIKE $${paramIndex} OR je.entry_number::text LIKE $${paramIndex + 1})`;
+      paramIndex += 2;
       params.push(`%${search}%`, `%${search}%`);
     }
     if (reference_prefix) {
@@ -97,7 +112,8 @@ export async function list(req, res) {
         'Q4': { from: `${year}-10-01`, to: `${year}-12-31` }
       };
       if (quarterMap[quarter]) {
-        query += ` AND je.date >= $${paramIndex++} AND je.date <= $${paramIndex++}`;
+        query += ` AND je.date >= $${paramIndex} AND je.date <= $${paramIndex + 1}`;
+        paramIndex += 2;
         params.push(quarterMap[quarter].from, quarterMap[quarter].to);
       }
     }
@@ -198,8 +214,10 @@ export async function list(req, res) {
     console.log('[JOURNAL] GET /api/journal - Returning', items.length, 'entries');
     res.json({ items, total: items.length });
   } catch (e) {
-    console.error('[JOURNAL] Error listing entries:', e?.message, e?.stack);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+    console.error('[JOURNAL] Error listing entries:', e?.message);
+    console.error('[JOURNAL] Error stack:', e?.stack);
+    console.error('[JOURNAL] Error code:', e?.code);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown", code: e?.code });
   }
 }
 
