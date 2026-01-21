@@ -733,9 +733,10 @@ export async function issueInvoice(req, res) {
     // Test 3: stringified JSON WITH cast PASSED
     // But Test 2 is simpler, so use it
     // PostgreSQL will automatically convert string to JSONB based on column type
+    // CRITICAL: Set type = 'sale' for POS invoices so they appear in sales screen
     const { rows } = await client.query(
-      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id, number, status, total, branch',
-      [number, date, customer_id, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch]
+      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch, type',
+      [number, date, customer_id, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, 'sale']
     );
     
     console.log('[ISSUE DEBUG] Invoice inserted successfully', { invoiceId: rows[0]?.id, linesCount: linesArray.length });
