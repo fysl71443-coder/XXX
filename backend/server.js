@@ -31,6 +31,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // ============================================
+// TRUST PROXY: Required for Render/Heroku/Cloud hosting
+// ============================================
+// Enable trust proxy for rate limiting behind reverse proxy
+app.set('trust proxy', 1);
+
+// ============================================
 // CRITICAL: CORS MUST BE FIRST (Before ANY routes)
 // ============================================
 // CORS middleware must be registered BEFORE any routes to handle preflight OPTIONS requests
