@@ -85,9 +85,12 @@ export default function POSInvoice(){
   const setItems = orderHook.setItems;
   const itemsRef = orderHook.itemsRef;
   const loadingOrder = orderHook.loadingOrder;
+  const setLoadingOrder = orderHook.setLoadingOrder;
   const hydrating = orderHook.hydrating;
+  const setHydrating = orderHook.setHydrating;
   const tableBusy = orderHook.tableBusy;
-  const hydrateOrder = orderHook.hydrateOrder; // Use hook's hydrateOrder
+  const setTableBusy = orderHook.setTableBusy;
+  // Note: hydrateOrder is defined locally below to handle custom logic
   
   const invoiceNumber = invoiceHook.invoiceNumber;
   const setInvoiceNumber = invoiceHook.setInvoiceNumber;

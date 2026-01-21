@@ -1,6 +1,7 @@
 import pdfMake from 'pdfmake/build/pdfmake'
 import pdfFonts from 'pdfmake/build/vfs_fonts'
 import { initPdfFonts } from './font-loader'
+import { createPDF, validatePdfDefinition } from '../../utils/pdfUtils'
 const cairoBase64 = ""
 
 // Determine API base URL - same logic as client.js
@@ -139,4 +140,3 @@ export async function autoPrintVatPDF({ from, to, lang='ar' }){
   { const errs=validatePdfDefinition(doc); if(errs.length){ console.group('🚨 PDF VALIDATION FAILED'); errs.forEach(e=>console.error(e)); console.groupEnd(); alert('فشل الطباعة — راجع الكونسول لمعرفة الأخطاء'); return } }
   createPDF(doc).print()
 }
-import { createPDF, validatePdfDefinition } from '../../utils/pdfUtils'

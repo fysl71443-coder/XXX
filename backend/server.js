@@ -6,12 +6,15 @@ import bcrypt from "bcrypt";
 import cors from "cors";
 import dotenv from "dotenv";
 import pg from "pg";
+import compression from "compression";
+import rateLimit from "express-rate-limit";
 import { createAdmin } from "./createAdmin.js";
 import { pool } from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { authorize } from "./middleware/authorize.js";
 import { checkAccountingPeriod } from "./middleware/checkAccountingPeriod.js";
 import { isAdminUser } from "./utils/auth.js";
+import { cache } from "./utils/cache.js";
 import routes from "./routes/index.js";
 
 // CRITICAL: Register JSONB type parser for pg library
@@ -31,16 +34,21 @@ const app = express();
 // CRITICAL: CORS MUST BE FIRST (Before ANY routes)
 // ============================================
 // CORS middleware must be registered BEFORE any routes to handle preflight OPTIONS requests
-// This allows frontend on different ports (3000, 4000, 5000) to access the API
-app.use(cors({
-  origin: [
+// In production, set CORS_ORIGINS env variable to your domain(s)
+// Example: CORS_ORIGINS=https://your-domain.com,https://www.your-domain.com
+const corsOrigins = process.env.CORS_ORIGINS 
+  ? process.env.CORS_ORIGINS.split(',').map(o => o.trim())
+  : [
     'http://localhost:3000',
     'http://localhost:4000', 
     'http://localhost:5000',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:4000',
     'http://127.0.0.1:5000'
-  ],
+  ];
+
+app.use(cors({
+  origin: corsOrigins,
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Permissions'],
@@ -50,6 +58,51 @@ app.use(cors({
 
 // Explicitly handle OPTIONS requests for all routes (CORS preflight)
 app.options('*', cors());
+
+// ============================================
+// PERFORMANCE: Gzip Compression
+// ============================================
+// Compress all responses for better performance
+app.use(compression({
+  level: 6, // Balanced compression level
+  threshold: 1024, // Only compress responses larger than 1KB
+  filter: (req, res) => {
+    // Don't compress if client doesn't accept it
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  }
+}));
+
+// ============================================
+// SECURITY: Rate Limiting
+// ============================================
+// General API rate limiter - 100 requests per minute
+const apiLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute per IP
+  message: { error: 'too_many_requests', message: 'Too many requests, please try again later.', retry_after: 60 },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => {
+    // Skip rate limiting for static files
+    return req.path.includes('/static/') || req.path.endsWith('.js') || req.path.endsWith('.css');
+  }
+});
+
+// Strict rate limiter for login - 5 attempts per 15 minutes
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // 5 login attempts per 15 minutes
+  message: { error: 'too_many_login_attempts', message: 'Too many login attempts, please try again later.', retry_after: 900 },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+// Apply rate limiters
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', loginLimiter);
 const port = Number(process.env.PORT || 4000); // Default 4000, but can be overridden (e.g., 5000 for dev)
 
 const buildPath = path.join(__dirname, "frontend", "build");
@@ -124,14 +177,43 @@ app.get('/robots.txt', (req, res) => {
   });
 });
 
-// Health check endpoint for development
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+// ============================================
+// Health Check Endpoint (Production Ready)
+// ============================================
+app.get('/api/health', async (req, res) => {
+  const startTime = Date.now();
+  let dbStatus = 'unknown';
+  let dbLatency = null;
+  
+  try {
+    const dbStart = Date.now();
+    await pool.query('SELECT 1');
+    dbLatency = Date.now() - dbStart;
+    dbStatus = 'connected';
+  } catch (e) {
+    dbStatus = 'disconnected';
+    console.error('[HEALTH] Database check failed:', e.message);
+  }
+  
+  const health = {
+    status: dbStatus === 'connected' ? 'healthy' : 'degraded',
     env: process.env.NODE_ENV || 'development',
     port: port,
-    timestamp: new Date().toISOString()
-  });
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: {
+      used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+      unit: 'MB'
+    },
+    database: {
+      status: dbStatus,
+      latency: dbLatency !== null ? `${dbLatency}ms` : null
+    },
+    responseTime: `${Date.now() - startTime}ms`
+  };
+  
+  res.status(dbStatus === 'connected' ? 200 : 503).json(health);
 });
 
 // ============================================
@@ -150,12 +232,24 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use('/api', routes);
 
 // Bootstrap endpoint - load all initial data in one request
+// PERFORMANCE: Results are cached per user for 2 minutes
 app.get("/api/bootstrap", authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
       return res.status(401).json({ error: "unauthorized" });
     }
+
+    // Check user-specific cache first
+    const cacheKey = `bootstrap_${userId}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log(`[BOOTSTRAP] Cache hit for user ${userId}`);
+      return res.json({ ...cached, cached: true });
+    }
+
+    console.log(`[BOOTSTRAP] Cache miss for user ${userId}, loading from DB...`);
+    const startTime = Date.now();
 
     // OPTIMIZATION: Load all data in parallel for faster response
     const [
@@ -165,8 +259,13 @@ app.get("/api/bootstrap", authenticateToken, async (req, res) => {
       partners,
       permissions
     ] = await Promise.all([
-      // Load company settings
-      pool.query("SELECT key, value FROM settings WHERE key LIKE 'settings_%'").then(r => {
+      // Load company settings (with shared cache)
+      (async () => {
+        const settingsCacheKey = 'settings_all';
+        const cachedSettings = cache.get(settingsCacheKey);
+        if (cachedSettings) return cachedSettings;
+        
+        const r = await pool.query("SELECT key, value FROM settings WHERE key LIKE 'settings_%'");
         const result = {};
         (r.rows || []).forEach(row => {
           try {
@@ -175,19 +274,47 @@ app.get("/api/bootstrap", authenticateToken, async (req, res) => {
             result[row.key] = row.value;
           }
         });
+        cache.set(settingsCacheKey, result, 5 * 60 * 1000); // Cache 5 minutes
         return result;
-      }).catch(() => ({})),
+      })().catch(() => ({})),
       
-      // Load branches
-      pool.query("SELECT id, name, code, address, phone FROM branches ORDER BY name").then(r => r.rows || []).catch(() => []),
+      // Load branches (with shared cache)
+      (async () => {
+        const branchesCacheKey = 'branches_all';
+        const cachedBranches = cache.get(branchesCacheKey);
+        if (cachedBranches) return cachedBranches;
+        
+        const r = await pool.query("SELECT id, name, code, address, phone FROM branches ORDER BY name");
+        const result = r.rows || [];
+        cache.set(branchesCacheKey, result, 10 * 60 * 1000); // Cache 10 minutes
+        return result;
+      })().catch(() => []),
       
-      // Load products (active only, limit to 1000 for performance)
-      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, COALESCE(stock_qty, 0) as stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
+      // Load products (active only, limit to 1000 for performance, with shared cache)
+      (async () => {
+        const productsCacheKey = 'products_active';
+        const cachedProducts = cache.get(productsCacheKey);
+        if (cachedProducts) return cachedProducts;
+        
+        const r = await pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, COALESCE(stock_qty, 0) as stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000");
+        const result = r.rows || [];
+        cache.set(productsCacheKey, result, 2 * 60 * 1000); // Cache 2 minutes (products change more often)
+        return result;
+      })().catch(() => []),
       
-      // Load partners (customers only, limit to 500)
-      pool.query("SELECT id, name, phone, type, customer_type FROM partners WHERE type LIKE '%عميل%' OR type LIKE '%customer%' ORDER BY name LIMIT 500").then(r => r.rows || []).catch(() => []),
+      // Load partners (customers only, limit to 500, with shared cache)
+      (async () => {
+        const partnersCacheKey = 'partners_customers';
+        const cachedPartners = cache.get(partnersCacheKey);
+        if (cachedPartners) return cachedPartners;
+        
+        const r = await pool.query("SELECT id, name, phone, type, customer_type FROM partners WHERE type LIKE '%عميل%' OR type LIKE '%customer%' ORDER BY name LIMIT 500");
+        const result = r.rows || [];
+        cache.set(partnersCacheKey, result, 5 * 60 * 1000); // Cache 5 minutes
+        return result;
+      })().catch(() => []),
       
-      // Load user permissions
+      // Load user permissions (user-specific, no shared cache)
       pool.query(`
         SELECT screen_code, branch_code, action_code, allowed
         FROM user_permissions
@@ -202,87 +329,21 @@ app.get("/api/bootstrap", authenticateToken, async (req, res) => {
       }).catch(() => ({}))
     ]);
 
-    res.json({
+    const result = {
       settings,
       branches,
       products,
       partners,
       permissions,
-      timestamp: Date.now()
-    });
-  } catch (e) {
-    console.error('[BOOTSTRAP] Error:', e);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+      timestamp: Date.now(),
+      loadTime: Date.now() - startTime
+    };
 
-// Bootstrap endpoint - load all initial data in one request
-app.get("/api/bootstrap", authenticateToken, async (req, res) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: "unauthorized" });
-    }
-
-    // OPTIMIZATION: Load all data in parallel for faster response
-    const [
-      settings,
-      branches,
-      products,
-      partners,
-      permissions
-    ] = await Promise.all([
-      // Load company settings
-      pool.query("SELECT key, value FROM settings WHERE key LIKE 'settings_%'").then(r => {
-        const result = {};
-        (r.rows || []).forEach(row => {
-          try {
-            result[row.key] = typeof row.value === 'string' ? JSON.parse(row.value) : row.value;
-          } catch {
-            result[row.key] = row.value;
-          }
-        });
-        return result;
-      }).catch(() => ({})),
-      
-      // Load branches
-      pool.query("SELECT id, name, code, address, phone FROM branches ORDER BY name").then(r => r.rows || []).catch(() => []),
-      
-      // Load products (active only, limit to 1000 for performance)
-      pool.query("SELECT id, name, name_en, sku, barcode, category, unit, price, cost, COALESCE(stock_qty, 0) as stock_quantity, is_active FROM products WHERE is_active = true ORDER BY name LIMIT 1000").then(r => r.rows || []).catch(() => []),
-      
-      // Load partners (customers only, limit to 500)
-      pool.query("SELECT id, name, phone, type, customer_type FROM partners WHERE type LIKE '%عميل%' OR type LIKE '%customer%' ORDER BY name LIMIT 500").then(r => r.rows || []).catch(() => []),
-      
-      // Load user permissions
-      pool.query(`
-        SELECT s.code as screen_code, a.code as action_code, COALESCE(up.allowed, true) as allowed
-        FROM users u
-        LEFT JOIN role_permissions rp ON rp.role_id = u.role_id
-        LEFT JOIN screens s ON s.id = rp.screen_id
-        LEFT JOIN actions a ON a.id = rp.action_id
-        LEFT JOIN user_permissions up ON up.user_id = u.id AND up.screen_code = s.code AND up.action_code = a.code
-        WHERE u.id = $1
-      `, [userId]).then(r => {
-        const result = {};
-        (r.rows || []).forEach(row => {
-          if (row.screen_code && row.action_code) {
-            const key = `${row.screen_code}_${row.action_code}`;
-            result[key] = row.allowed;
-          }
-        });
-        return result;
-      }).catch(() => ({}))
-    ]);
-
-    res.json({
-      settings,
-      branches,
-      products,
-      partners,
-      permissions,
-      timestamp: Date.now()
-    });
+    // Cache user-specific result for 2 minutes
+    cache.set(cacheKey, result, 2 * 60 * 1000);
+    
+    console.log(`[BOOTSTRAP] Loaded in ${result.loadTime}ms for user ${userId}`);
+    res.json(result);
   } catch (e) {
     console.error('[BOOTSTRAP] Error:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
@@ -1026,7 +1087,7 @@ function requireAdmin(req, res, next){
 
 function baseScreens(){
   return [
-    "clients","suppliers","employees","expenses","products","sales","purchases","reports","accounting","journal","settings"
+    "clients","suppliers","employees","expenses","products","sales","purchases","reports","accounting","journal","settings","fiscal_years","data_import"
   ];
 }
 function defaultPermissions(role){
@@ -8293,9 +8354,69 @@ app.post("/api/pos/save-draft", authenticateToken, authorize("sales","create", {
 // These routes are redundant but kept for clarity
 // The SPA fallback middleware will catch all non-API routes before they reach here
 
-app.listen(port, () => {
+// ============================================
+// GLOBAL ERROR HANDLER
+// ============================================
+import { errorHandler } from './middleware/errorHandler.js';
+app.use(errorHandler);
+
+// ============================================
+// GRACEFUL SHUTDOWN
+// ============================================
+const server = app.listen(port, () => {
   console.log(`[SERVER] Started on port ${port} | NODE_ENV=${process.env.NODE_ENV || 'development'}`);
   console.log(`[SERVER] Build path: ${buildPath}`);
   console.log(`[SERVER] JWT_SECRET: ${JWT_SECRET ? 'configured' : 'MISSING'}`);
   console.log(`[SERVER] Database: ${pool ? 'connected' : 'NOT configured'}`);
+  console.log(`[SERVER] Compression: enabled`);
+  console.log(`[SERVER] Rate Limiting: enabled (100 req/min API, 5 req/15min login)`);
 });
+
+// Handle graceful shutdown
+async function gracefulShutdown(signal) {
+  console.log(`\n[SERVER] ${signal} received. Shutting down gracefully...`);
+  
+  // Stop accepting new connections
+  server.close(() => {
+    console.log('[SERVER] HTTP server closed');
+  });
+  
+  // Close database pool
+  try {
+    await pool.end();
+    console.log('[SERVER] Database pool closed');
+  } catch (e) {
+    console.error('[SERVER] Error closing database pool:', e.message);
+  }
+  
+  // Clear cache
+  cache.clear();
+  console.log('[SERVER] Cache cleared');
+  
+  console.log('[SERVER] Shutdown complete');
+  process.exit(0);
+}
+
+// Handle signals
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+// Handle uncaught exceptions and unhandled rejections
+process.on('uncaughtException', (error) => {
+  console.error('[CRITICAL] Uncaught Exception:', error);
+  // Give time to log, then exit
+  setTimeout(() => process.exit(1), 1000);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[CRITICAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+// Periodic cache cleanup to prevent memory leaks
+setInterval(() => {
+  const stats = cache.getStats();
+  if (stats.size > 1000) {
+    console.log(`[CACHE] Clearing large cache (${stats.size} items)`);
+    cache.clear();
+  }
+}, 60 * 60 * 1000); // Every hour

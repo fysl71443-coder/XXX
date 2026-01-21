@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react'
+import App from './App'
 
 jest.mock('./App', () => () => {
   return 'ERP'
 })
-import App from './App'
 
 test('renders dashboard title', () => {
   render(<App />)

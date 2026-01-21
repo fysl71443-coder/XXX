@@ -2,6 +2,7 @@ import jwt from "jsonwebtoken";
 import { pool } from "../db.js";
 import { isAdminUser } from "../utils/auth.js";
 import { parseIntStrict } from "../utils/validation.js";
+import { cache } from "../utils/cache.js";
 
 export async function authenticateToken(req, res, next) {
   try {
@@ -113,13 +114,25 @@ export async function authenticateToken(req, res, next) {
       return res.status(500).json({ error: "server_error", details: "db_not_configured" });
     }
     
-    // Load user - simplified without role_id dependency
-    // We use role-based admin bypass, not role_id-based
-    const { rows } = await pool.query(
-      'SELECT id, email, role, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', 
-      [userId]
-    );
-    const user = rows && rows[0];
+    // PERFORMANCE: Cache user data to reduce DB queries
+    // User data is cached for 10 minutes
+    const userCacheKey = `user_${userId}`;
+    let user = cache.get(userCacheKey);
+    
+    if (!user) {
+      // Load user - simplified without role_id dependency
+      // We use role-based admin bypass, not role_id-based
+      const { rows } = await pool.query(
+        'SELECT id, email, role, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', 
+        [userId]
+      );
+      user = rows && rows[0];
+      
+      // Cache user for 10 minutes
+      if (user) {
+        cache.set(userCacheKey, user, 10 * 60 * 1000);
+      }
+    }
     
     if (!user) {
       console.log(`[AUTH] REJECTED: User not found | userId=${payload.id} ${method} ${path}`)

@@ -6,6 +6,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { printExpensesInvoicesPDF } from '../printing/pdf/autoReports'
 import { useAuth } from '../context/AuthContext'
+import { t } from '../utils/i18n'
 
 // Fixed imports
 function flatten(nodes){ const out=[]; (nodes||[]).forEach(n=>{ out.push(n); out.push(...flatten(n.children||[])) }); return out }

@@ -1,11 +1,23 @@
 import { pool } from '../db.js';
+import { cache } from '../utils/cache.js';
+
+// Cache key for accounts tree
+const ACCOUNTS_TREE_CACHE_KEY = 'accounts_tree';
+const ACCOUNTS_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 /**
  * List accounts (tree structure)
  * GET /api/accounts
+ * PERFORMANCE: Results are cached for 5 minutes
  */
 export async function list(req, res) {
   try {
+    // Check cache first
+    const cached = cache.get(ACCOUNTS_TREE_CACHE_KEY);
+    if (cached) {
+      return res.json(cached);
+    }
+    
     const { rows } = await pool.query('SELECT id, account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry, created_at FROM accounts ORDER BY account_number ASC');
     const accounts = rows || [];
     const byId = new Map(accounts.map(a => [a.id, { ...a, children: [] }]));
@@ -19,11 +31,23 @@ export async function list(req, res) {
         roots.push(a);
       }
     }
+    
+    // Cache the result
+    cache.set(ACCOUNTS_TREE_CACHE_KEY, roots, ACCOUNTS_CACHE_TTL);
+    
     res.json(roots);
   } catch (e) {
     console.error('[ACCOUNTS] Error fetching accounts tree:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
+}
+
+/**
+ * Invalidate accounts cache
+ * Call this after any account modification
+ */
+export function invalidateAccountsCache() {
+  cache.delete(ACCOUNTS_TREE_CACHE_KEY);
 }
 
 /**
@@ -55,6 +79,10 @@ export async function create(req, res) {
       'INSERT INTO accounts(account_number, account_code, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *',
       [b.account_number||null, b.account_code||b.account_number||null, b.name||'', b.name_en||'', b.type||'asset', b.nature||'debit', b.parent_id||null, Number(b.opening_balance||0), b.allow_manual_entry!==false]
     );
+    
+    // Invalidate cache after creating account
+    invalidateAccountsCache();
+    
     res.json(rows && rows[0]);
   } catch (e) {
     console.error('[ACCOUNTS] Error creating account:', e);
@@ -74,6 +102,10 @@ export async function update(req, res) {
       'UPDATE accounts SET name=COALESCE($1,name), name_en=COALESCE($2,name_en), type=COALESCE($3,type), nature=COALESCE($4,nature), opening_balance=COALESCE($5,opening_balance), allow_manual_entry=COALESCE($6,allow_manual_entry), updated_at=NOW() WHERE id=$7 RETURNING *',
       [b.name||null, b.name_en||null, b.type||null, b.nature||null, b.opening_balance!=null?Number(b.opening_balance):null, b.allow_manual_entry, id]
     );
+    
+    // Invalidate cache after updating account
+    invalidateAccountsCache();
+    
     res.json(rows && rows[0]);
   } catch (e) {
     console.error('[ACCOUNTS] Error updating account:', e);
@@ -95,6 +127,10 @@ export async function remove(req, res) {
       return res.status(400).json({ error: "account_has_postings", message: "Cannot delete account with journal postings" });
     }
     await pool.query('DELETE FROM accounts WHERE id = $1', [id]);
+    
+    // Invalidate cache after deleting account
+    invalidateAccountsCache();
+    
     res.json({ ok: true });
   } catch (e) {
     console.error('[ACCOUNTS] Error deleting account:', e);

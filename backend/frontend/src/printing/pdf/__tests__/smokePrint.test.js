@@ -1,10 +1,10 @@
+import { ensureImageDataUrl, normalizeImage, validatePdfDefinition } from '../../../utils/pdfUtils'
+
 jest.mock('pdfmake/build/pdfmake', () => ({
   __esModule: true,
   default: { createPdf: jest.fn(() => ({ open: jest.fn(), print: jest.fn(), download: jest.fn() })) }
 }), { virtual: true })
 jest.mock('pdfmake/build/vfs_fonts', () => ({ __esModule: true, default: { pdfMake: { vfs: {} } } }), { virtual: true })
-
-import { ensureImageDataUrl, normalizeImage, validatePdfDefinition } from '../../../utils/pdfUtils'
 
 describe('smoke print end-to-end', () => {
   beforeEach(()=>{

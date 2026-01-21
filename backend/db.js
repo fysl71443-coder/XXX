@@ -31,10 +31,19 @@ if (!DATABASE_URL.startsWith('postgresql://') && !DATABASE_URL.startsWith('postg
   process.exit(1);
 }
 
-// Create PostgreSQL pool - NO fallback, NO null, NO exceptions
+// Create PostgreSQL pool with optimized settings
+// NO fallback, NO null, NO exceptions
 export const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false },
+  // Performance optimizations
+  max: 20,                        // Maximum number of connections in pool
+  min: 5,                         // Minimum number of connections to keep open
+  idleTimeoutMillis: 30000,       // Close idle connections after 30 seconds
+  connectionTimeoutMillis: 5000,  // Timeout for acquiring a connection
+  statement_timeout: 30000,       // Query timeout (30 seconds)
+  query_timeout: 30000,           // Overall query timeout
+  allowExitOnIdle: false          // Keep pool alive when idle
 });
 
 // CRITICAL: Wrap pool.query to add detailed error logging

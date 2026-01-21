@@ -217,8 +217,11 @@ export function useOrder() {
     items,
     setItems, // Expose setItems for compatibility
     loadingOrder,
+    setLoadingOrder, // Expose for POSInvoice custom hydrateOrder
     hydrating,
+    setHydrating, // Expose for POSInvoice custom hydrateOrder
     tableBusy,
+    setTableBusy, // Expose for POSInvoice custom hydrateOrder
     orderId: getStoredOrderId(),
     
     // Actions

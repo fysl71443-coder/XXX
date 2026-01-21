@@ -1,6 +1,10 @@
 import React from 'react'
 import { render, act, waitFor } from '@testing-library/react'
 
+// remove secondary mock
+
+import POSInvoice from '../POSInvoice'
+
 jest.mock('react-router-dom', () => {
   let route = { branch: 'place_india', table: '2', order: null }
   const setRoute = (r) => { route = { ...route, ...r } }
@@ -59,10 +63,6 @@ jest.mock('../../context/AuthContext', () => ({
   __esModule: true,
   useAuth: () => ({ user: { id: 1, name: 'Tester', role: 'admin' }, canScreen: () => true })
 }), { virtual: true })
-
-// remove secondary mock
-
-import POSInvoice from '../POSInvoice'
 window.localStorage.setItem('lang','ar')
 
 describe('POSInvoice QA Tests', () => {

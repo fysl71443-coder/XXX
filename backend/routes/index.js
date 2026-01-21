@@ -14,6 +14,8 @@ import settingsRoutes from './settings.js';
 import reportRoutes from './reports.js';
 import journalRoutes from './journal.js';
 import auditRoutes from './audit.js';
+import fiscalYearRoutes from './fiscalYears.js';
+import importRoutes from './import.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { authorize } from '../middleware/authorize.js';
 
@@ -43,5 +45,7 @@ router.get('/customers', authenticateToken, authorize('clients', 'view'), async 
   }
 });
 router.use('/journal', journalRoutes);
+router.use('/fiscal-years', fiscalYearRoutes);
+router.use('/import', importRoutes);
 
 export default router;

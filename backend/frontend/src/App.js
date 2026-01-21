@@ -6,6 +6,7 @@ import { FaUsers, FaTruck, FaUserTie, FaReceipt, FaBox, FaCashRegister, FaShoppi
 import { GiMoneyStack } from 'react-icons/gi';
 import { settings as apiSettings } from './services/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { FiscalYearProvider } from './context/FiscalYearContext';
 import ErrorBoundary from './ErrorBoundary';
 import AuthGate from './components/AuthGate';
 import { useLang } from './hooks/useLang';
@@ -54,6 +55,8 @@ const BusinessDaySalesReport = lazy(() => import('./pages/BusinessDaySalesReport
 const Reports = lazy(() => import('./pages/Reports'));
 const PrintPreview = lazy(() => import('./pages/PrintPreview'));
 const Settings = lazy(() => import('./pages/Settings'));
+const FiscalYearManagement = lazy(() => import('./pages/FiscalYearManagement'));
+const DataImport = lazy(() => import('./pages/DataImport'));
 
 // Loading fallback component
 const LoadingFallback = () => (
@@ -188,6 +191,7 @@ function App() {
   
   return (
     <AuthProvider>
+      <FiscalYearProvider>
       <BrowserRouter>
         <ErrorBoundary>
         {/* AuthGate blocks ALL rendering until auth state is determined */}
@@ -247,11 +251,14 @@ function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/debug/receipt-preview" element={<PrintPreview />} />
           <Route path="/settings" element={<ErrorBoundary><Settings /></ErrorBoundary>} />
+          <Route path="/fiscal-years" element={<ErrorBoundary><FiscalYearManagement /></ErrorBoundary>} />
+          <Route path="/data-import" element={<ErrorBoundary><DataImport /></ErrorBoundary>} />
         </Routes>
         </Suspense>
         </AuthGate>
         </ErrorBoundary>
     </BrowserRouter>
+      </FiscalYearProvider>
     </AuthProvider>
   )
 }
