@@ -1,0 +1,956 @@
+{
+  "extracted": [
+    {
+      "method": "post",
+      "route": "/api/auth/login",
+      "lineNumber": 807
+    },
+    {
+      "method": "post",
+      "route": "/auth/login",
+      "lineNumber": 808
+    },
+    {
+      "method": "get",
+      "route": "/api/auth/me",
+      "lineNumber": 990
+    },
+    {
+      "method": "get",
+      "route": "/auth/me",
+      "lineNumber": 1033
+    },
+    {
+      "method": "get",
+      "route": "/users",
+      "lineNumber": 1099
+    },
+    {
+      "method": "get",
+      "route": "/api/users",
+      "lineNumber": 1109
+    },
+    {
+      "method": "get",
+      "route": "/api/users/:id",
+      "lineNumber": 1121
+    },
+    {
+      "method": "post",
+      "route": "/users",
+      "lineNumber": 1136
+    },
+    {
+      "method": "post",
+      "route": "/api/users",
+      "lineNumber": 1149
+    },
+    {
+      "method": "put",
+      "route": "/users/:id",
+      "lineNumber": 1163
+    },
+    {
+      "method": "put",
+      "route": "/api/users/:id",
+      "lineNumber": 1174
+    },
+    {
+      "method": "post",
+      "route": "/users/:id/toggle",
+      "lineNumber": 1186
+    },
+    {
+      "method": "post",
+      "route": "/api/users/:id/toggle",
+      "lineNumber": 1198
+    },
+    {
+      "method": "post",
+      "route": "/users/:id/reset-password",
+      "lineNumber": 1211
+    },
+    {
+      "method": "post",
+      "route": "/api/users/:id/reset-password",
+      "lineNumber": 1223
+    },
+    {
+      "method": "get",
+      "route": "/users/:id/permissions",
+      "lineNumber": 1315
+    },
+    {
+      "method": "get",
+      "route": "/api/users/:id/permissions",
+      "lineNumber": 1331
+    },
+    {
+      "method": "put",
+      "route": "/users/:id/permissions",
+      "lineNumber": 1348
+    },
+    {
+      "method": "put",
+      "route": "/api/users/:id/permissions",
+      "lineNumber": 1376
+    },
+    {
+      "method": "get",
+      "route": "/users/:id/user-permissions",
+      "lineNumber": 1494
+    },
+    {
+      "method": "get",
+      "route": "/api/users/:id/user-permissions",
+      "lineNumber": 1542
+    },
+    {
+      "method": "get",
+      "route": "/api/customers",
+      "lineNumber": 1808
+    },
+    {
+      "method": "get",
+      "route": "/journal",
+      "lineNumber": 1856
+    },
+    {
+      "method": "get",
+      "route": "/api/journal",
+      "lineNumber": 1952
+    },
+    {
+      "method": "get",
+      "route": "/journal/:id",
+      "lineNumber": 2049
+    },
+    {
+      "method": "get",
+      "route": "/api/journal/:id",
+      "lineNumber": 2092
+    },
+    {
+      "method": "post",
+      "route": "/journal",
+      "lineNumber": 2136
+    },
+    {
+      "method": "post",
+      "route": "/api/journal",
+      "lineNumber": 2210
+    },
+    {
+      "method": "put",
+      "route": "/journal/:id",
+      "lineNumber": 2285
+    },
+    {
+      "method": "put",
+      "route": "/api/journal/:id",
+      "lineNumber": 2344
+    },
+    {
+      "method": "post",
+      "route": "/journal/:id/post",
+      "lineNumber": 2404
+    },
+    {
+      "method": "post",
+      "route": "/api/journal/:id/post",
+      "lineNumber": 2441
+    },
+    {
+      "method": "post",
+      "route": "/journal/:id/return-to-draft",
+      "lineNumber": 2479
+    },
+    {
+      "method": "post",
+      "route": "/api/journal/:id/return-to-draft",
+      "lineNumber": 2531
+    },
+    {
+      "method": "delete",
+      "route": "/journal/:id",
+      "lineNumber": 2584
+    },
+    {
+      "method": "delete",
+      "route": "/api/journal/:id",
+      "lineNumber": 2650
+    },
+    {
+      "method": "get",
+      "route": "/settings",
+      "lineNumber": 2742
+    },
+    {
+      "method": "get",
+      "route": "/settings/:key",
+      "lineNumber": 2750
+    },
+    {
+      "method": "put",
+      "route": "/settings/:key",
+      "lineNumber": 2760
+    },
+    {
+      "method": "post",
+      "route": "/settings/backup",
+      "lineNumber": 2770
+    },
+    {
+      "method": "post",
+      "route": "/settings/restore",
+      "lineNumber": 2780
+    },
+    {
+      "method": "get",
+      "route": "/api/settings",
+      "lineNumber": 2798
+    },
+    {
+      "method": "get",
+      "route": "/api/settings/:key",
+      "lineNumber": 2804
+    },
+    {
+      "method": "put",
+      "route": "/api/settings/:key",
+      "lineNumber": 2812
+    },
+    {
+      "method": "post",
+      "route": "/api/settings/backup",
+      "lineNumber": 2820
+    },
+    {
+      "method": "post",
+      "route": "/api/settings/restore",
+      "lineNumber": 2827
+    },
+    {
+      "method": "get",
+      "route": "/products",
+      "lineNumber": 2870
+    },
+    {
+      "method": "get",
+      "route": "/api/products",
+      "lineNumber": 2913
+    },
+    {
+      "method": "post",
+      "route": "/products",
+      "lineNumber": 2958
+    },
+    {
+      "method": "post",
+      "route": "/api/products",
+      "lineNumber": 2975
+    },
+    {
+      "method": "put",
+      "route": "/products/:id",
+      "lineNumber": 2992
+    },
+    {
+      "method": "put",
+      "route": "/api/products/:id",
+      "lineNumber": 3015
+    },
+    {
+      "method": "delete",
+      "route": "/products/:id",
+      "lineNumber": 3038
+    },
+    {
+      "method": "delete",
+      "route": "/api/products/:id",
+      "lineNumber": 3049
+    },
+    {
+      "method": "post",
+      "route": "/products/bulk-import",
+      "lineNumber": 3061
+    },
+    {
+      "method": "post",
+      "route": "/api/products/bulk-import",
+      "lineNumber": 3150
+    },
+    {
+      "method": "get",
+      "route": "/accounts",
+      "lineNumber": 3277
+    },
+    {
+      "method": "get",
+      "route": "/api/accounts",
+      "lineNumber": 3300
+    },
+    {
+      "method": "get",
+      "route": "/api/accounts/:id",
+      "lineNumber": 3321
+    },
+    {
+      "method": "post",
+      "route": "/accounts",
+      "lineNumber": 3336
+    },
+    {
+      "method": "post",
+      "route": "/api/accounts",
+      "lineNumber": 3350
+    },
+    {
+      "method": "put",
+      "route": "/accounts/:id",
+      "lineNumber": 3365
+    },
+    {
+      "method": "put",
+      "route": "/api/accounts/:id",
+      "lineNumber": 3380
+    },
+    {
+      "method": "delete",
+      "route": "/accounts/:id",
+      "lineNumber": 3396
+    },
+    {
+      "method": "delete",
+      "route": "/api/accounts/:id",
+      "lineNumber": 3413
+    },
+    {
+      "method": "post",
+      "route": "/accounts/seed-default",
+      "lineNumber": 3430
+    },
+    {
+      "method": "post",
+      "route": "/api/accounts/seed-default",
+      "lineNumber": 3628
+    },
+    {
+      "method": "get",
+      "route": "/partners",
+      "lineNumber": 3985
+    },
+    {
+      "method": "get",
+      "route": "/api/partners",
+      "lineNumber": 3994
+    },
+    {
+      "method": "post",
+      "route": "/partners",
+      "lineNumber": 4003
+    },
+    {
+      "method": "post",
+      "route": "/api/partners",
+      "lineNumber": 4034
+    },
+    {
+      "method": "put",
+      "route": "/partners/:id",
+      "lineNumber": 4065
+    },
+    {
+      "method": "put",
+      "route": "/api/partners/:id",
+      "lineNumber": 4076
+    },
+    {
+      "method": "delete",
+      "route": "/partners/:id",
+      "lineNumber": 4087
+    },
+    {
+      "method": "delete",
+      "route": "/api/partners/:id",
+      "lineNumber": 4094
+    },
+    {
+      "method": "get",
+      "route": "/expenses",
+      "lineNumber": 4360
+    },
+    {
+      "method": "get",
+      "route": "/api/expenses",
+      "lineNumber": 4387
+    },
+    {
+      "method": "get",
+      "route": "/api/expenses/:id",
+      "lineNumber": 4414
+    },
+    {
+      "method": "post",
+      "route": "/expenses",
+      "lineNumber": 4458
+    },
+    {
+      "method": "post",
+      "route": "/api/expenses",
+      "lineNumber": 4614
+    },
+    {
+      "method": "put",
+      "route": "/expenses/:id",
+      "lineNumber": 4802
+    },
+    {
+      "method": "put",
+      "route": "/api/expenses/:id",
+      "lineNumber": 4821
+    },
+    {
+      "method": "post",
+      "route": "/expenses/:id/post",
+      "lineNumber": 4960
+    },
+    {
+      "method": "post",
+      "route": "/api/expenses/:id/post",
+      "lineNumber": 5061
+    },
+    {
+      "method": "post",
+      "route": "/expenses/:id/reverse",
+      "lineNumber": 5164
+    },
+    {
+      "method": "post",
+      "route": "/api/expenses/:id/reverse",
+      "lineNumber": 5269
+    },
+    {
+      "method": "delete",
+      "route": "/expenses/:id",
+      "lineNumber": 5375
+    },
+    {
+      "method": "delete",
+      "route": "/api/expenses/:id",
+      "lineNumber": 5424
+    },
+    {
+      "method": "get",
+      "route": "/invoices",
+      "lineNumber": 5634
+    },
+    {
+      "method": "get",
+      "route": "/api/invoices",
+      "lineNumber": 5640
+    },
+    {
+      "method": "get",
+      "route": "/api/invoices/:id",
+      "lineNumber": 5646
+    },
+    {
+      "method": "get",
+      "route": "/invoices/next-number",
+      "lineNumber": 5659
+    },
+    {
+      "method": "post",
+      "route": "/invoices",
+      "lineNumber": 5670
+    },
+    {
+      "method": "post",
+      "route": "/api/invoices",
+      "lineNumber": 5682
+    },
+    {
+      "method": "put",
+      "route": "/api/invoices/:id",
+      "lineNumber": 5698
+    },
+    {
+      "method": "delete",
+      "route": "/invoices/:id",
+      "lineNumber": 5709
+    },
+    {
+      "method": "get",
+      "route": "/orders",
+      "lineNumber": 5831
+    },
+    {
+      "method": "get",
+      "route": "/api/orders",
+      "lineNumber": 5832
+    },
+    {
+      "method": "get",
+      "route": "/orders/:id",
+      "lineNumber": 5914
+    },
+    {
+      "method": "get",
+      "route": "/api/orders/:id",
+      "lineNumber": 5915
+    },
+    {
+      "method": "post",
+      "route": "/orders",
+      "lineNumber": 6004
+    },
+    {
+      "method": "post",
+      "route": "/api/orders",
+      "lineNumber": 6005
+    },
+    {
+      "method": "put",
+      "route": "/orders/:id",
+      "lineNumber": 6086
+    },
+    {
+      "method": "put",
+      "route": "/api/orders/:id",
+      "lineNumber": 6087
+    },
+    {
+      "method": "delete",
+      "route": "/orders/:id",
+      "lineNumber": 6099
+    },
+    {
+      "method": "delete",
+      "route": "/api/orders/:id",
+      "lineNumber": 6100
+    },
+    {
+      "method": "get",
+      "route": "/pos/tables-layout",
+      "lineNumber": 6153
+    },
+    {
+      "method": "get",
+      "route": "/api/pos/tables-layout",
+      "lineNumber": 6154
+    },
+    {
+      "method": "put",
+      "route": "/pos/tables-layout",
+      "lineNumber": 6178
+    },
+    {
+      "method": "put",
+      "route": "/api/pos/tables-layout",
+      "lineNumber": 6179
+    },
+    {
+      "method": "get",
+      "route": "/pos/table-state",
+      "lineNumber": 6218
+    },
+    {
+      "method": "get",
+      "route": "/api/pos/table-state",
+      "lineNumber": 6219
+    },
+    {
+      "method": "post",
+      "route": "/pos/verify-cancel",
+      "lineNumber": 6231
+    },
+    {
+      "method": "post",
+      "route": "/api/pos/verify-cancel",
+      "lineNumber": 6232
+    },
+    {
+      "method": "post",
+      "route": "/pos/saveDraft",
+      "lineNumber": 6236
+    },
+    {
+      "method": "post",
+      "route": "/pos/save-draft",
+      "lineNumber": 6237
+    },
+    {
+      "method": "post",
+      "route": "/pos/issueInvoice",
+      "lineNumber": 6912
+    },
+    {
+      "method": "post",
+      "route": "/api/pos/issueInvoice",
+      "lineNumber": 6913
+    },
+    {
+      "method": "get",
+      "route": "/journal/account/:id",
+      "lineNumber": 6916
+    },
+    {
+      "method": "get",
+      "route": "/api/journal/account/:id",
+      "lineNumber": 6969
+    },
+    {
+      "method": "get",
+      "route": "/reports/trial-balance",
+      "lineNumber": 7024
+    },
+    {
+      "method": "get",
+      "route": "/api/reports/trial-balance",
+      "lineNumber": 7073
+    },
+    {
+      "method": "get",
+      "route": "/reports/sales-vs-expenses",
+      "lineNumber": 7142
+    },
+    {
+      "method": "get",
+      "route": "/api/reports/sales-vs-expenses",
+      "lineNumber": 7146
+    },
+    {
+      "method": "get",
+      "route": "/reports/sales-by-branch",
+      "lineNumber": 7257
+    },
+    {
+      "method": "get",
+      "route": "/api/reports/sales-by-branch",
+      "lineNumber": 7309
+    },
+    {
+      "method": "get",
+      "route": "/reports/expenses-by-branch",
+      "lineNumber": 7395
+    },
+    {
+      "method": "get",
+      "route": "/api/reports/expenses-by-branch",
+      "lineNumber": 7399
+    },
+    {
+      "method": "post",
+      "route": "/api/pos/saveDraft",
+      "lineNumber": 7801
+    },
+    {
+      "method": "post",
+      "route": "/api/pos/save-draft",
+      "lineNumber": 7802
+    }
+  ],
+  "keep": [
+    {
+      "method": "get",
+      "route": "/favicon.ico",
+      "lineNumber": 61
+    },
+    {
+      "method": "get",
+      "route": "/zatca.svg",
+      "lineNumber": 68
+    },
+    {
+      "method": "get",
+      "route": "*/favicon.ico",
+      "lineNumber": 75
+    },
+    {
+      "method": "get",
+      "route": "*/zatca.svg",
+      "lineNumber": 81
+    },
+    {
+      "method": "get",
+      "route": "/manifest.json",
+      "lineNumber": 86
+    },
+    {
+      "method": "get",
+      "route": "/robots.txt",
+      "lineNumber": 94
+    },
+    {
+      "method": "get",
+      "route": "/api/health",
+      "lineNumber": 104
+    },
+    {
+      "method": "get",
+      "route": "/api/bootstrap",
+      "lineNumber": 120
+    },
+    {
+      "method": "get",
+      "route": "/api/bootstrap",
+      "lineNumber": 187
+    },
+    {
+      "method": "post",
+      "route": "/debug/bootstrap-admin",
+      "lineNumber": 810
+    },
+    {
+      "method": "post",
+      "route": "/debug/purge-unlinked",
+      "lineNumber": 831
+    },
+    {
+      "method": "post",
+      "route": "/api/debug/purge-unlinked",
+      "lineNumber": 909
+    },
+    {
+      "method": "get",
+      "route": "/roles",
+      "lineNumber": 1405
+    },
+    {
+      "method": "get",
+      "route": "/api/roles",
+      "lineNumber": 1408
+    },
+    {
+      "method": "get",
+      "route": "/screens",
+      "lineNumber": 1411
+    },
+    {
+      "method": "get",
+      "route": "/api/screens",
+      "lineNumber": 1420
+    },
+    {
+      "method": "get",
+      "route": "/actions",
+      "lineNumber": 1429
+    },
+    {
+      "method": "get",
+      "route": "/api/actions",
+      "lineNumber": 1433
+    },
+    {
+      "method": "get",
+      "route": "/branches",
+      "lineNumber": 1438
+    },
+    {
+      "method": "get",
+      "route": "/api/branches",
+      "lineNumber": 1460
+    },
+    {
+      "method": "get",
+      "route": "/create-admin",
+      "lineNumber": 1592
+    },
+    {
+      "method": "get",
+      "route": "/health",
+      "lineNumber": 1602
+    },
+    {
+      "method": "get",
+      "route": "/healthz",
+      "lineNumber": 1605
+    },
+    {
+      "method": "post",
+      "route": "/api/audit",
+      "lineNumber": 1613
+    },
+    {
+      "method": "post",
+      "route": "/audit",
+      "lineNumber": 1649
+    },
+    {
+      "method": "post",
+      "route": "/api/error-log",
+      "lineNumber": 1681
+    },
+    {
+      "method": "get",
+      "route": "/accounting-periods/:period",
+      "lineNumber": 3692
+    },
+    {
+      "method": "get",
+      "route": "/api/accounting-periods/:period",
+      "lineNumber": 3737
+    },
+    {
+      "method": "post",
+      "route": "/accounting-periods/:period/open",
+      "lineNumber": 3782
+    },
+    {
+      "method": "post",
+      "route": "/api/accounting-periods/:period/open",
+      "lineNumber": 3804
+    },
+    {
+      "method": "post",
+      "route": "/accounting-periods/:period/close",
+      "lineNumber": 3826
+    },
+    {
+      "method": "post",
+      "route": "/api/accounting-periods/:period/close",
+      "lineNumber": 3852
+    },
+    {
+      "method": "get",
+      "route": "/accounting-periods/:period/summary",
+      "lineNumber": 3878
+    },
+    {
+      "method": "get",
+      "route": "/api/accounting-periods/:period/summary",
+      "lineNumber": 3925
+    },
+    {
+      "method": "get",
+      "route": "/employees",
+      "lineNumber": 4102
+    },
+    {
+      "method": "get",
+      "route": "/api/employees",
+      "lineNumber": 4121
+    },
+    {
+      "method": "get",
+      "route": "/employees/:id",
+      "lineNumber": 4140
+    },
+    {
+      "method": "get",
+      "route": "/api/employees/:id",
+      "lineNumber": 4161
+    },
+    {
+      "method": "post",
+      "route": "/employees",
+      "lineNumber": 4258
+    },
+    {
+      "method": "post",
+      "route": "/api/employees",
+      "lineNumber": 4259
+    },
+    {
+      "method": "put",
+      "route": "/employees/:id",
+      "lineNumber": 4343
+    },
+    {
+      "method": "put",
+      "route": "/api/employees/:id",
+      "lineNumber": 4344
+    },
+    {
+      "method": "delete",
+      "route": "/employees/:id",
+      "lineNumber": 4345
+    },
+    {
+      "method": "delete",
+      "route": "/api/employees/:id",
+      "lineNumber": 4352
+    },
+    {
+      "method": "get",
+      "route": "/supplier-invoices",
+      "lineNumber": 5483
+    },
+    {
+      "method": "get",
+      "route": "/api/supplier-invoices",
+      "lineNumber": 5484
+    },
+    {
+      "method": "get",
+      "route": "/supplier-invoices/next-number",
+      "lineNumber": 5547
+    },
+    {
+      "method": "get",
+      "route": "/api/supplier-invoices/next-number",
+      "lineNumber": 5548
+    },
+    {
+      "method": "post",
+      "route": "/supplier-invoices",
+      "lineNumber": 5589
+    },
+    {
+      "method": "post",
+      "route": "/api/supplier-invoices",
+      "lineNumber": 5590
+    },
+    {
+      "method": "put",
+      "route": "/supplier-invoices/:id",
+      "lineNumber": 5606
+    },
+    {
+      "method": "put",
+      "route": "/api/supplier-invoices/:id",
+      "lineNumber": 5607
+    },
+    {
+      "method": "post",
+      "route": "/supplier-invoices/:id/post",
+      "lineNumber": 5619
+    },
+    {
+      "method": "post",
+      "route": "/api/supplier-invoices/:id/post",
+      "lineNumber": 5620
+    },
+    {
+      "method": "delete",
+      "route": "/supplier-invoices/:id",
+      "lineNumber": 5632
+    },
+    {
+      "method": "delete",
+      "route": "/api/supplier-invoices/:id",
+      "lineNumber": 5633
+    },
+    {
+      "method": "get",
+      "route": "/invoice_items/:id",
+      "lineNumber": 5716
+    },
+    {
+      "method": "get",
+      "route": "/payments",
+      "lineNumber": 6101
+    },
+    {
+      "method": "post",
+      "route": "/payments",
+      "lineNumber": 6107
+    },
+    {
+      "method": "get",
+      "route": "/ar/summary",
+      "lineNumber": 6115
+    }
+  ]
+}

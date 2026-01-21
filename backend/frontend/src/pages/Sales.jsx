@@ -27,7 +27,18 @@ export default function Sales(){
   useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=> window.removeEventListener('storage', onStorage) },[])
 
   useEffect(()=>{ setLoadingProducts(true); apiProducts.list().then(list=>{ const arr = Array.isArray(list)?list:[]; setProducts(arr.map(p=>({ id: p.id||p.product_id||p.code||p.sku||p.name, name: p.name, price_before_tax: Number(p.sale_price||p.price||0) }))) }).catch(()=>setProducts([])).finally(()=>setLoadingProducts(false)) },[])
-  useEffect(()=>{ setLoadingInvoices(true); apiInvoices.list({ type: 'sale' }).then(r=>{ setInvoices((r?.items||r||[])) }).catch(()=>setInvoices([])).finally(()=>setLoadingInvoices(false)) },[])
+  useEffect(()=>{ 
+    setLoadingInvoices(true); 
+    apiInvoices.list({ type: 'sale' })
+      .then(r=>{ 
+        const items = r?.items || r || [];
+        // Sort by date descending and limit to recent 50
+        const sorted = [...items].sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 50);
+        setInvoices(sorted);
+      })
+      .catch(()=>setInvoices([]))
+      .finally(()=>setLoadingInvoices(false)) 
+  },[])
 
   useEffect(()=>{ updateSpecialDiscountVisibility() }, [customerName, specialDiscountPct])
 
@@ -211,15 +222,27 @@ export default function Sales(){
                   {invoices.map((inv)=>{
                     const status = String(inv.status||'open').toLowerCase()
                     const badge = status==='paid' ? 'bg-green-100 text-green-700' : (status==='partial' ? 'bg-amber-100 text-amber-700' : 'bg-yellow-100 text-yellow-800')
-                    const branchLabel = branch==='place_india' ? 'Place India' : branch==='china_town' ? 'China Town' : (branch||'-')
+                    const invBranch = String(inv.branch || branch || '').toLowerCase().replace(/\s+/g, '_')
+                    const branchLabel = invBranch==='place_india' || invBranch==='palace_india' ? 'Place India' : invBranch==='china_town' ? 'China Town' : (invBranch||'-')
+                    const branchBadge = invBranch==='place_india' || invBranch==='palace_india' ? 'bg-blue-300 text-white' : 'bg-pink-300 text-white'
+                    const discount = Number(inv.discount_amount || inv.discount_total || 0)
+                    const paymentLabel = (function(){
+                      const pm = String(inv.payment_method||'').toLowerCase()
+                      if (pm==='cash') return lang==='ar'?'نقدي':'Cash'
+                      if (pm==='card') return lang==='ar'?'بطاقة':'Card'
+                      if (pm==='bank' || pm==='bank_transfer') return lang==='ar'?'تحويل':'Transfer'
+                      if (pm==='credit') return lang==='ar'?'آجل':'Credit'
+                      if (pm==='multi' || pm==='multiple') return lang==='ar'?'متعدد':'Multi'
+                      return '-'
+                    })()
                     return (
                       <tr key={inv.id} className="border-b">
                         <td className="p-2 font-semibold">{inv.invoice_number}</td>
                         <td className="p-2">{String(inv.date||'').slice(0,10)}</td>
-                        <td className="p-2"><span className={`px-2 py-1 rounded text-xs ${branch==='place_india'?'bg-blue-300 text-white': 'bg-pink-300 text-white'}`}>{branchLabel}</span></td>
-                        <td className="p-2">{inv.partner?.name || '-'}</td>
-                        <td className="p-2">-</td>
-                        <td className="p-2">-</td>
+                        <td className="p-2"><span className={`px-2 py-1 rounded text-xs ${branchBadge}`}>{branchLabel}</span></td>
+                        <td className="p-2">{inv.partner?.name || (lang==='ar'?'عميل نقدي':'Walk-in')}</td>
+                        <td className="p-2">{paymentLabel}</td>
+                        <td className="p-2">{discount > 0 ? discount.toFixed(2) : '-'}</td>
                         <td className="p-2">{Number(inv.total||0).toFixed(2)}</td>
                         <td className="p-2"><span className={`px-2 py-1 rounded text-xs ${badge}`}>{status==='paid'?(lang==='ar'?'مدفوع':'Paid'):status==='partial'?(lang==='ar'?'جزئي':'Partial'):(lang==='ar'?'غير مدفوع':'Unpaid')}</span></td>
                         <td className="p-2">

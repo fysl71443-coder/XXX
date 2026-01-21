@@ -238,14 +238,15 @@ export const reports = {
     return request(`/reports/inventory-profit${query ? `?${query}` : ''}`)
   },
   businessDaySales: (params = {}) => {
-    // API Contract: /api/reports/business-day-sales?branch=string&date=YYYY-MM-DD
+    // API Contract: /reports/business-day-sales?branch=string&date=YYYY-MM-DD
+    // NOTE: baseURL already includes /api, so don't add /api here
     // branch can be 'all', 'china_town', 'place_india', or omitted (defaults to 'all')
     const { branch = 'all', date } = params;
     if (!date) {
       return Promise.reject(new Error('Missing required param: date'));
     }
     const query = new URLSearchParams({ branch, date }).toString();
-    return request(`/api/reports/business-day-sales${query ? `?${query}` : ''}`)
+    return request(`/reports/business-day-sales${query ? `?${query}` : ''}`)
   },
   sendBusinessDaySales: (data = {}) => request('/reports/send-business-day-sales', { method: 'POST', body: JSON.stringify(data) }),
   trialBalance: (params = {}) => {
@@ -297,8 +298,10 @@ export const settings = {
 
 export const users = {
   list: () => safeList(() => request('/users')),
+  get: (id) => request(`/users/${id}`),
   create: (data) => request('/users', { method: 'POST', body: JSON.stringify(data) }),
   update: (id, data) => request(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  remove: (id) => request(`/users/${id}`, { method: 'DELETE' }),
   toggle: (id) => request(`/users/${id}/toggle`, { method: 'POST' }),
   resetPassword: (id, password) => request(`/users/${id}/reset-password`, { method: 'POST', body: JSON.stringify({ password }) }),
   permissions: (id) => request(`/users/${id}/permissions`),

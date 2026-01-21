@@ -22,6 +22,10 @@ export function authorize(screen, action, options = {}) {
       const method = req.method || 'UNKNOWN'
       const path = req.path || req.url || 'UNKNOWN'
       
+      // CRITICAL: Prevent /next-number from being treated as /:id parameter
+      // If path ends with /next-number, skip branch validation (it's a special endpoint)
+      const isSpecialEndpoint = path.includes('/next-number') || path.endsWith('/next-number');
+      
       // CRITICAL: Skip authorization for static assets and non-API paths
       // Authorization should ONLY apply to API endpoints, not frontend routes or static files
       // Must catch paths like /supplier-invoices/static/js/... (React Router lazy loading)
@@ -96,6 +100,17 @@ export function authorize(screen, action, options = {}) {
       const ac = normalize(action)
       const userId = req.user?.id || 'anon'
       
+      // DEBUG: Log to identify NaN source
+      if (path.includes('/next-number')) {
+        console.log('[AUTHORIZE] DEBUG /next-number:', {
+          userId,
+          userIdType: typeof userId,
+          userIdIsNaN: Number.isNaN(Number(userId)),
+          params: req.params,
+          query: req.query,
+        });
+      }
+      
       console.log(`[AUTHORIZE] ${method} ${path} | screen=${sc} action=${ac} userId=${userId}`)
       
       const perms = await ensurePermissionsMap(req)
@@ -108,6 +123,13 @@ export function authorize(screen, action, options = {}) {
       
       if ((p._global || {})[ac] === true) {
         console.log(`[AUTHORIZE] ALLOWED: Global permission | userId=${userId} screen=${sc} action=${ac}`)
+        return next()
+      }
+      
+      // CRITICAL: Skip branch validation for special endpoints like /next-number
+      // These endpoints don't require branch-specific permissions
+      if (isSpecialEndpoint) {
+        console.log(`[AUTHORIZE] ALLOWED: Special endpoint (no branch required) | userId=${userId} screen=${sc} action=${ac} path=${path}`)
         return next()
       }
       

@@ -3,32 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ميزان المراجعة</title>
+<title id="pageTitle">ميزان المراجعة</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   :root { --border:#222; --soft:#eaeaea; --muted:#555; }
   @page { margin: 18mm 15mm; }
-  body { font-family: 'Cairo', sans-serif; direction: rtl; margin: 0; }
+  body { font-family: 'Cairo', sans-serif; margin: 0; }
+  body.rtl { direction: rtl; }
+  body.ltr { direction: ltr; }
   .header { display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:8px; margin-bottom:10px; }
   .brand { display:flex; align-items:center; gap:12px; }
   .brand img { height:48px; max-width:180px; object-fit:contain; display:none; }
   .brand .name { font-weight:700; }
   .brand .vat { color:var(--muted); font-size:13px; }
   .doc .title { font-size:18px; font-weight:700; }
-  .doc .meta { color:var(--muted); font-size:13px; text-align:left; }
+  .doc .meta { color:var(--muted); font-size:13px; }
   table { width: 100%; border-collapse: collapse; margin-top: 12px; }
   thead th { background: #f2f2f2; }
-  th, td { border: 1px solid #000; padding: 6px; text-align: right; font-size: 13px; }
+  th, td { border: 1px solid #000; padding: 6px; font-size: 13px; }
+  body.rtl th, body.rtl td { text-align: right; }
+  body.ltr th, body.ltr td { text-align: left; }
   tbody tr:nth-child(even){ background:#fafafa }
   tfoot td { font-weight:600 }
   .summary { font-weight: 600; }
   @media print { .no-print { display: none; } }
 </style>
 </head>
-<body>
+<body class="rtl">
 <div class="no-print" style="margin-bottom:8px; display:flex; gap:8px; align-items:center;">
-  <button onclick="window.print()" style="padding:6px 10px;">طباعة</button>
-  <button onclick="window.close()" style="padding:6px 10px;">إغلاق</button>
+  <button onclick="window.print()" style="padding:6px 10px;" id="btnPrint">طباعة</button>
+  <button onclick="window.close()" style="padding:6px 10px;" id="btnClose">إغلاق</button>
+  <select id="langSelect" onchange="changeLang(this.value)" style="padding:6px 10px;">
+    <option value="ar">العربية</option>
+    <option value="en">English</option>
+  </select>
 </div>
 <div class="header">
   <div class="brand">
@@ -39,25 +47,25 @@
     </div>
   </div>
   <div class="doc">
-    <div class="title">ميزان المراجعة</div>
+    <div class="title" id="reportTitle">ميزان المراجعة</div>
     <div class="meta" id="periodLabel"></div>
   </div>
   </div>
 <table id="tbl">
   <thead>
     <tr>
-      <th>الكود</th>
-      <th>الحساب</th>
-      <th>مدين</th>
-      <th>دائن</th>
-      <th>ملاحظات</th>
+      <th id="thCode">الكود</th>
+      <th id="thAccount">الحساب</th>
+      <th id="thDebit">مدين</th>
+      <th id="thCredit">دائن</th>
+      <th id="thNotes">ملاحظات</th>
     </tr>
   </thead>
   <tbody></tbody>
   <tfoot>
     <tr>
       <td></td>
-      <td class="summary">الإجمالي</td>
+      <td class="summary" id="tdTotal">الإجمالي</td>
       <td id="totalDebit"></td>
       <td id="totalCredit"></td>
       <td></td>
@@ -65,193 +73,201 @@
   </tfoot>
   </table>
 <script>
-  // Determine API base URL - same logic as client.js
+  // Language labels
+  const labels = {
+    ar: {
+      pageTitle: 'ميزان المراجعة',
+      reportTitle: 'ميزان المراجعة',
+      btnPrint: 'طباعة',
+      btnClose: 'إغلاق',
+      thCode: 'الكود',
+      thAccount: 'الحساب',
+      thDebit: 'مدين',
+      thCredit: 'دائن',
+      thNotes: 'ملاحظات',
+      tdTotal: 'الإجمالي',
+      period: 'الفترة',
+      from: 'من',
+      to: 'إلى',
+      vatNumber: 'الرقم الضريبي'
+    },
+    en: {
+      pageTitle: 'Trial Balance',
+      reportTitle: 'Trial Balance',
+      btnPrint: 'Print',
+      btnClose: 'Close',
+      thCode: 'Code',
+      thAccount: 'Account',
+      thDebit: 'Debit',
+      thCredit: 'Credit',
+      thNotes: 'Notes',
+      tdTotal: 'Total',
+      period: 'Period',
+      from: 'From',
+      to: 'To',
+      vatNumber: 'VAT Number'
+    }
+  };
+  
+  let currentLang = localStorage.getItem('lang') || 'ar';
+  let loadedData = { rows: [], company: null, branding: null, from: null, to: null, period: null };
+  
+  function changeLang(lang) {
+    currentLang = lang;
+    const l = labels[lang] || labels.ar;
+    document.documentElement.lang = lang;
+    document.body.className = lang === 'ar' ? 'rtl' : 'ltr';
+    document.getElementById('pageTitle').textContent = l.pageTitle;
+    document.getElementById('reportTitle').textContent = l.reportTitle;
+    document.getElementById('btnPrint').textContent = l.btnPrint;
+    document.getElementById('btnClose').textContent = l.btnClose;
+    document.getElementById('thCode').textContent = l.thCode;
+    document.getElementById('thAccount').textContent = l.thAccount;
+    document.getElementById('thDebit').textContent = l.thDebit;
+    document.getElementById('thCredit').textContent = l.thCredit;
+    document.getElementById('thNotes').textContent = l.thNotes;
+    document.getElementById('tdTotal').textContent = l.tdTotal;
+    document.getElementById('langSelect').value = lang;
+    
+    // Re-render period label
+    const meta = [];
+    if (loadedData.period) meta.push(`${l.period}: ${loadedData.period}`);
+    if (loadedData.from) meta.push(`${l.from}: ${loadedData.from}`);
+    if (loadedData.to) meta.push(`${l.to}: ${loadedData.to}`);
+    document.getElementById('periodLabel').textContent = meta.join(' • ');
+    
+    // Re-render company info
+    if (loadedData.company) {
+      const name = lang === 'ar' ? (loadedData.company.name_ar || loadedData.company.name_en || '') : (loadedData.company.name_en || loadedData.company.name_ar || '');
+      const vat = loadedData.company.vat_number ? `${l.vatNumber}: ${loadedData.company.vat_number}` : '';
+      document.getElementById('companyName').textContent = name;
+      document.getElementById('companyVat').textContent = vat;
+    }
+    
+    // Re-render table with correct account names
+    renderTable();
+  }
+  
+  function renderTable() {
+    const tbody = document.querySelector('#tbl tbody');
+    tbody.innerHTML = '';
+    let sumD = 0, sumC = 0;
+    
+    loadedData.rows.filter(r => {
+      const d = Number(r.debit || r.debit_total || 0);
+      const c = Number(r.credit || r.credit_total || 0);
+      return Math.abs(d) + Math.abs(c) > 1e-9;
+    }).forEach((r, idx) => {
+      const tr = document.createElement('tr');
+      const code = String(r.account_code || r.code || r.account_number || '').trim();
+      const name = currentLang === 'ar' 
+        ? String(r.name || r.name_ar || r.account_name || '').trim()
+        : String(r.name_en || r.account_name_en || r.name || r.account_name || '').trim();
+      const d = Number(r.debit || r.debit_total || 0);
+      const c = Number(r.credit || r.credit_total || 0);
+      const note = r.note || '';
+      
+      [code || '', name || '', fmt(d), fmt(c), note || ''].forEach(v => {
+        const td = document.createElement('td');
+        td.textContent = String(v);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+      sumD += d;
+      sumC += c;
+    });
+    
+    document.getElementById('totalDebit').textContent = fmt(sumD);
+    document.getElementById('totalCredit').textContent = fmt(sumC);
+  }
+  
+  // Determine API base URL
   function getApiBase() {
-    // 1. Check for explicit window override
-    if (window.__API__) {
-      return window.__API__;
-    }
-    // 2. Check if running on development port (4000 or 3000)
+    if (window.__API__) return window.__API__;
     const port = window.location.port;
-    if (port === '4000' || port === '3000') {
-      return 'http://localhost:5000/api';
-    }
-    // 3. Use same origin (production mode)
+    if (port === '4000' || port === '3000') return 'http://localhost:5000/api';
     return window.location.origin + '/api';
   }
-  const API_BASE = getApiBase()
-  function qp(k){ return new URLSearchParams(location.search).get(k) }
-  function fmt(n){ try { return Number(n||0).toFixed(2) } catch { return '0.00' } }
-  function labelOpType(t){ const v=String(t||''); if(v==='invoice') return 'بيع'; if(v==='supplier_invoice') return 'مورد'; if(v==='expense_invoice') return 'مصروف'; if(v==='payment') return 'سداد/تحصيل'; if(v==='payroll_run') return 'مسير رواتب'; if(!v||v==='manual') return 'يدوي'; return v }
-  function composeNote(acc, drill){
-    const code = String(acc.account_code||acc.code||'').trim()
-    const name = String(acc.name||acc.name_en||acc.name_ar||'').trim()
-    const type = String(acc.type||'').trim()
-    const items = Array.isArray(drill?.items)?drill.items:[]
-    const types = new Set(items.map(i=> String(i.related_type||i.reference_type||'').trim()))
-    const hasInvoice = types.has('invoice')
-    const hasSupplier = types.has('supplier_invoice')
-    const hasExpense = types.has('expense') || types.has('expense_invoice')
-    const hasPayment = types.has('payment')
-    const sumD = Number(acc.debit||acc.debit_total||0)
-    const sumC = Number(acc.credit||acc.credit_total||0)
-    
-    // Cash accounts
-    const isCash = ['1110','1010','1120','1111'].includes(code) || /cash|bank|صندوق|بنك/i.test(name)
-    if (isCash) {
-      if (hasPayment && hasInvoice) return 'بيع نقدي وتحويلات'
-      if (hasPayment) {
-        const hasAR = items.some(i=> String(i.account_code||'')==='1210' && Number(i.credit||0)>0)
-        const hasAP = items.some(i=> String(i.account_code||'')==='2410' && Number(i.debit||0)>0)
-        const hasPayroll = items.some(i=> String(i.account_code||'')==='2430' && Number(i.debit||0)>0)
-        if (hasAR && sumD>0 && sumD>=sumC) return 'استلام نقدي من العملاء'
-        if (hasAP || hasPayroll) return 'سداد للموردين/الرواتب'
-        return sumD>=sumC?'استلام نقدي':'سداد نقدي'
-      }
-      if (hasInvoice) return 'بيع نقدي'
-      if (items.length > 0) return 'حركة نقدية'
-    }
-    
-    // Accounts Receivable
-    if (code==='1210' || code==='1141' || /customers|accounts receivable|عملاء|ذمم/i.test(name)) {
-      if (hasInvoice && hasPayment) return 'بيع وتحصيل جزئي'
-      if (hasInvoice) return 'بيع آجل'
-      if (hasPayment) return 'تحصيل من العملاء'
-      if (items.length > 0) return 'ذمم عملاء'
-    }
-    
-    // Accounts Payable
-    if (code==='2410' || code==='2111' || /suppliers|accounts payable|موردين|ذمم/i.test(name)) return 'التزام الموردين'
-    
-    // VAT accounts
-    if (code==='2150' || code==='2141' || /vat payable|output vat|ضريبة مبيعات/i.test(name)) return 'ضريبة القيمة المضافة على المبيعات'
-    if (code==='1250' || /vat input|ضريبة مشتريات/i.test(name)) return 'ضريبة مشتريات مستحقة'
-    
-    // Expense accounts
-    if (code==='5110' || /purchases|مشتريات/i.test(name)) return 'مشتريات الموردين'
-    if (code==='5210' || /salaries|رواتب/i.test(name)) return 'مصروف الرواتب'
-    if (code==='2430' || /accrued payroll|رواتب مستحقة/i.test(name)) return 'الالتزام المستحق للرواتب'
-    
-    // Revenue accounts
-    if (code==='4190' || /discount|خصم/i.test(name)) return 'خصم على المبيعات'
-    if (code==='4111' || code==='4112' || code==='4121' || code==='4122' || /sales|revenue|مبيعات|إيرادات/i.test(name)) {
-      if (hasInvoice) return 'مبيعات'
-      return 'إيرادات المبيعات'
-    }
-    
-    // Type-based fallback
-    if (type==='revenue') return 'إيرادات البيع الفعلية'
-    if (type==='expense') return 'مصروفات تشغيلية'
-    if (type==='liability') return 'التزامات'
-    if (type==='asset') return 'أصول'
-    if (type==='equity') return 'حقوق ملكية'
-    
-    // If there are items but no specific match, show general note
-    if (items.length > 0) {
-      if (hasInvoice) return 'عمليات بيع'
-      if (hasSupplier) return 'عمليات شراء'
-      if (hasExpense) return 'عمليات مصروفات'
-      if (hasPayment) return 'عمليات سداد'
-      return 'عمليات محاسبية'
-    }
-    
-    return ''
+  const API_BASE = getApiBase();
+  function qp(k) { return new URLSearchParams(location.search).get(k); }
+  function fmt(n) { try { return Number(n || 0).toFixed(2); } catch { return '0.00'; } }
+  
+  async function authFetch(url) {
+    const token = localStorage.getItem('token');
+    const h = token ? { Authorization: `Bearer ${token}` } : {};
+    const r = await fetch(url, { headers: h });
+    if (!r.ok) throw new Error('request_failed');
+    return r.json();
   }
-  async function authFetch(url){ const token = localStorage.getItem('token'); const h = token? { Authorization: `Bearer ${token}` } : {}; const r = await fetch(url, { headers: h }); if(!r.ok) throw new Error('request_failed'); return r.json() }
-  async function load(){
-    let company = null
-    let branding = null
-    try { company = await authFetch(`${API_BASE}/settings/settings_company`) } catch {}
-    try { branding = await authFetch(`${API_BASE}/settings/settings_branding`) } catch {}
-    if (company) { const name = company.name_ar || company.name_en || ''; const vat = company.vat_number ? `الرقم الضريبي: ${company.vat_number}` : ''; document.getElementById('companyName').textContent = name; document.getElementById('companyVat').textContent = vat }
-    if (branding && branding.logo) { const img=document.getElementById('logo'); img.src=branding.logo; img.style.display='block' }
-    const period = qp('period');
-    const from = qp('from'); const to = qp('to');
-    const meta = []
-    if (period) meta.push(`الفترة: ${period}`)
-    if (from) meta.push(`من: ${from}`)
-    if (to) meta.push(`إلى: ${to}`)
-    document.getElementById('periodLabel').textContent = meta.join(' • ')
-    const params = new URLSearchParams(); if (period) params.set('period', period); if (from) params.set('from', from); if (to) params.set('to', to)
-    const res = await authFetch(`${API_BASE}/reports/trial-balance${params.toString()?`?${params.toString()}`:''}`)
-    const rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res?.rows) ? res.rows : (Array.isArray(res) ? res : []))
+  
+  async function load() {
+    // Set initial language
+    document.getElementById('langSelect').value = currentLang;
+    if (currentLang === 'en') {
+      document.documentElement.lang = 'en';
+      document.body.className = 'ltr';
+    }
     
-    // Fetch account names from accounts API if missing
-    const accountMap = new Map()
+    try { loadedData.company = await authFetch(`${API_BASE}/settings/settings_company`); } catch {}
+    try { loadedData.branding = await authFetch(`${API_BASE}/settings/settings_branding`); } catch {}
+    
+    if (loadedData.branding && loadedData.branding.logo) {
+      const img = document.getElementById('logo');
+      img.src = loadedData.branding.logo;
+      img.style.display = 'block';
+    }
+    
+    loadedData.period = qp('period');
+    loadedData.from = qp('from');
+    loadedData.to = qp('to');
+    
+    const params = new URLSearchParams();
+    if (loadedData.period) params.set('period', loadedData.period);
+    if (loadedData.from) params.set('from', loadedData.from);
+    if (loadedData.to) params.set('to', loadedData.to);
+    
+    const res = await authFetch(`${API_BASE}/reports/trial-balance${params.toString() ? `?${params.toString()}` : ''}`);
+    loadedData.rows = Array.isArray(res?.items) ? res.items : (Array.isArray(res?.rows) ? res.rows : (Array.isArray(res) ? res : []));
+    
+    // Fetch account names
     try {
-      const accountsTree = await authFetch(`${API_BASE}/accounts`)
-      const flatAccounts = []
+      const accountsTree = await authFetch(`${API_BASE}/accounts`);
+      const accountMap = new Map();
       function flattenAccounts(arr) {
-        if (!Array.isArray(arr)) return
+        if (!Array.isArray(arr)) return;
         for (const a of arr) {
           if (a && a.id) {
-            flatAccounts.push(a)
-            if (Array.isArray(a.children)) flattenAccounts(a.children)
+            accountMap.set(Number(a.id), a);
+            if (a.account_code) accountMap.set(String(a.account_code), a);
+            if (a.account_number) accountMap.set(String(a.account_number), a);
+            if (Array.isArray(a.children)) flattenAccounts(a.children);
           }
         }
       }
-      flattenAccounts(accountsTree)
-      
-      for (const acc of flatAccounts) {
-        const accId = Number(acc.id || 0)
-        const accCode = String(acc.account_code || acc.account_number || '').trim()
-        if (accId) accountMap.set(accId, acc)
-        if (accCode) accountMap.set(accCode, acc)
-      }
+      flattenAccounts(accountsTree);
       
       // Enrich rows with account names
-      for (const r of rows) {
-        const accId = Number(r.account_id || r.id || 0)
-        const accCode = String(r.account_code || r.code || r.account_number || '').trim()
-        const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || '').trim()
-        
-        if (!name && (accId || accCode)) {
-          const acc = accountMap.get(accId) || accountMap.get(accCode)
-          if (acc) {
-            r.name = acc.name || acc.name_en || acc.name_ar || ''
-            r.name_en = acc.name_en || acc.name || acc.name_ar || ''
-            r.name_ar = acc.name || acc.name_en || acc.name_ar || ''
-            r.account_name = acc.name || acc.name_en || acc.name_ar || ''
-            r.account_name_en = acc.name_en || acc.name || acc.name_ar || ''
-          }
+      for (const r of loadedData.rows) {
+        const accId = Number(r.account_id || r.id || 0);
+        const accCode = String(r.account_code || r.code || r.account_number || '').trim();
+        const acc = accountMap.get(accId) || accountMap.get(accCode);
+        if (acc) {
+          r.name = r.name || acc.name || '';
+          r.name_en = r.name_en || acc.name_en || '';
+          r.name_ar = r.name_ar || acc.name || '';
         }
       }
     } catch (e) {
-      console.warn('[TRIAL BALANCE] Failed to fetch account names:', e)
+      console.warn('Failed to fetch account names:', e);
     }
     
-    const tbody = document.querySelector('#tbl tbody')
-    tbody.innerHTML = ''
-    let sumD = 0, sumC = 0
-    // Load drilldown data for notes (only if account_id exists)
-    const drillPromises = rows.map(r => {
-      const accountId = r.account_id || r.id
-      if (!accountId) return Promise.resolve({ items: [] })
-      const params2 = new URLSearchParams(); 
-      if (period) params2.set('period', period); 
-      if (from) params2.set('from', from); 
-      if (to) params2.set('to', to); 
-      params2.set('account_id', String(accountId))
-      return authFetch(`${API_BASE}/reports/trial-balance/drilldown${params2.toString()?`?${params2.toString()}`:''}`).catch(()=>({ items: [] }))
-    })
-    const drills = await Promise.all(drillPromises)
-    rows.filter(r=>{ const d = Number(r.debit||r.debit_total||0); const c = Number(r.credit||r.credit_total||0); return Math.abs(d) + Math.abs(c) > 1e-9 }).forEach((r, idx) => {
-      const tr = document.createElement('tr')
-      const code = String(r.account_code || r.code || r.account_number || '').trim()
-      const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || '').trim()
-      const d = Number(r.debit||r.debit_total||0)
-      const c = Number(r.credit||r.credit_total||0)
-      const note = composeNote(r, drills[idx] || { items: [] })
-      // Always show code, name, debit, credit, and note
-      ;[code || '', name || '', fmt(d), fmt(c), note || ''].forEach(v => { const td=document.createElement('td'); td.textContent=String(v); tr.appendChild(td) })
-      tbody.appendChild(tr)
-      sumD += d; sumC += c
-    })
-    document.getElementById('totalDebit').textContent = fmt(sumD)
-    document.getElementById('totalCredit').textContent = fmt(sumC)
-    setTimeout(()=>window.print(), 200)
+    // Apply current language
+    changeLang(currentLang);
+    
+    setTimeout(() => window.print(), 200);
   }
-  load().catch(()=>{ alert('فشل الطباعة. يرجى المحاولة مرة أخرى.') })
+  
+  load().catch(() => { alert('فشل الطباعة. يرجى المحاولة مرة أخرى.'); });
 </script>
 </body>
 </html>

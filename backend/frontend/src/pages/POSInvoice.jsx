@@ -4,6 +4,9 @@ import api, { partners as apiPartners, products as apiProducts, orders as apiOrd
 import { print } from '@/printing'
 import { useAuth } from '../context/AuthContext'
 import { t, getLang } from '../utils/i18n'
+import { useOrder } from '../hooks/useOrder'
+import { useInvoice } from '../hooks/useInvoice'
+import { usePayments } from '../hooks/usePayments'
 export default function POSInvoice(){
   const navigate = useNavigate()
   const { branch, table } = useParams()
@@ -28,7 +31,7 @@ export default function POSInvoice(){
   const lastSavedHashRef = useRef(null)
   const hydratedFromOrderRef = useRef(false)
   const hydratedOrderIdRef = useRef(null)
-  const itemsRef = useRef([])
+  // itemsRef now managed by useOrder hook - removed duplicate declaration
   const pendingChangesRef = useRef(false)
   const savePendingRef = useRef(false)
   const pendingHashRef = useRef(null)
@@ -44,7 +47,7 @@ export default function POSInvoice(){
   const [lang, setLang] = useState(getLang())
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [loadingProducts, setLoadingProducts] = useState(false)
-  const [loadingOrder, setLoadingOrder] = useState(false)
+  // loadingOrder now managed by useOrder hook (see above)
   const [loadingPartner, setLoadingPartner] = useState(false)
   const [categoriesState, setCategoriesState] = useState(['عام'])
   useEffect(()=>{
@@ -72,10 +75,39 @@ export default function POSInvoice(){
     { id: 'p1', name: 'منتج 1', category: 'عام', price: 10 },
     { id: 'p2', name: 'منتج 2', category: 'عام', price: 5 },
   ] : []))
-  const [items, setItems] = useState([])
+  // Use custom hooks for order, invoice, and payments management
+  const orderHook = useOrder();
+  const invoiceHook = useInvoice(branch, table, orderId);
+  const paymentsHook = usePayments();
+  
+  // Extract from hooks (for backward compatibility during refactoring)
+  const items = orderHook.items;
+  const setItems = orderHook.setItems;
+  const itemsRef = orderHook.itemsRef;
+  const loadingOrder = orderHook.loadingOrder;
+  const hydrating = orderHook.hydrating;
+  const tableBusy = orderHook.tableBusy;
+  const hydrateOrder = orderHook.hydrateOrder; // Use hook's hydrateOrder
+  
+  const invoiceNumber = invoiceHook.invoiceNumber;
+  const setInvoiceNumber = invoiceHook.setInvoiceNumber;
+  const invoiceReady = invoiceHook.invoiceReady;
+  const setInvoiceReady = invoiceHook.setInvoiceReady;
+  
+  const paymentMethod = paymentsHook.paymentMethod;
+  const setPaymentMethod = paymentsHook.setPaymentMethod;
+  const payLines = paymentsHook.payLines;
+  const setPayLines = paymentsHook.setPayLines;
+  const payLinesInitiated = paymentsHook.payLinesInitiated;
+  const setPayLinesInitiated = paymentsHook.setPayLinesInitiated;
+  const multiOpen = paymentsHook.multiOpen;
+  const setMultiOpen = paymentsHook.setMultiOpen;
+  const modalPay = paymentsHook.modalPay;
+  const setModalPay = paymentsHook.setModalPay;
+  const cashPaid = paymentsHook.cashPaid;
+  const setCashPaid = paymentsHook.setCashPaid;
+  
   const [loading, setLoading] = useState(false)
-  const [hydrating, setHydrating] = useState(false)
-  const [tableBusy, setTableBusy] = useState(false)
   const [partnerId, setPartnerId] = useState(null)
   const [partners, setPartners] = useState([])
   const [custSuggestOpen, setCustSuggestOpen] = useState(false)
@@ -91,13 +123,10 @@ export default function POSInvoice(){
   const [selectedPartnerType, setSelectedPartnerType] = useState('')
   const [discountLocked, setDiscountLocked] = useState(false)
   const [discountApplied, setDiscountApplied] = useState(false)
-  const [invoiceNumber, setInvoiceNumber] = useState('Auto')
-  const [invoiceReady, setInvoiceReady] = useState(false)
-  const [paymentMethod, setPaymentMethod] = useState('')
+  // Payment and invoice state now managed by hooks (see above)
   const [selectedCategory, setSelectedCategory] = useState(null)
   const [sectionOpen, setSectionOpen] = useState(false)
   const [cashCalcOpen, setCashCalcOpen] = useState(false)
-  const [cashPaid, setCashPaid] = useState('')
   const [supervisorOpen, setSupervisorOpen] = useState(false)
   const [supPassword, setSupPassword] = useState('')
   const [supError, setSupError] = useState('')
@@ -105,10 +134,6 @@ export default function POSInvoice(){
   const [alertOpen, setAlertOpen] = useState(false)
   const [alertTitle, setAlertTitle] = useState('')
   const [alertMessage, setAlertMessage] = useState('')
-  const [payLines, setPayLines] = useState([])
-  const [payLinesInitiated, setPayLinesInitiated] = useState(false)
-  const [multiOpen, setMultiOpen] = useState(false)
-  const [modalPay, setModalPay] = useState([])
   const [branchesList, setBranchesList] = useState([])
   const currency = '﷼'
   const currencyCode = 'SAR'
@@ -572,32 +597,15 @@ export default function POSInvoice(){
     },[products]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const dataReady = !loadingCategories && !loadingProducts && !loadingOrder && !loadingPartner && !hydrating
-  function addItem(p){
-    const base = Array.isArray(itemsRef.current) ? itemsRef.current : []
-    const idx = base.findIndex(it => String(it.product_id||it.id||'') === String(p.id) || String(it.name||'') === String(p.name))
-    // Get bilingual names
-    const nm = splitBilingual(p.name, p.name_en)
-    const next = (function(){
-      if (idx >= 0) { 
-        return base.map((it, i) => i === idx ? { 
-          ...it, 
-          qty: Number(it.qty||0) + 1,
-          name_en: it.name_en || nm.en || ''
-        } : it) 
-      }
-      return [...base, { 
-        product_id: p.id, 
-        name: p.name, 
-        name_en: nm.en || p.name_en || '',
-        qty: 1, 
-        price: Number(p.price||0), 
-        discount: 0 
-      }]
-    })()
-    itemsRef.current = next
-    setItems(next)
-    pendingChangesRef.current = true
-  }
+  // Use hook's addItem function
+  const addItem = useCallback((p) => {
+    const nm = splitBilingual(p.name, p.name_en);
+    const productWithBilingual = {
+      ...p,
+      name_en: nm.en || p.name_en || ''
+    };
+    orderHook.addItem(productWithBilingual);
+  }, [orderHook]);
   async function ensureOrderThenAdd(p){
     const norm = (v)=>{ const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); if (s==='palace_india' || s==='palce_india') return 'place_india'; return s }
     if (!orderId) {
@@ -610,20 +618,9 @@ export default function POSInvoice(){
     }
     addItem(p)
   }
-  function updateItem(idx, patch){
-    const base = Array.isArray(itemsRef.current) ? itemsRef.current : []
-    const next = base.map((it,i)=> i===idx ? { ...it, ...(typeof patch==='function'?patch(it):patch) } : it )
-    itemsRef.current = next
-    setItems(next)
-    pendingChangesRef.current = true
-  }
-  function removeItem(idx){
-    const base = Array.isArray(itemsRef.current) ? itemsRef.current : []
-    const next = base.filter((_,i)=> i!==idx)
-    itemsRef.current = next
-    setItems(next)
-    pendingChangesRef.current = true
-  }
+  // Use hook's updateItem and removeItem functions
+  const updateItem = orderHook.updateItem;
+  const removeItem = orderHook.removeItem;
   const totals = useMemo(()=>{ 
     const safeItems = Array.isArray(items) ? items : [];
     const subtotal = safeItems.reduce((s,it)=> s + Number(it.qty||0)*Number(it.price||0),0); 
@@ -1846,8 +1843,9 @@ export default function POSInvoice(){
       } else if (tp==='credit') {
         setDiscountLocked(true)
         setPlatformDiscountOpen(true)
-        setDiscountApplied(false)
-        setDiscountPct(0)
+        setPlatformDiscount(d > 0 ? d : 0) // Load customer discount if available
+        setDiscountApplied(d > 0) // Auto-apply if discount exists
+        setDiscountPct(d > 0 ? d : 0) // Set discount percentage
       } else {
         setDiscountLocked(true)
         setPlatformDiscountOpen(false)
@@ -1885,8 +1883,9 @@ export default function POSInvoice(){
     } else if (tp==='credit') {
       setDiscountLocked(true)
       setPlatformDiscountOpen(true)
-      setDiscountApplied(false)
-      setDiscountPct(0)
+      setPlatformDiscount(d > 0 ? d : 0) // Load customer discount if available
+      setDiscountApplied(d > 0) // Auto-apply if discount exists
+      setDiscountPct(d > 0 ? d : 0) // Set discount percentage
     } else {
       setDiscountLocked(true)
       setPlatformDiscountOpen(false)

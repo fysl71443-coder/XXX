@@ -104,35 +104,90 @@ export default function EmployeeEdit(){
                 </div>
               )}
             </div>
-            <input type="date" className="border rounded p-2" value={form.birth_date||''} onChange={e=>setForm({ ...form, birth_date: e.target.value })} />
-            <select className="border rounded p-2" value={form.gender||''} onChange={e=>setForm({ ...form, gender: e.target.value })}><option value="">{lang==='ar'?'الجنس':'Gender'}</option><option value="male">{lang==='ar'?'ذكر':'Male'}</option><option value="female">{lang==='ar'?'أنثى':'Female'}</option></select>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'تاريخ الميلاد':'Birth Date'}</label>
+              <input type="date" className="border rounded p-2 w-full" value={form.birth_date||''} onChange={e=>setForm({ ...form, birth_date: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'الجنس':'Gender'}</label>
+              <select className="border rounded p-2 w-full" value={form.gender||''} onChange={e=>setForm({ ...form, gender: e.target.value })}><option value="">{lang==='ar'?'اختر':'Select'}</option><option value="male">{lang==='ar'?'ذكر':'Male'}</option><option value="female">{lang==='ar'?'أنثى':'Female'}</option></select>
+            </div>
             <div className="md:col-span-2 font-semibold flex items-center gap-2"><Briefcase className="w-4 h-4 text-primary-600" />{lang==='ar'?'بيانات التوظيف':'Employment'}</div>
-            <input type="date" className="border rounded p-2" value={form.hire_date||''} onChange={e=>setForm({ ...form, hire_date: e.target.value })} />
-            <select className="border rounded p-2" value={form.contract_type||''} onChange={e=>setForm({ ...form, contract_type: e.target.value })}><option value="full_time">{lang==='ar'?'دوام كامل':'Full-time'}</option><option value="part_time">{lang==='ar'?'جزئي':'Part-time'}</option><option value="temporary">{lang==='ar'?'مؤقت':'Temporary'}</option></select>
-            <input className="border rounded p-2" value={form.contract_duration_months||''} onChange={e=>setForm({ ...form, contract_duration_months: e.target.value })} />
-            <input className="border rounded p-2" value={form.probation_days||''} onChange={e=>setForm({ ...form, probation_days: e.target.value })} />
-            <select className="border rounded p-2" value={form.status||'active'} onChange={e=>setForm({ ...form, status: e.target.value })}><option value="active">{lang==='ar'?'نشط':'Active'}</option><option value="disabled">{lang==='ar'?'موقوف':'Disabled'}</option><option value="terminated">{lang==='ar'?'منتهي':'Terminated'}</option></select>
-          <div className="md:col-span-2 font-semibold flex items-center gap-2"><Wallet className="w-4 h-4 text-primary-600" />Payroll</div>
-          <select className="border rounded p-2" value={form.pay_type||'monthly'} onChange={e=>setForm({ ...form, pay_type: e.target.value })}><option value="monthly">{lang==='ar'?'شهري':'Monthly'}</option><option value="hourly">{lang==='ar'?'بالساعة':'Hourly'}</option></select>
-          <input className="border rounded p-2" inputMode="decimal" lang="en" dir="ltr" value={String(form.basic_salary||'')} onChange={e=>setForm({ ...form, basic_salary: sanitizeDecimal(e.target.value) })} />
-          <input className="border rounded p-2" inputMode="decimal" lang="en" dir="ltr" value={String(form.hourly_rate||'')} onChange={e=>setForm({ ...form, hourly_rate: sanitizeDecimal(e.target.value) })} />
-          <input className="border rounded p-2" inputMode="decimal" lang="en" dir="ltr" value={String(form.housing_allowance||'')} onChange={e=>setForm({ ...form, housing_allowance: sanitizeDecimal(e.target.value) })} />
-          <input className="border rounded p-2" inputMode="decimal" lang="en" dir="ltr" value={String(form.transport_allowance||'')} onChange={e=>setForm({ ...form, transport_allowance: sanitizeDecimal(e.target.value) })} />
-          <input className="border rounded p-2" inputMode="decimal" lang="en" dir="ltr" value={String(form.other_allowances||'')} onChange={e=>setForm({ ...form, other_allowances: sanitizeDecimal(e.target.value) })} />
-            <input className="border rounded p-2" value={form.iban||''} onChange={e=>setForm({ ...form, iban: e.target.value })} />
-            <div className="md:col-span-2 font-semibold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-primary-600" />GOSI</div>
-            <input className="border rounded p-2" value={form.gosi_subscription_no||''} onChange={e=>setForm({ ...form, gosi_subscription_no: e.target.value })} />
-            <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.gosi_enrolled} onChange={e=>setForm({ ...form, gosi_enrolled: e.target.checked })} /> {lang==='ar'?'مشمول بالتأمينات':'GOSI enrolled'}</label>
-            <input className="border rounded p-2" inputMode="decimal" lang="en" dir="ltr" value={String(form.gosi_employee_rate||'')} onChange={e=>setForm({ ...form, gosi_employee_rate: sanitizeDecimal(e.target.value) })} />
-            <input className="border rounded p-2" inputMode="decimal" lang="en" dir="ltr" value={String(form.gosi_employer_rate||'')} onChange={e=>setForm({ ...form, gosi_employer_rate: sanitizeDecimal(e.target.value) })} />
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'تاريخ التعيين':'Hire Date'}</label>
+              <input type="date" className="border rounded p-2 w-full" value={form.hire_date||''} onChange={e=>setForm({ ...form, hire_date: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'نوع العقد':'Contract Type'}</label>
+              <select className="border rounded p-2 w-full" value={form.contract_type||''} onChange={e=>setForm({ ...form, contract_type: e.target.value })}><option value="full_time">{lang==='ar'?'دوام كامل':'Full-time'}</option><option value="part_time">{lang==='ar'?'جزئي':'Part-time'}</option><option value="temporary">{lang==='ar'?'مؤقت':'Temporary'}</option></select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'مدة العقد (أشهر)':'Contract Duration (months)'}</label>
+              <input className="border rounded p-2 w-full" placeholder={lang==='ar'?'12':'12'} value={form.contract_duration_months||''} onChange={e=>setForm({ ...form, contract_duration_months: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'فترة التجربة (يوم)':'Probation (days)'}</label>
+              <input className="border rounded p-2 w-full" placeholder="90" value={form.probation_days||''} onChange={e=>setForm({ ...form, probation_days: e.target.value })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'الحالة':'Status'}</label>
+              <select className="border rounded p-2 w-full" value={form.status||'active'} onChange={e=>setForm({ ...form, status: e.target.value })}><option value="active">{lang==='ar'?'نشط':'Active'}</option><option value="disabled">{lang==='ar'?'موقوف':'Disabled'}</option><option value="terminated">{lang==='ar'?'منتهي':'Terminated'}</option></select>
+            </div>
+            <div className="md:col-span-2 font-semibold flex items-center gap-2"><Wallet className="w-4 h-4 text-primary-600" />{lang==='ar'?'الرواتب':'Payroll'}</div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'نوع الدفع':'Pay Type'}</label>
+              <select className="border rounded p-2 w-full" value={form.pay_type||'monthly'} onChange={e=>setForm({ ...form, pay_type: e.target.value })}><option value="monthly">{lang==='ar'?'شهري':'Monthly'}</option><option value="hourly">{lang==='ar'?'بالساعة':'Hourly'}</option></select>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'الراتب الأساسي':'Basic Salary'}</label>
+              <input className="border rounded p-2 w-full" inputMode="decimal" lang="en" dir="ltr" placeholder="0.00" value={String(form.basic_salary||'')} onChange={e=>setForm({ ...form, basic_salary: sanitizeDecimal(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'سعر الساعة':'Hourly Rate'}</label>
+              <input className="border rounded p-2 w-full" inputMode="decimal" lang="en" dir="ltr" placeholder="0.00" value={String(form.hourly_rate||'')} onChange={e=>setForm({ ...form, hourly_rate: sanitizeDecimal(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'بدل السكن':'Housing Allowance'}</label>
+              <input className="border rounded p-2 w-full" inputMode="decimal" lang="en" dir="ltr" placeholder="0.00" value={String(form.housing_allowance||'')} onChange={e=>setForm({ ...form, housing_allowance: sanitizeDecimal(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'بدل النقل':'Transport Allowance'}</label>
+              <input className="border rounded p-2 w-full" inputMode="decimal" lang="en" dir="ltr" placeholder="0.00" value={String(form.transport_allowance||'')} onChange={e=>setForm({ ...form, transport_allowance: sanitizeDecimal(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'بدلات أخرى':'Other Allowances'}</label>
+              <input className="border rounded p-2 w-full" inputMode="decimal" lang="en" dir="ltr" placeholder="0.00" value={String(form.other_allowances||'')} onChange={e=>setForm({ ...form, other_allowances: sanitizeDecimal(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'رقم الآيبان':'IBAN'}</label>
+              <input className="border rounded p-2 w-full" placeholder="SA..." value={form.iban||''} onChange={e=>setForm({ ...form, iban: e.target.value })} />
+            </div>
+            <div className="md:col-span-2 font-semibold flex items-center gap-2"><ShieldCheck className="w-4 h-4 text-primary-600" />{lang==='ar'?'التأمينات الاجتماعية':'GOSI'}</div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'رقم الاشتراك':'Subscription No.'}</label>
+              <input className="border rounded p-2 w-full" placeholder={lang==='ar'?'رقم الاشتراك':'Subscription No.'} value={form.gosi_subscription_no||''} onChange={e=>setForm({ ...form, gosi_subscription_no: e.target.value })} />
+            </div>
+            <div className="flex items-center">
+              <label className="flex items-center gap-2"><input type="checkbox" checked={!!form.gosi_enrolled} onChange={e=>setForm({ ...form, gosi_enrolled: e.target.checked })} /> {lang==='ar'?'مشمول بالتأمينات':'GOSI enrolled'}</label>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'نسبة الموظف':'Employee Rate'}</label>
+              <input className="border rounded p-2 w-full" inputMode="decimal" lang="en" dir="ltr" placeholder="0.09" value={String(form.gosi_employee_rate||'')} onChange={e=>setForm({ ...form, gosi_employee_rate: sanitizeDecimal(e.target.value) })} />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">{lang==='ar'?'نسبة صاحب العمل':'Employer Rate'}</label>
+              <input className="border rounded p-2 w-full" inputMode="decimal" lang="en" dir="ltr" placeholder="0.11" value={String(form.gosi_employer_rate||'')} onChange={e=>setForm({ ...form, gosi_employer_rate: sanitizeDecimal(e.target.value) })} />
+            </div>
             <div className="md:col-span-2 font-semibold">{lang==='ar'?'ربط محاسبي':'Accounting Link'}</div>
             <div className="md:col-span-2 flex items-center gap-2">
-              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs">5210</span>
-              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs">2120</span>
-              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs">2130</span>
+              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs">{lang==='ar'?'مصروف الرواتب':'Salary Expense'}: 5210</span>
+              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs">{lang==='ar'?'التأمينات':'GOSI Liability'}: 2120</span>
+              <span className="px-2 py-1 rounded bg-gray-100 text-gray-700 text-xs">{lang==='ar'?'الرواتب المستحقة':'Payroll Payable'}: 2130</span>
             </div>
             <div className="md:col-span-2 font-semibold">{lang==='ar'?'القسم':'Department'}</div>
-            <input className="border rounded p-2" value={form.department||''} onChange={e=>setForm({ ...form, department: e.target.value })} />
+            <div>
+              <input className="border rounded p-2 w-full" placeholder={lang==='ar'?'اسم القسم':'Department name'} value={form.department||''} onChange={e=>setForm({ ...form, department: e.target.value })} />
+            </div>
           </div>
         </div>
       </main>

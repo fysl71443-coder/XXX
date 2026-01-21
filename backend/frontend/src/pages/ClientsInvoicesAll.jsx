@@ -5,7 +5,7 @@ import { invoices, partners as apiPartners, periods, payments } from '../service
 import StatusBadge from '../ui/StatusBadge'
 import { t } from '../utils/i18n'
 import Button from '../ui/Button'
-import { FaEye, FaEdit, FaPrint } from 'react-icons/fa'
+import { FaEye, FaEdit, FaPrint, FaSync } from 'react-icons/fa'
 import Modal from '../ui/Modal'
 
 export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='', mode='' }){
@@ -79,7 +79,10 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
     setPreviewOpen(true)
   }
   function editInvoice(inv){ navigate('/clients', { state: { openCustomerId: inv.partner_id } }) }
-  function printInvoice(inv){ }
+  function printInvoice(inv){ 
+    const url = `/print/invoice.html?id=${encodeURIComponent(inv.id)}`;
+    window.open(url, '_blank');
+  }
   async function reload(){ setLoading(true); try { const q = { type:'sale', ...filters }; const sv = String(q.status||'').toLowerCase(); if (sv==='due' || sv==='overdue') { q.due = '1'; delete q.status } const res = await invoices.list(q); setRows(res?.items||res||[]) } catch { setRows([]) } finally { setLoading(false) } }
 
   return (
@@ -109,10 +112,9 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
                 <option value="partial">{lang==='ar'?'جزئية':'Partial'}</option>
               </select>
               <select className="border rounded px-2 py-2" value={filters.branch} onChange={e=>setFilters(f=>({...f, branch: e.target.value}))}>
-                <option value="">{lang==='ar'?'الفرع':'Branch'}</option>
+                <option value="">{lang==='ar'?'كل الفروع':'All Branches'}</option>
                 <option value="china_town">China Town</option>
                 <option value="place_india">Place India</option>
-                <option value="palace_india">Palace India</option>
               </select>
               <input type="date" className="border rounded px-2 py-2" value={filters.from} onChange={e=>setFilters(f=>({...f, from: e.target.value}))} />
               <input type="date" className="border rounded px-2 py-2" value={filters.to} onChange={e=>setFilters(f=>({...f, to: e.target.value}))} />
@@ -161,6 +163,7 @@ export default function ClientsInvoicesAll({ compact=false, defaultPartnerId='',
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" onClick={()=> viewInvoice(inv)}><FaEye /> {lang==='ar'?'عرض':'View'}</Button>
                     <Button variant="secondary" onClick={()=> editInvoice(inv)}><FaEdit /> {lang==='ar'?'تعديل':'Edit'}</Button>
+                    <Button variant="ghost" onClick={()=> printInvoice(inv)}><FaPrint /> {lang==='ar'?'طباعة':'Print'}</Button>
                   </div>
                 </td>
               </tr>

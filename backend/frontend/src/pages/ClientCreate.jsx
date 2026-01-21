@@ -1,17 +1,23 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { partners } from '../services/api'
-import { FaHome, FaSave } from 'react-icons/fa'
+import { FaHome, FaSave, FaUser, FaPhone, FaMapMarkerAlt, FaPercent, FaCreditCard } from 'react-icons/fa'
 import { useAuth } from '../context/AuthContext'
 
 export default function ClientCreate() {
   const navigate = useNavigate()
   const { can } = useAuth()
-  const [lang] = useState(localStorage.getItem('lang')||'ar')
+  const [lang, setLang] = useState(localStorage.getItem('lang')||'ar')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({
-    name: '', phone: '', address: '', customer_payment: 'نقدي', discount_pct: ''
+    name: '', phone: '', address: '', customer_payment: 'نقدي', discount_pct: '', email: '', tax_id: ''
   })
+
+  useEffect(() => {
+    function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   async function save() {
     setSaving(true)
@@ -78,23 +84,90 @@ export default function ClientCreate() {
       </header>
 
       <main className="max-w-2xl mx-auto px-6 py-6 space-y-4">
-        <div className="border rounded p-4 bg-white">
-          <div className="font-semibold mb-2">{lang==='ar'? 'بيانات العميل (مطعم)' : 'Customer (Restaurant)'}</div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <input className="border rounded p-2" placeholder={lang==='ar'?'الاسم':'Name'} value={form.name} onChange={e=>setForm({...form, name: e.target.value})} />
-            <input className="border rounded p-2" placeholder={lang==='ar'?'الهاتف':'Phone'} value={form.phone} onChange={e=>setForm({...form, phone: e.target.value})} />
-            <textarea className="border rounded p-2 md:col-span-2" rows={2} placeholder={lang==='ar'?'العنوان':'Address'} value={form.address} onChange={e=>setForm({...form, address: e.target.value})} />
-            <select className="border rounded p-2" value={form.customer_payment} onChange={e=>setForm({...form, customer_payment: e.target.value})}>
-              <option value="نقدي">{lang==='ar'?'نقدي':'Cash'}</option>
-              <option value="آجل">{lang==='ar'?'آجل':'Credit'}</option>
-            </select>
-            <input type="number" className="border rounded p-2" placeholder={lang==='ar'?'الخصم الممنوح (%)':'Granted Discount (%)'} value={form.discount_pct} onChange={e=>setForm({...form, discount_pct: e.target.value})} />
+        <div className="border rounded-xl p-6 bg-white shadow-sm">
+          <div className="font-bold text-lg mb-4 text-primary-700">{lang==='ar'? 'بيانات العميل الجديد' : 'New Customer Information'}</div>
+          
+          {/* البيانات الأساسية */}
+          <div className="mb-4">
+            <div className="text-sm font-semibold text-gray-600 mb-2">{lang==='ar'?'البيانات الأساسية':'Basic Information'}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <FaUser className="inline ml-1" /> {lang==='ar'?'اسم العميل':'Customer Name'} <span className="text-red-500">*</span>
+                </label>
+                <input className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                  placeholder={lang==='ar'?'أدخل اسم العميل':'Enter customer name'} 
+                  value={form.name} 
+                  onChange={e=>setForm({...form, name: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <FaPhone className="inline ml-1" /> {lang==='ar'?'رقم الهاتف':'Phone Number'}
+                </label>
+                <input className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                  placeholder={lang==='ar'?'05XXXXXXXX':'05XXXXXXXX'} 
+                  value={form.phone} 
+                  onChange={e=>setForm({...form, phone: e.target.value})} />
+              </div>
+            </div>
           </div>
-          <div className="flex justify-end gap-2 mt-3">
-            <button className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded" onClick={()=>navigate('/clients')}>{lang==='ar'?'رجوع':'Back'}</button>
+
+          {/* العنوان */}
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              <FaMapMarkerAlt className="inline ml-1" /> {lang==='ar'?'العنوان':'Address'}
+            </label>
+            <textarea className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+              rows={2} 
+              placeholder={lang==='ar'?'أدخل عنوان العميل (مطلوب لعملاء الآجل)':'Enter customer address (required for credit customers)'} 
+              value={form.address} 
+              onChange={e=>setForm({...form, address: e.target.value})} />
+          </div>
+
+          {/* نوع الدفع والخصم */}
+          <div className="mb-4">
+            <div className="text-sm font-semibold text-gray-600 mb-2">{lang==='ar'?'معلومات الدفع':'Payment Information'}</div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <FaCreditCard className="inline ml-1" /> {lang==='ar'?'نوع الدفع':'Payment Type'}
+                </label>
+                <select className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                  value={form.customer_payment} 
+                  onChange={e=>setForm({...form, customer_payment: e.target.value})}>
+                  <option value="نقدي">{lang==='ar'?'نقدي (دفع فوري)':'Cash (Immediate Payment)'}</option>
+                  <option value="آجل">{lang==='ar'?'آجل (بيع بالدين)':'Credit (Deferred Payment)'}</option>
+                </select>
+                <p className="text-xs text-gray-500 mt-1">
+                  {form.customer_payment==='آجل' 
+                    ? (lang==='ar'?'العميل الآجل يتطلب رقم هاتف وعنوان صحيح':'Credit customer requires valid phone and address')
+                    : (lang==='ar'?'العميل النقدي يدفع فورًا':'Cash customer pays immediately')}
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <FaPercent className="inline ml-1" /> {lang==='ar'?'نسبة الخصم الممنوح':'Granted Discount (%)'}
+                </label>
+                <input type="number" min="0" max="100" step="0.5"
+                  className="w-full border rounded-lg p-2.5 focus:ring-2 focus:ring-primary-500 focus:border-primary-500" 
+                  placeholder={lang==='ar'?'0':'0'} 
+                  value={form.discount_pct} 
+                  onChange={e=>setForm({...form, discount_pct: e.target.value})} />
+                <p className="text-xs text-gray-500 mt-1">{lang==='ar'?'سيتم تطبيقه تلقائيًا على الفواتير':'Will be automatically applied to invoices'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* أزرار الإجراءات */}
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <button className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors" onClick={()=>navigate('/clients')}>
+              {lang==='ar'?'رجوع':'Back'}
+            </button>
             {(()=>{ const allowed = can('clients:write'); return (
-            <button disabled={saving || !allowed} className={`px-3 py-2 ${allowed?'bg-primary-600':'bg-gray-400 cursor-not-allowed'} text-white rounded flex items-center gap-2`} onClick={save}>
-              <FaSave /> {saving ? (lang==='ar'? 'جار الحفظ...' : 'Saving...') : (lang==='ar'? 'حفظ' : 'Save')}
+            <button disabled={saving || !allowed} 
+              className={`px-4 py-2.5 ${allowed?'bg-primary-600 hover:bg-primary-700':'bg-gray-400 cursor-not-allowed'} text-white rounded-lg flex items-center gap-2 transition-colors`} 
+              onClick={save}>
+              <FaSave /> {saving ? (lang==='ar'? 'جار الحفظ...' : 'Saving...') : (lang==='ar'? 'حفظ العميل' : 'Save Customer')}
             </button>) })()}
           </div>
         </div>

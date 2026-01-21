@@ -41,7 +41,26 @@ export default function SalesOrders(){
       setLoading(true)
       try {
         const items = await apiOrders.list()
-        const mapped = items.map(it => ({ id: it.id, number: it.order_number, date: new Date(it.date||Date.now()).toISOString().replace('T',' ').substring(0,19), customer: it.customer?.name || '-', status: String(it.status||'DRAFT'), activity: 'Accounts', amount: 0 }))
+        const mapped = (Array.isArray(items) ? items : []).map(it => {
+          // Calculate amount from lines if available
+          let amount = Number(it.total_amount || it.total || 0);
+          if (amount === 0 && it.lines) {
+            try {
+              const lines = Array.isArray(it.lines) ? it.lines : (typeof it.lines === 'string' ? JSON.parse(it.lines) : []);
+              const itemLines = lines.filter(l => l && l.type === 'item');
+              amount = itemLines.reduce((sum, l) => sum + (Number(l.qty || l.quantity || 0) * Number(l.price || 0)), 0);
+            } catch {}
+          }
+          return {
+            id: it.id, 
+            number: it.order_number, 
+            date: new Date(it.date||Date.now()).toISOString().replace('T',' ').substring(0,19), 
+            customer: it.customer?.name || it.partner?.name || '-', 
+            status: String(it.status||'DRAFT'), 
+            activity: it.branch === 'china_town' ? 'China Town' : 'Place India', 
+            amount: amount
+          };
+        });
         setOrders(mapped)
       } catch {
         setOrders([])
@@ -101,7 +120,25 @@ export default function SalesOrders(){
     try {
       await apiOrders.remove(id)
       const items = await apiOrders.list()
-      const mapped = items.map(it => ({ id: it.id, number: it.order_number, date: new Date(it.date||Date.now()).toISOString().replace('T',' ').substring(0,19), customer: it.customer?.name || '-', status: String(it.status||'DRAFT'), activity: 'Accounts', amount: 0 }))
+      const mapped = (Array.isArray(items) ? items : []).map(it => {
+        let amount = Number(it.total_amount || it.total || 0);
+        if (amount === 0 && it.lines) {
+          try {
+            const lines = Array.isArray(it.lines) ? it.lines : (typeof it.lines === 'string' ? JSON.parse(it.lines) : []);
+            const itemLines = lines.filter(l => l && l.type === 'item');
+            amount = itemLines.reduce((sum, l) => sum + (Number(l.qty || l.quantity || 0) * Number(l.price || 0)), 0);
+          } catch {}
+        }
+        return {
+          id: it.id, 
+          number: it.order_number, 
+          date: new Date(it.date||Date.now()).toISOString().replace('T',' ').substring(0,19), 
+          customer: it.customer?.name || it.partner?.name || '-', 
+          status: String(it.status||'DRAFT'), 
+          activity: it.branch === 'china_town' ? 'China Town' : 'Place India', 
+          amount: amount
+        };
+      });
       setOrders(mapped)
     } catch {}
   }

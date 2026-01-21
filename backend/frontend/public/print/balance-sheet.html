@@ -3,32 +3,40 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>المركز المالي</title>
+<title id="pageTitle">المركز المالي</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
   :root { --border:#222; --soft:#eaeaea; --muted:#555; }
   @page { margin: 18mm 15mm; }
-  body { font-family: 'Cairo', sans-serif; direction: rtl; margin: 0; }
+  body { font-family: 'Cairo', sans-serif; margin: 0; }
+  body.rtl { direction: rtl; }
+  body.ltr { direction: ltr; }
   .header { display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:8px; margin-bottom:10px; }
   .brand { display:flex; align-items:center; gap:12px; }
   .brand img { height:48px; max-width:180px; object-fit:contain; display:none; }
   .brand .name { font-weight:700; }
   .brand .vat { color:var(--muted); font-size:13px; }
   .doc .title { font-size:18px; font-weight:700; }
-  .doc .meta { color:var(--muted); font-size:13px; text-align:left; }
+  .doc .meta { color:var(--muted); font-size:13px; }
   table { width: 100%; border-collapse: collapse; margin-top: 12px; }
   thead th { background: #f2f2f2; }
-  th, td { border: 1px solid #000; padding: 6px; text-align: right; font-size: 13px; }
+  th, td { border: 1px solid #000; padding: 6px; font-size: 13px; }
+  body.rtl th, body.rtl td { text-align: right; }
+  body.ltr th, body.ltr td { text-align: left; }
   tbody tr:nth-child(even){ background:#fafafa }
   tfoot td { font-weight:600 }
   .summary { font-weight: 600; }
   @media print { .no-print { display: none; } }
 </style>
 </head>
-<body>
+<body class="rtl">
 <div class="no-print" style="margin-bottom:8px; display:flex; gap:8px; align-items:center;">
-  <button onclick="prepareAndPrint()" style="padding:6px 10px;">طباعة</button>
-  <button onclick="window.close()" style="padding:6px 10px;">إغلاق</button>
+  <button onclick="prepareAndPrint()" style="padding:6px 10px;" id="btnPrint">طباعة</button>
+  <button onclick="window.close()" style="padding:6px 10px;" id="btnClose">إغلاق</button>
+  <select id="langSelect" onchange="changeLang(this.value)" style="padding:6px 10px;">
+    <option value="ar">العربية</option>
+    <option value="en">English</option>
+  </select>
 </div>
 <div class="header">
   <div class="brand">
@@ -39,25 +47,25 @@
     </div>
   </div>
   <div class="doc">
-    <div class="title">المركز المالي</div>
+    <div class="title" id="reportTitle">المركز المالي</div>
     <div class="meta" id="meta"></div>
   </div>
-  </div>
+</div>
 <table id="tbl">
   <thead>
     <tr>
-      <th>الكود</th>
-      <th>الحساب</th>
-      <th>مدين</th>
-      <th>دائن</th>
-      <th>الرصيد</th>
+      <th id="thCode">الكود</th>
+      <th id="thAccount">الحساب</th>
+      <th id="thDebit">مدين</th>
+      <th id="thCredit">دائن</th>
+      <th id="thBalance">الرصيد</th>
     </tr>
   </thead>
   <tbody></tbody>
   <tfoot>
     <tr>
       <td></td>
-      <td class="summary">الإجمالي</td>
+      <td class="summary" id="tdTotal">الإجمالي</td>
       <td id="sumDebit"></td>
       <td id="sumCredit"></td>
       <td id="sumBalance"></td>
@@ -65,111 +73,197 @@
   </tfoot>
 </table>
 <script>
-  // Determine API base URL - same logic as client.js
+  const labels = {
+    ar: {
+      pageTitle: 'المركز المالي',
+      reportTitle: 'المركز المالي',
+      btnPrint: 'طباعة',
+      btnClose: 'إغلاق',
+      thCode: 'الكود',
+      thAccount: 'الحساب',
+      thDebit: 'مدين',
+      thCredit: 'دائن',
+      thBalance: 'الرصيد',
+      tdTotal: 'الإجمالي',
+      from: 'من',
+      to: 'إلى',
+      vatNumber: 'الرقم الضريبي'
+    },
+    en: {
+      pageTitle: 'Balance Sheet',
+      reportTitle: 'Balance Sheet',
+      btnPrint: 'Print',
+      btnClose: 'Close',
+      thCode: 'Code',
+      thAccount: 'Account',
+      thDebit: 'Debit',
+      thCredit: 'Credit',
+      thBalance: 'Balance',
+      tdTotal: 'Total',
+      from: 'From',
+      to: 'To',
+      vatNumber: 'VAT Number'
+    }
+  };
+  
+  let currentLang = localStorage.getItem('lang') || 'ar';
+  let loadedData = { rows: [], company: null, branding: null, from: null, to: null };
+  
+  function changeLang(lang) {
+    currentLang = lang;
+    const l = labels[lang] || labels.ar;
+    document.documentElement.lang = lang;
+    document.body.className = lang === 'ar' ? 'rtl' : 'ltr';
+    document.getElementById('pageTitle').textContent = l.pageTitle;
+    document.getElementById('reportTitle').textContent = l.reportTitle;
+    document.getElementById('btnPrint').textContent = l.btnPrint;
+    document.getElementById('btnClose').textContent = l.btnClose;
+    document.getElementById('thCode').textContent = l.thCode;
+    document.getElementById('thAccount').textContent = l.thAccount;
+    document.getElementById('thDebit').textContent = l.thDebit;
+    document.getElementById('thCredit').textContent = l.thCredit;
+    document.getElementById('thBalance').textContent = l.thBalance;
+    document.getElementById('tdTotal').textContent = l.tdTotal;
+    document.getElementById('langSelect').value = lang;
+    
+    // Re-render period label
+    const meta = [];
+    if (loadedData.from) meta.push(`${l.from}: ${loadedData.from}`);
+    if (loadedData.to) meta.push(`${l.to}: ${loadedData.to}`);
+    document.getElementById('meta').textContent = meta.join(' • ');
+    
+    // Re-render company info
+    if (loadedData.company) {
+      const name = lang === 'ar' ? (loadedData.company.name_ar || loadedData.company.name_en || '') : (loadedData.company.name_en || loadedData.company.name_ar || '');
+      const vat = loadedData.company.vat_number ? `${l.vatNumber}: ${loadedData.company.vat_number}` : '';
+      document.getElementById('companyName').textContent = name;
+      document.getElementById('companyVat').textContent = vat;
+    }
+    
+    renderTable();
+  }
+  
+  function renderTable() {
+    const tbody = document.querySelector('#tbl tbody');
+    tbody.innerHTML = '';
+    let sumD = 0, sumC = 0, sumB = 0;
+    
+    loadedData.rows.filter(r => {
+      const debit = Number(r.debit || r.debit_total || 0);
+      const credit = Number(r.credit || r.credit_total || 0);
+      const balance = Number(r.balance || debit - credit);
+      return Math.abs(debit) + Math.abs(credit) + Math.abs(balance) > 1e-9;
+    }).forEach(r => {
+      const code = String(r.account_code || r.code || r.account_number || '').trim();
+      const name = currentLang === 'ar' 
+        ? String(r.name || r.name_ar || r.account_name || '').trim()
+        : String(r.name_en || r.account_name_en || r.name || r.account_name || '').trim();
+      const debit = Number(r.debit || r.debit_total || 0);
+      const credit = Number(r.credit || r.credit_total || 0);
+      const balance = Number(r.balance || debit - credit);
+      
+      const tr = document.createElement('tr');
+      [code || '', name || '', fmt(debit), fmt(credit), fmt(balance)].forEach(v => {
+        const td = document.createElement('td');
+        td.textContent = String(v);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+      sumD += debit;
+      sumC += credit;
+      sumB += balance;
+    });
+    
+    document.getElementById('sumDebit').textContent = fmt(sumD);
+    document.getElementById('sumCredit').textContent = fmt(sumC);
+    document.getElementById('sumBalance').textContent = fmt(sumB);
+  }
+  
   function getApiBase() {
     if (window.__API__) return window.__API__;
     const port = window.location.port;
     if (port === '4000' || port === '3000') return 'http://localhost:5000/api';
     return window.location.origin + '/api';
   }
-  const API_BASE = getApiBase()
-  function qp(k){ return new URLSearchParams(location.search).get(k) }
-  function fmt(n){ try { return Number(n||0).toFixed(2) } catch { return '0.00' } }
-  function prepareAndPrint(){ const bar=document.querySelector('.no-print'); if(bar) bar.style.display='none'; window.print() }
-  async function authFetch(url){ const token = localStorage.getItem('token'); const h = token? { Authorization: `Bearer ${token}` } : {}; const r = await fetch(url, { headers: h }); if(!r.ok) throw new Error('request_failed'); return r.json() }
-  async function load(){
-    let company = null
-    let branding = null
-    try { company = await authFetch(`${API_BASE}/settings/settings_company`) } catch {}
-    try { branding = await authFetch(`${API_BASE}/settings/settings_branding`) } catch {}
-    if (company) { const name = company.name_ar || company.name_en || ''; const vat = company.vat_number ? `الرقم الضريبي: ${company.vat_number}` : ''; document.getElementById('companyName').textContent = name; document.getElementById('companyVat').textContent = vat }
-    if (branding && branding.logo) { const img=document.getElementById('logo'); img.src=branding.logo; img.style.display='block' }
-    const from = qp('from'); const to = qp('to'); const meta = []
-    if (from) meta.push(`من: ${from}`); if (to) meta.push(`إلى: ${to}`)
-    document.getElementById('meta').textContent = meta.join(' • ')
-    const params = new URLSearchParams(); if (from) params.set('from', from); if (to) params.set('to', to)
-    const tb = await authFetch(`${API_BASE}/reports/trial-balance${params.toString()?`?${params.toString()}`:''}`)
-    const rows = Array.isArray(tb.items) ? tb.items : (Array.isArray(tb.rows) ? tb.rows : [])
+  const API_BASE = getApiBase();
+  function qp(k) { return new URLSearchParams(location.search).get(k); }
+  function fmt(n) { try { return Number(n || 0).toFixed(2); } catch { return '0.00'; } }
+  function prepareAndPrint() { const bar = document.querySelector('.no-print'); if (bar) bar.style.display = 'none'; window.print(); }
+  
+  async function authFetch(url) {
+    const token = localStorage.getItem('token');
+    const h = token ? { Authorization: `Bearer ${token}` } : {};
+    const r = await fetch(url, { headers: h });
+    if (!r.ok) throw new Error('request_failed');
+    return r.json();
+  }
+  
+  async function load() {
+    document.getElementById('langSelect').value = currentLang;
+    if (currentLang === 'en') {
+      document.documentElement.lang = 'en';
+      document.body.className = 'ltr';
+    }
     
-    // Fetch account names from accounts API if missing
-    const accountMap = new Map()
+    try { loadedData.company = await authFetch(`${API_BASE}/settings/settings_company`); } catch {}
+    try { loadedData.branding = await authFetch(`${API_BASE}/settings/settings_branding`); } catch {}
+    
+    if (loadedData.branding && loadedData.branding.logo) {
+      const img = document.getElementById('logo');
+      img.src = loadedData.branding.logo;
+      img.style.display = 'block';
+    }
+    
+    loadedData.from = qp('from');
+    loadedData.to = qp('to');
+    
+    const params = new URLSearchParams();
+    if (loadedData.from) params.set('from', loadedData.from);
+    if (loadedData.to) params.set('to', loadedData.to);
+    
+    const tb = await authFetch(`${API_BASE}/reports/trial-balance${params.toString() ? `?${params.toString()}` : ''}`);
+    loadedData.rows = Array.isArray(tb.items) ? tb.items : (Array.isArray(tb.rows) ? tb.rows : []);
+    
+    // Fetch account names
     try {
-      const accountsTree = await authFetch(`${API_BASE}/accounts`)
-      const flatAccounts = []
+      const accountsTree = await authFetch(`${API_BASE}/accounts`);
+      const accountMap = new Map();
       function flattenAccounts(arr) {
-        if (!Array.isArray(arr)) return
+        if (!Array.isArray(arr)) return;
         for (const a of arr) {
           if (a && a.id) {
-            flatAccounts.push(a)
-            if (Array.isArray(a.children)) flattenAccounts(a.children)
+            accountMap.set(Number(a.id), a);
+            if (a.account_code) accountMap.set(String(a.account_code), a);
+            if (a.account_number) accountMap.set(String(a.account_number), a);
+            if (Array.isArray(a.children)) flattenAccounts(a.children);
           }
         }
       }
-      flattenAccounts(accountsTree)
-      
-      for (const acc of flatAccounts) {
-        const accId = Number(acc.id || 0)
-        const accCode = String(acc.account_code || acc.account_number || '').trim()
-        if (accId) accountMap.set(accId, acc)
-        if (accCode) accountMap.set(accCode, acc)
-      }
+      flattenAccounts(accountsTree);
       
       // Enrich rows with account names
-      for (const r of rows) {
-        const accId = Number(r.account_id || r.id || 0)
-        const accCode = String(r.account_code || r.code || r.account_number || '').trim()
-        const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || r.account || '').trim()
-        
-        if (!name && (accId || accCode)) {
-          const acc = accountMap.get(accId) || accountMap.get(accCode)
-          if (acc) {
-            r.name = acc.name || acc.name_en || acc.name_ar || ''
-            r.name_en = acc.name_en || acc.name || acc.name_ar || ''
-            r.name_ar = acc.name || acc.name_en || acc.name_ar || ''
-            r.account_name = acc.name || acc.name_en || acc.name_ar || ''
-            r.account_name_en = acc.name_en || acc.name || acc.name_ar || ''
-            r.account = acc.name || acc.name_en || acc.name_ar || ''
-          }
+      for (const r of loadedData.rows) {
+        const accId = Number(r.account_id || r.id || 0);
+        const accCode = String(r.account_code || r.code || r.account_number || '').trim();
+        const acc = accountMap.get(accId) || accountMap.get(accCode);
+        if (acc) {
+          r.name = r.name || acc.name || '';
+          r.name_en = r.name_en || acc.name_en || '';
+          r.name_ar = r.name_ar || acc.name || '';
         }
       }
     } catch (e) {
-      console.warn('[BALANCE SHEET] Failed to fetch account names:', e)
+      console.warn('Failed to fetch account names:', e);
     }
     
-    const tbody = document.querySelector('#tbl tbody')
-    tbody.innerHTML = ''
-    let sumD = 0, sumC = 0, sumB = 0
-    rows.filter(r => {
-      const debit = Number(r.debit || r.debit_total || 0)
-      const credit = Number(r.credit || r.credit_total || 0)
-      const balance = Number(r.balance || debit - credit)
-      return Math.abs(debit) + Math.abs(credit) + Math.abs(balance) > 1e-9
-    }).forEach(r => {
-      const code = String(r.account_code || r.code || r.account_number || '').trim()
-      const name = String(r.name || r.name_en || r.name_ar || r.account_name || r.account_name_en || r.account || '').trim()
-      const debit = Number(r.debit || r.debit_total || 0)
-      const credit = Number(r.credit || r.credit_total || 0)
-      const balance = Number(r.balance || debit - credit)
-      const tr = document.createElement('tr')
-      ;[code || '', name || '', fmt(debit), fmt(credit), fmt(balance)].forEach(v => {
-        const td = document.createElement('td')
-        td.textContent = String(v)
-        tr.appendChild(td)
-      })
-      tbody.appendChild(tr)
-      sumD += debit
-      sumC += credit
-      sumB += balance
-    })
-    document.getElementById('sumDebit').textContent = fmt(sumD)
-    document.getElementById('sumCredit').textContent = fmt(sumC)
-    document.getElementById('sumBalance').textContent = fmt(sumB)
-    setTimeout(() => window.print(), 200)
+    changeLang(currentLang);
+    setTimeout(() => window.print(), 200);
   }
+  
   load().catch((err) => {
-    console.error('[BALANCE SHEET] Load error:', err)
-    alert('فشل الطباعة. يرجى المحاولة مرة أخرى.\n' + (err?.message || ''))
-  })
+    console.error('Load error:', err);
+    alert('فشل الطباعة. يرجى المحاولة مرة أخرى.');
+  });
 </script>
 </body>
 </html>

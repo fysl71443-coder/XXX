@@ -650,7 +650,7 @@ export default function Expenses(){
   const nonExpenseNote = form.expense_type!=='expense'
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen bg-gray-50" dir={lang==='ar'?'rtl':'ltr'}>
       <header className="px-6 py-4 bg-gradient-to-r from-primary-700 to-primary-600 text-white shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -659,28 +659,29 @@ export default function Expenses(){
             </div>
             <div>
               <h2 className="text-2xl font-bold">{lang==='ar'?"المصروفات":"Expenses"}</h2>
-              <p className="text-sm opacity-90">{t('labels.actions', lang)}</p>
+              <p className="text-sm opacity-90">{lang==='ar'?'إدارة المصروفات والسداد':'Manage Expenses & Payments'}</p>
             </div>
           </div>
           <div className="flex gap-2 items-center">
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className={`px-4 py-2 rounded-lg flex items-center gap-2 border ${location.pathname==='/expenses'?'bg-white text-primary-700 border-white':'bg-white/10 text-white border-white/20 hover:bg-white/20'}`}>
               <FaPlus className="text-sm" />
-              <span className="text-sm">{t('buttons.create_invoice', lang)}</span>
+              <span className="text-sm">{lang==='ar'?'إنشاء فاتورة':'Create Invoice'}</span>
             </motion.button>
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className={`px-4 py-2 rounded-lg flex items-center gap-2 border ${location.pathname==='/expenses/invoices'?'bg-white text-primary-700 border-white':'bg-white/10 text-white border-white/20 hover:bg-white/20'}`} onClick={() => navigate('/expenses/invoices')}>
               <FaList className="text-sm" />
-              <span className="text-sm">{t('labels.invoices_list', lang)}</span>
+              <span className="text-sm">{lang==='ar'?'قائمة الفواتير':'Invoices List'}</span>
             </motion.button>
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 backdrop-blur-sm border border-white/20" onClick={() => navigate('/')}>
               <FaHome className="text-sm" />
-              <span className="text-sm">{t('labels.home', lang)}</span>
+              <span className="text-sm">{lang==='ar'?'الرئيسية':'Home'}</span>
             </motion.button>
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 backdrop-blur-sm border border-white/20" onClick={() => setHelpOpen(true)}>
-              <span className="text-sm">{t('labels.help', lang)}</span>
+              <span className="text-sm">{lang==='ar'?'المساعدة':'Help'}</span>
             </motion.button>
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 backdrop-blur-sm border border-white/20" onClick={async()=>{ try { const res = await apiExpenses.list(filters); setList(res||[]) } catch {} }}>
-              <span className="text-sm">{t('labels.reload', lang)}</span>
+              <span className="text-sm">{lang==='ar'?'تحديث':'Reload'}</span>
             </motion.button>
+            <button className="px-3 py-1 rounded-md border border-white/30 text-sm hover:bg-white/10" onClick={()=>{ const next = lang==='ar'?'en':'ar'; setLang(next); localStorage.setItem('lang', next) }}>{lang==='ar'?'EN':'عربي'}</button>
             <span className="px-2 py-1 bg-white/10 rounded-lg border border-white/20"><StatusBadge status={periodStatus} type="period" /></span>
           </div>
         </div>
@@ -1190,15 +1191,26 @@ export default function Expenses(){
         </motion.section>
         
         <section className="lg:col-span-4 space-y-4">
+           {/* Quick Stats */}
+           <div className="grid grid-cols-2 gap-3">
+             <div className="bg-white border rounded-xl shadow-sm p-4">
+               <div className="text-xs text-gray-500 mb-1">{lang==='ar'?'إجمالي المصروفات':'Total Expenses'}</div>
+               <div className="text-xl font-bold text-red-600">{rows.filter(r=>r.expense_type==='expense').reduce((s,r)=>s+parseFloat(r.total||0),0).toLocaleString('en-US',{minimumFractionDigits:2})} <span className="text-xs font-normal">SAR</span></div>
+             </div>
+             <div className="bg-white border rounded-xl shadow-sm p-4">
+               <div className="text-xs text-gray-500 mb-1">{lang==='ar'?'عدد الفواتير':'Invoices Count'}</div>
+               <div className="text-xl font-bold text-primary-600">{rows.length}</div>
+             </div>
+           </div>
+           
            <div className="bg-white border rounded-xl shadow-lg p-6">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-lg font-semibold text-gray-800">{lang==='ar'?'تعليمات':'Instructions'}</h3>
-                <button className="px-3 py-1 rounded-md border text-sm hover:bg-gray-50" onClick={()=>{ const next = lang==='ar'?'en':'ar'; setLang(next); localStorage.setItem('lang', next) }}>{lang==='ar'?'English':'العربية'}</button>
               </div>
               <div className="space-y-3 text-sm text-gray-600 leading-relaxed">
-                <p><strong>1.</strong> {lang==='ar'?'اختر نوع العملية (مصروف، سحب، إيداع، سداد).':'Select transaction type.'}</p>
+                <p><strong>1.</strong> {lang==='ar'?'اختر نوع العملية (مصروف، سحب، إيداع، سداد).':'Select transaction type (expense, withdraw, deposit, payment).'}</p>
                 <p><strong>2.</strong> {lang==='ar'?'في حال السداد، اختر النوع الفرعي (مورد، رواتب...) لربط العملية آلياً.':'For payments, select subtype for smart linking.'}</p>
-                <p><strong>3.</strong> {lang==='ar'?'تأكد من اختيار الحساب البنكي الصحيح عند الدفع البنكي.':'Ensure correct bank account selection.'}</p>
+                <p><strong>3.</strong> {lang==='ar'?'تأكد من اختيار الحساب البنكي الصحيح عند الدفع البنكي.':'Ensure correct bank account selection for bank payments.'}</p>
                 <p><strong>4.</strong> {lang==='ar'?'راجع القيد المحاسبي في الأسفل قبل الحفظ.':'Review accounting entry below before saving.'}</p>
               </div>
            </div>
@@ -1211,10 +1223,41 @@ export default function Expenses(){
                  <li>{lang==='ar'?'السحب والإيداع يؤثران فقط على النقدية.':'Withdraw/Deposit affect cash only.'}</li>
               </ul>
            </div>
+           
+           {/* Recent Transactions */}
+           <div className="bg-white border rounded-xl shadow-sm p-4">
+             <h4 className="font-semibold text-gray-800 mb-3">{lang==='ar'?'آخر العمليات':'Recent Transactions'}</h4>
+             <div className="space-y-2 max-h-[200px] overflow-y-auto">
+               {rows.slice(0, 5).map(r => (
+                 <div key={r.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                   <div>
+                     <div className="text-sm font-medium">{r.invoice_number || `#${r.id}`}</div>
+                     <div className="text-xs text-gray-500">{String(r.date||'').slice(0,10)}</div>
+                   </div>
+                   <div className="text-sm font-bold text-red-600">{parseFloat(r.total||0).toLocaleString('en-US')} SAR</div>
+                 </div>
+               ))}
+               {rows.length === 0 && <div className="text-center text-gray-500 text-sm py-4">{lang==='ar'?'لا توجد عمليات':'No transactions'}</div>}
+             </div>
+           </div>
         </section>
       </main>
-      <Modal open={helpOpen} title={t('labels.help', lang)} onClose={()=>setHelpOpen(false)}>
-        <div className="text-sm text-gray-700">{lang==='ar'?"المصروفات":"Expenses"}</div>
+      <Modal open={helpOpen} title={lang==='ar'?'المساعدة':'Help'} onClose={()=>setHelpOpen(false)}>
+        <div className="space-y-4">
+          <div>
+            <h4 className="font-bold text-gray-800 mb-2">{lang==='ar'?'أنواع العمليات':'Transaction Types'}</h4>
+            <ul className="text-sm text-gray-600 space-y-2">
+              <li><strong>{lang==='ar'?'مصروف':'Expense'}:</strong> {lang==='ar'?'تسجيل فاتورة مصروف مع إنشاء قيد محاسبي':'Record expense invoice with accounting entry'}</li>
+              <li><strong>{lang==='ar'?'سحب نقدي':'Withdrawal'}:</strong> {lang==='ar'?'سحب من البنك إلى الصندوق':'Withdraw from bank to cash'}</li>
+              <li><strong>{lang==='ar'?'إيداع نقدي':'Deposit'}:</strong> {lang==='ar'?'إيداع من الصندوق إلى البنك':'Deposit from cash to bank'}</li>
+              <li><strong>{lang==='ar'?'سداد':'Payment'}:</strong> {lang==='ar'?'سداد التزام قائم (مورد، رواتب، ضريبة...)':'Settle existing liability (supplier, payroll, VAT...)'}</li>
+            </ul>
+          </div>
+          <div>
+            <h4 className="font-bold text-gray-800 mb-2">{lang==='ar'?'الربط الذكي':'Smart Linking'}</h4>
+            <p className="text-sm text-gray-600">{lang==='ar'?'عند اختيار "سداد"، يمكنك ربط الدفعة بفواتير موردين أو مسيرات رواتب محددة لتسوية الذمم آلياً.':'When selecting "Payment", you can link to specific supplier invoices or payroll runs for automatic settlement.'}</p>
+          </div>
+        </div>
       </Modal>
     </div>
   )

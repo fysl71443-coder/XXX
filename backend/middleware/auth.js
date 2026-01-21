@@ -1,6 +1,7 @@
 import jwt from "jsonwebtoken";
 import { pool } from "../db.js";
 import { isAdminUser } from "../utils/auth.js";
+import { parseIntStrict } from "../utils/validation.js";
 
 export async function authenticateToken(req, res, next) {
   try {
@@ -89,6 +90,20 @@ export async function authenticateToken(req, res, next) {
       }
     }
     
+    // CRITICAL: Validate payload.id is a valid integer to prevent NaN errors
+    const userId = parseIntStrict(payload.id);
+    if (userId === null || userId <= 0) {
+      console.error(`[AUTH] REJECTED: Invalid user ID in token | payload.id=${payload.id} | ${method} ${path}`);
+      const acceptsJson = req.headers['accept']?.includes('application/json');
+      const isApiRequest = path.startsWith('/api/') || acceptsJson || req.headers['x-requested-with'] === 'XMLHttpRequest';
+      if (isApiRequest) {
+        return res.status(401).json({ error: "unauthorized", details: "Invalid token payload" });
+      } else {
+        const redirectUrl = `/login?next=${encodeURIComponent(path)}`;
+        return res.redirect(redirectUrl);
+      }
+    }
+    
     // CRITICAL: pool is guaranteed to exist - PostgreSQL connection verified at startup
     // If pool is null here, it means application started incorrectly - this should never happen
     if (!pool) {
@@ -102,7 +117,7 @@ export async function authenticateToken(req, res, next) {
     // We use role-based admin bypass, not role_id-based
     const { rows } = await pool.query(
       'SELECT id, email, role, default_branch, created_at FROM "users" WHERE id = $1 LIMIT 1', 
-      [payload.id]
+      [userId]
     );
     const user = rows && rows[0];
     

@@ -17,13 +17,106 @@ const dbPool = new Pool({
 async function getAccountIdByNumber(accountNumber) {
   if (!accountNumber) return null;
   try {
+    // Try accounts table first (PostgreSQL)
     const { rows } = await dbPool.query(
       'SELECT id FROM accounts WHERE account_code = $1 OR account_number = $1 LIMIT 1',
       [accountNumber]
     );
-    return rows && rows[0] ? rows[0].id : null;
+    if (rows && rows[0]) {
+      return rows[0].id;
+    }
+    // Try Account table (Prisma schema)
+    const { rows: prismaRows } = await dbPool.query(
+      'SELECT id FROM "Account" WHERE account_number = $1 LIMIT 1',
+      [accountNumber]
+    );
+    return prismaRows && prismaRows[0] ? prismaRows[0].id : null;
   } catch (e) {
     console.error(`[FIX] Error getting account ${accountNumber}:`, e.message);
+    return null;
+  }
+}
+
+async function ensureAccountExists(accountCode, accountName, accountType, nature, parentId = null) {
+  try {
+    // Check if account exists
+    let accountId = await getAccountIdByNumber(accountCode);
+    if (accountId) {
+      return accountId;
+    }
+    
+    // Create account if it doesn't exist
+    console.log(`📝 إنشاء الحساب ${accountCode}: ${accountName}`);
+    
+    // Try to insert into accounts table first (PostgreSQL)
+    try {
+      const { rows } = await dbPool.query(
+        `INSERT INTO accounts(account_code, account_number, name, name_en, type, nature, parent_id, opening_balance, allow_manual_entry)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         RETURNING id`,
+        [
+          accountCode,
+          accountCode, // account_number same as account_code
+          accountName,
+          accountName, // name_en same as name
+          accountType,
+          nature,
+          parentId,
+          0, // opening_balance
+          true // allow_manual_entry
+        ]
+      );
+      
+      if (rows && rows[0]) {
+        console.log(`✅ تم إنشاء الحساب ${accountCode} بنجاح (ID: ${rows[0].id})`);
+        return rows[0].id;
+      }
+    } catch (insertError) {
+      // If account already exists or table doesn't exist, try Account table (Prisma)
+      if (insertError.code === '23505' || insertError.message.includes('unique') || insertError.message.includes('duplicate') || insertError.message.includes('does not exist')) {
+        console.log(`⚠️ جاري المحاولة في جدول Account...`);
+        try {
+          const { rows: accountRows } = await dbPool.query(
+            `INSERT INTO "Account"(account_number, name, type, nature, parent_id, opening_balance)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (account_number) DO NOTHING
+             RETURNING id`,
+            [
+              accountCode,
+              accountName,
+              accountType,
+              nature,
+              parentId,
+              0
+            ]
+          );
+          
+          if (accountRows && accountRows[0]) {
+            console.log(`✅ تم إنشاء الحساب ${accountCode} في جدول Account (ID: ${accountRows[0].id})`);
+            return accountRows[0].id;
+          }
+          
+          // If no rows returned, account already exists, get it
+          accountId = await getAccountIdByNumber(accountCode);
+          if (accountId) {
+            return accountId;
+          }
+        } catch (prismaError) {
+          // If still fails, try to get existing account
+          accountId = await getAccountIdByNumber(accountCode);
+          if (accountId) {
+            return accountId;
+          }
+          console.error(`❌ فشل إنشاء الحساب في كلا الجدولين: ${prismaError.message}`);
+        }
+      } else {
+        throw insertError; // Re-throw if it's a different error
+      }
+    }
+    
+    return null;
+  } catch (e) {
+    console.error(`❌ خطأ في إنشاء الحساب ${accountCode}:`, e.message);
     return null;
   }
 }
@@ -83,20 +176,51 @@ async function fixOldExpenses() {
           }
         }
         
-        // Get expense account ID
-        const expenseAccountId = await getAccountIdByNumber(accountCode);
+        // Get or create expense account ID
+        let expenseAccountId = await getAccountIdByNumber(accountCode);
+        if (!expenseAccountId) {
+          // Try to get parent account for expenses (5200)
+          const parentExpenseId = await getAccountIdByNumber('5200');
+          expenseAccountId = await ensureAccountExists(
+            accountCode,
+            'مصروفات عامة',
+            'expense',
+            'debit',
+            parentExpenseId
+          );
+        }
         
-        // Get payment account ID
+        // Get or create payment account ID
         let paymentAccountId = null;
         const paymentMethod = String(expense.payment_method || 'cash').toLowerCase();
         if (paymentMethod === 'bank') {
           paymentAccountId = await getAccountIdByNumber('1121');
+          if (!paymentAccountId) {
+            const parentBankId = await getAccountIdByNumber('1120');
+            paymentAccountId = await ensureAccountExists(
+              '1121',
+              'بنك الراجحي',
+              'bank',
+              'debit',
+              parentBankId
+            );
+          }
         } else {
           paymentAccountId = await getAccountIdByNumber('1111');
+          if (!paymentAccountId) {
+            const parentCashId = await getAccountIdByNumber('1110');
+            paymentAccountId = await ensureAccountExists(
+              '1111',
+              'صندوق رئيسي',
+              'cash',
+              'debit',
+              parentCashId
+            );
+          }
         }
         
         if (!expenseAccountId || !paymentAccountId) {
-          console.log(`⚠️ Expense #${expense.id}: لا يمكن العثور على الحسابات - تم التخطي`);
+          console.log(`⚠️ Expense #${expense.id}: لا يمكن إنشاء أو العثور على الحسابات - تم التخطي`);
           await client.query('ROLLBACK');
           failed++;
           continue;

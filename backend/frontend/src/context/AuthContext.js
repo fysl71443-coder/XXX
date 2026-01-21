@@ -217,69 +217,95 @@ export function AuthProvider({ children }) {
   }, [user, permissionsLoaded])
 
   const login = useCallback(async (email, password) => {
-    const r = await apiAuth.login({ email, password });
-    const tk = r.token || r?.token;
-    if (tk) {
-      localStorage.setItem('token', tk);
-      try { if (r?.user) localStorage.setItem('auth_user', JSON.stringify(r.user)); } catch {}
-      try { if (Array.isArray(r?.screens)) localStorage.setItem('screens', JSON.stringify(r.screens)); } catch {}
-      try { if (Array.isArray(r?.branches)) localStorage.setItem('branches', JSON.stringify(r.branches)); } catch {}
-      setToken(tk);
-      setPermissionsLoaded(false); // Reset permissions flag
-      
-      try {
-        const data = await apiAuth.me();
-        if (!data || !data.id) {
-          throw new Error('Invalid user data from /auth/me');
-        }
-        setUser(data);
+    try {
+      const r = await apiAuth.login({ email, password });
+      const tk = r.token || r?.token;
+      if (tk) {
+        localStorage.setItem('token', tk);
+        try { if (r?.user) localStorage.setItem('auth_user', JSON.stringify(r.user)); } catch {}
+        try { if (Array.isArray(r?.screens)) localStorage.setItem('screens', JSON.stringify(r.screens)); } catch {}
+        try { if (Array.isArray(r?.branches)) localStorage.setItem('branches', JSON.stringify(r.branches)); } catch {}
+        setToken(tk);
+        setPermissionsLoaded(false); // Reset permissions flag
         
-        // Check if admin - skip permissions load
-        const isAdmin = isAdminUser(data);
-        
-        if (isAdmin) {
-          console.log('[AuthContext] Admin user logged in - skipping permissions load');
-          setPermissionsLoaded(true);
-          setPermissionsMap({});
-        } else {
-          // Load permissions for non-admin users
-          try {
-            const userId = data?.id || data?.user?.id;
-            if (userId) {
-              console.log('[AuthContext] Loading permissions after login...');
-              const pm = await apiUsers.permissions(userId);
-              setPermissionsMap(normalizePerms(pm || {}));
-              setPermissionsLoaded(true);
-              console.log('[AuthContext] Permissions loaded after login');
-            }
-          } catch (permErr) {
-            console.error('[AuthContext] Error loading permissions after login:', permErr);
-            setPermissionsLoaded(false);
+        try {
+          const data = await apiAuth.me();
+          if (!data || !data.id) {
+            throw new Error('Invalid user data from /auth/me');
           }
-        }
-        return data;
-      } catch (e) {
-        console.error('[AuthContext] Error in login flow:', e);
-        const fallbackUser = (r && (r.user || r)) || null
-        if (fallbackUser && fallbackUser.id) {
-          setUser(fallbackUser);
-          // Try to load permissions for fallback user
-          try {
-            const userId = fallbackUser?.id || fallbackUser?.user?.id;
-            if (userId) {
-              const pm = await apiUsers.permissions(userId);
-              setPermissionsMap(normalizePerms(pm || {}));
-              setPermissionsLoaded(true);
+          setUser(data);
+          
+          // Check if admin - skip permissions load
+          const isAdmin = isAdminUser(data);
+          
+          if (isAdmin) {
+            console.log('[AuthContext] Admin user logged in - skipping permissions load');
+            setPermissionsLoaded(true);
+            setPermissionsMap({});
+          } else {
+            // Load permissions for non-admin users
+            try {
+              const userId = data?.id || data?.user?.id;
+              if (userId) {
+                console.log('[AuthContext] Loading permissions after login...');
+                const pm = await apiUsers.permissions(userId);
+                setPermissionsMap(normalizePerms(pm || {}));
+                setPermissionsLoaded(true);
+                console.log('[AuthContext] Permissions loaded after login');
+              }
+            } catch (permErr) {
+              console.error('[AuthContext] Error loading permissions after login:', permErr);
+              setPermissionsLoaded(false);
             }
-          } catch {}
-          return fallbackUser;
+          }
+          return data;
+        } catch (e) {
+          console.error('[AuthContext] Error in login flow:', e);
+          const fallbackUser = (r && (r.user || r)) || null
+          if (fallbackUser && fallbackUser.id) {
+            setUser(fallbackUser);
+            // Try to load permissions for fallback user
+            try {
+              const userId = fallbackUser?.id || fallbackUser?.user?.id;
+              if (userId) {
+                const pm = await apiUsers.permissions(userId);
+                setPermissionsMap(normalizePerms(pm || {}));
+                setPermissionsLoaded(true);
+              }
+            } catch {}
+            return fallbackUser;
+          }
+          // Clear token on error
+          localStorage.removeItem('token');
+          localStorage.removeItem('auth_user');
+          setToken(null);
+          setUser(null);
+          throw e;
         }
+      }
+      // No token received - invalid credentials
+      const e = new Error('invalid_credentials');
+      e.code = 'invalid_credentials';
+      throw e;
+    } catch (err) {
+      // CRITICAL: Clear token on any login failure
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('screens');
+      localStorage.removeItem('branches');
+      localStorage.removeItem('user_permissions_cache');
+      setToken(null);
+      setUser(null);
+      
+      // Re-throw with proper error code
+      if (err?.response?.data?.error === 'invalid_credentials' || err?.response?.status === 400) {
+        const e = new Error('invalid_credentials');
+        e.code = 'invalid_credentials';
+        e.response = err.response;
         throw e;
       }
+      throw err;
     }
-    const e = new Error('invalid_credentials');
-    e.code = 'invalid_credentials';
-    throw e;
   }, []);
 
   const logout = () => {

@@ -2,8 +2,9 @@ import axios from 'axios';
 import { normalizeArray } from '../../utils/normalize';
 
 // CRITICAL: Determine API base URL
-// In development (npm start on port 4000), connect to backend on port 5000
-// In production (served from backend), use same origin
+// Supports both port 4000 (production) and 5000 (development)
+// In production (served from backend on port 4000), use same origin
+// In development (React dev server on 3000), connect to backend on 4000 or 5000
 function getApiBase() {
   // 1. Check for explicit environment variable
   if (process.env.REACT_APP_API_URL) {
@@ -15,18 +16,32 @@ function getApiBase() {
     return window.__API__;
   }
   
-  // 3. Check if running on development port (4000)
+  // 3. Check if running on development port
   if (typeof window !== 'undefined') {
     const port = window.location.port;
-    // If running on port 4000 (React dev server), use backend on 5000
-    if (port === '4000' || port === '3000') {
+    const hostname = window.location.hostname;
+    
+    // If running on port 4000, backend is on same port (production mode)
+    if (port === '4000') {
+      return window.location.origin + '/api';
+    }
+    
+    // If running on port 5000, backend is on same port (dev mode)
+    if (port === '5000') {
+      return window.location.origin + '/api';
+    }
+    
+    // If running on port 3000 (React dev server), try backend on 5000 first, then 4000
+    if (port === '3000') {
+      // Try port 5000 first (common dev setup), fallback to 4000
       return 'http://localhost:5000/api';
     }
+    
     // Otherwise, use same origin (production mode)
     return window.location.origin + '/api';
   }
   
-  // 4. Fallback for SSR/Node environment
+  // 4. Fallback for SSR/Node environment - try 5000 first, then 4000
   return 'http://localhost:5000/api';
 }
 

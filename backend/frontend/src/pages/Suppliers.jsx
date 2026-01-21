@@ -654,20 +654,21 @@ useEffect(() => {
 
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="ltr">
+    <div className="min-h-screen bg-gray-50" dir={lang==='ar'?'rtl':'ltr'}>
       <PageHeader
         icon={FaTruck}
-        title={'Suppliers'}
-        subtitle={'Manage supplier relationships, invoices and purchase orders'}
+        title={lang==='ar'?'الموردون':'Suppliers'}
+        subtitle={lang==='ar'?'إدارة علاقات الموردين والفواتير وأوامر الشراء':'Manage supplier relationships, invoices and purchase orders'}
         onHomeClick={() => navigate('/')}
-        homeLabel={'Home'}
+        homeLabel={lang==='ar'?'الرئيسية':'Home'}
         actions={[
-          (<button key="excel" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=>{ if (!can('reports:export') || exportingExcel) return; setExportingExcel(true); try { exportExcel() } finally { setExportingExcel(false) } }} disabled={!can('reports:export') || exportingExcel}>{exportingExcel ? 'Exporting...' : 'Excel'}</button>),
-          (<button key="pdf" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed" onClick={async()=>{ if (!can('reports:print') || exportingPDF) return; setExportingPDF(true); try { await exportPDF() } finally { setExportingPDF(false) } }} disabled={!can('reports:print') || exportingPDF}>{exportingPDF ? 'Generating...' : 'PDF'}</button>),
-          (<button key="cards" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={()=>navigate('/suppliers/cards')}><FaEye/> {'Supplier Cards'}</button>)
+          (<button key="excel" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=>{ if (!can('reports:export') || exportingExcel) return; setExportingExcel(true); try { exportExcel() } finally { setExportingExcel(false) } }} disabled={!can('reports:export') || exportingExcel}>{exportingExcel ? (lang==='ar'?'جار التصدير...':'Exporting...') : 'Excel'}</button>),
+          (<button key="pdf" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20 disabled:opacity-50 disabled:cursor-not-allowed" onClick={async()=>{ if (!can('reports:print') || exportingPDF) return; setExportingPDF(true); try { await exportPDF() } finally { setExportingPDF(false) } }} disabled={!can('reports:print') || exportingPDF}>{exportingPDF ? (lang==='ar'?'جار التوليد...':'Generating...') : 'PDF'}</button>),
+          (<button key="cards" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={()=>navigate('/suppliers/cards')}><FaEye/> {lang==='ar'?'بطاقات الموردين':'Supplier Cards'}</button>),
+          (can('suppliers:write') && <button key="add" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={()=>navigate('/suppliers/create')}><FaPlus/> {lang==='ar'?'إضافة مورد':'Add Supplier'}</button>)
         ]}
       />
-      <main className="max-w-7xl mx_auto px-6 py-6 space-y-4">
+      <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
         <div className="px-6">
           <AdvancedFilters
             value={{ search, ...filters }}

@@ -20,24 +20,62 @@ export default function Login() {
   
 
   const [error, setError] = useState('')
+  
+  // Check if user is already logged in
+  useEffect(() => {
+    const existingToken = localStorage.getItem('token');
+    if (existingToken) {
+      // Try to verify token is still valid
+      refresh().then(() => {
+        // If refresh succeeds, user is already logged in, redirect
+        navigate(next);
+      }).catch(() => {
+        // Token is invalid, clear it
+        localStorage.removeItem('token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('screens');
+        localStorage.removeItem('branches');
+        localStorage.removeItem('user_permissions_cache');
+      });
+    }
+  }, [refresh, navigate, next]);
+  
   useEffect(()=>{
     function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') }
     window.addEventListener('storage', onStorage)
     return ()=> window.removeEventListener('storage', onStorage)
   },[])
+  
   function toggleLang(){ const nextLang = lang==='ar'?'en':'ar'; setLang(nextLang); try { localStorage.setItem('lang', nextLang) } catch {} }
+  
   async function onSubmit(e) {
     e.preventDefault()
     setError('')
+    
+    // Clear any existing token before attempting login
+    localStorage.removeItem('token');
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('screens');
+    localStorage.removeItem('branches');
+    localStorage.removeItem('user_permissions_cache');
+    
     try {
       const user = await login(email, password)
       if (remember) try { localStorage.setItem('remember', '1') } catch {}
       navigate(next)
     } catch (err) {
       console.error('[LOGIN] Error details:', err);
+      
+      // CRITICAL: Clear token on any login failure
+      localStorage.removeItem('token');
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('screens');
+      localStorage.removeItem('branches');
+      localStorage.removeItem('user_permissions_cache');
+      
       // Network errors
       if (err?.message?.includes('Network Error') || err?.code === 'ERR_NETWORK' || err?.message?.includes('Failed to fetch')) {
-        setError(lang==='ar'?'لا يمكن الاتصال بالخادم. تأكد من أن الخادم يعمل على http://localhost:4000':'Cannot connect to server. Make sure server is running on http://localhost:4000')
+        setError(lang==='ar'?'لا يمكن الاتصال بالخادم. تأكد من أن الخادم يعمل على http://localhost:5000':'Cannot connect to server. Make sure server is running on http://localhost:5000')
         return
       }
       // Server errors
@@ -57,11 +95,9 @@ export default function Login() {
           console.error('[LOGIN] Register failed:', e2);
           setError(lang==='ar'?'فشل إنشاء المدير لأول مرة':'Failed to bootstrap the first admin') 
         }
-      } else if (err?.code === 'invalid_credentials') {
-        setError(lang==='ar'?'بيانات الدخول غير صحيحة':'Invalid email or password')
-      } else if (err?.message === 'invalid_credentials') {
-        setError(lang==='ar'?'بيانات الدخول غير صحيحة':'Invalid email or password')
-      } else if (err?.code === 'not_found') {
+      } else if (err?.code === 'invalid_credentials' || err?.message === 'invalid_credentials' || err?.response?.data?.error === 'invalid_credentials') {
+        setError(lang==='ar'?'البريد الإلكتروني أو كلمة المرور غير صحيحة':'Email or password is incorrect')
+      } else if (err?.code === 'not_found' || err?.response?.data?.error === 'not_found') {
         try {
           const boot = await apiAuth.debugBootstrapAdmin({ email, password, name: 'Admin' })
           await login(email, password)
@@ -70,13 +106,13 @@ export default function Login() {
           return
         } catch (_) { 
           console.error('[LOGIN] Bootstrap failed:', _);
-          setError(lang==='ar'?'تعذر تسجيل الدخول':'Unable to sign in') 
+          setError(lang==='ar'?'البريد الإلكتروني أو كلمة المرور غير صحيحة':'Email or password is incorrect') 
         }
       } else if (err?.code === 'blocked' || err?.code === 'too_many_attempts') {
         setError(lang==='ar'?'تم حجب المستخدم بعد تعدد المحاولات. تواصل مع المدير':'User is blocked after too many attempts. Contact admin')
       } else {
         // Show more detailed error message
-        const errorMsg = err?.message || err?.details || (lang==='ar'?'تعذر تسجيل الدخول':'Unable to sign in')
+        const errorMsg = err?.response?.data?.error || err?.message || err?.details || (lang==='ar'?'البريد الإلكتروني أو كلمة المرور غير صحيحة':'Email or password is incorrect')
         setError(errorMsg)
       }
     }

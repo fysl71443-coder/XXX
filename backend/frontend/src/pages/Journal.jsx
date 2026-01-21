@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import * as XLSX from 'xlsx'
 import { motion, AnimatePresence } from 'framer-motion'
 import Breadcrumbs from '../ui/Breadcrumbs'
@@ -8,8 +8,9 @@ import ActionButton from '../ui/ActionButton'
 import JournalEntryCard from '../components/JournalEntryCard'
 import { journal as apiJournal, accounts as apiAccounts, settings as apiSettings, debug as apiDebug, periods as apiPeriods, invoices as apiInvoices, orders as apiOrders, supplierInvoices, expenses as apiExpenses, payments as apiPayments } from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
-import { TrendingUp, TrendingDown, FileText, CheckCircle, Search } from 'lucide-react'
+// Charts removed for simplicity - can be re-added if needed
+// import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { TrendingUp, TrendingDown, FileText, Search } from 'lucide-react'
 import PageHeader from '../components/PageHeader'
 import Modal from '../ui/Modal'
 import { t } from '../utils/i18n'
@@ -35,162 +36,130 @@ function sanitizeDecimal(str){
 }
 
 function Filters({ filters, onChange, onCreate, accounts, canCreate }) {
+  const lang = localStorage.getItem('lang') || 'ar'
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  
   return (
-    <div className="flex flex-wrap gap-3 items-end bg-white/80 backdrop-blur border border-gray-200 p-4 rounded-xl shadow-sm">
-      <div>
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'الفترة':'Preset'}</label>
-        <select value={filters.preset || ''} onChange={e => onChange({ ...filters, preset: e.target.value, page: 1 })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-          <option value="">{(localStorage.getItem('lang')||'ar')==='ar'?'تخصيص':'Custom'}</option>
-          <option value="today">{(localStorage.getItem('lang')||'ar')==='ar'?'اليوم':'Today'}</option>
-          <option value="this_week">{(localStorage.getItem('lang')||'ar')==='ar'?'هذا الأسبوع':'This Week'}</option>
-          <option value="this_month">{(localStorage.getItem('lang')||'ar')==='ar'?'هذا الشهر':'This Month'}</option>
-          <option value="this_year">{(localStorage.getItem('lang')||'ar')==='ar'?'هذه السنة':'This Year'}</option>
-        </select>
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.from')}</label>
-        <input type="date" value={filters.from || ''} onChange={e => onChange({ ...filters, from: e.target.value })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.to')}</label>
-        <input type="date" value={filters.to || ''} onChange={e => onChange({ ...filters, to: e.target.value })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'فترة ضريبية':'Tax Period'}</label>
-        <input placeholder={(localStorage.getItem('lang')||'ar')==='ar'?'YYYY-MM':'YYYY-MM'} value={filters.period || ''} onChange={e => onChange({ ...filters, period: e.target.value })} className="px-3 py-2 border border-gray-200 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'الربع':'Quarter'}</label>
-        <select
-          value={filters.quarter || localStorage.getItem('selected_quarter') || ''}
-          onChange={e => { const v = e.target.value; try { if (v) localStorage.setItem('selected_quarter', v); else localStorage.removeItem('selected_quarter') } catch {} ; onChange({ ...filters, quarter: v, page: 1 }) }}
-          className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-        >
-          <option value="">{(localStorage.getItem('lang')||'ar')==='ar'?'بدون':'None'}</option>
-          <option value="Q1">{(localStorage.getItem('lang')||'ar')==='ar'?'الربع الأول (Q1)':'Q1'}</option>
-          <option value="Q2">{(localStorage.getItem('lang')||'ar')==='ar'?'الربع الثاني (Q2)':'Q2'}</option>
-          <option value="Q3">{(localStorage.getItem('lang')||'ar')==='ar'?'الربع الثالث (Q3)':'Q3'}</option>
-          <option value="Q4">{(localStorage.getItem('lang')||'ar')==='ar'?'الربع الرابع (Q4)':'Q4'}</option>
-        </select>
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.status')}</label>
-        <select value={filters.status || ''} onChange={e => onChange({ ...filters, status: e.target.value })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-          <option value="">{t('labels.all')}</option>
-          <option value="draft">{t('labels.draft')}</option>
-          <option value="posted">{t('labels.posted')}</option>
-          <option value="reversed">{t('labels.reversed')}</option>
-        </select>
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'نوع العملية':'Operation Type'}</label>
-        <select value={filters.type || ''} onChange={e => onChange({ ...filters, type: e.target.value, page: 1 })} className="px-3 py-2 border border-gray-200 rounded-lg min-w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-          <option value="">{(localStorage.getItem('lang')||'ar')==='ar'?'جميع العمليات':'All'}</option>
-          <option value="sale_invoices">{(localStorage.getItem('lang')||'ar')==='ar'?'فواتير بيع':'Sale Invoices'}</option>
-          <option value="purchase_invoices">{(localStorage.getItem('lang')||'ar')==='ar'?'فواتير شراء':'Purchase Invoices'}</option>
-          <option value="expenses">{(localStorage.getItem('lang')||'ar')==='ar'?'مصروفات':'Expenses'}</option>
-          <option value="payroll">{(localStorage.getItem('lang')||'ar')==='ar'?'رواتب':'Payroll'}</option>
-          <option value="opening">{(localStorage.getItem('lang')||'ar')==='ar'?'أرصدة افتتاحية':'Opening'}</option>
-          <option value="manual">{(localStorage.getItem('lang')||'ar')==='ar'?'قيود يدوية':'Manual'}</option>
-          <option value="vat_settlement">{(localStorage.getItem('lang')||'ar')==='ar'?'تسويات ضريبية':'VAT Settlement'}</option>
-        </select>
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'المصدر':'Source'}</label>
-        <select value={filters.source || ''} onChange={e => onChange({ ...filters, source: e.target.value, page: 1 })} className="px-3 py-2 border border-gray-200 rounded-lg min-w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-          <option value="">{(localStorage.getItem('lang')||'ar')==='ar'?'الكل':'All'}</option>
-          <option value="sales">{(localStorage.getItem('lang')||'ar')==='ar'?'المبيعات':'Sales'}</option>
-          <option value="purchases">{(localStorage.getItem('lang')||'ar')==='ar'?'المشتريات':'Purchases'}</option>
-          <option value="payroll">{(localStorage.getItem('lang')||'ar')==='ar'?'الرواتب':'Payroll'}</option>
-          <option value="system">{(localStorage.getItem('lang')||'ar')==='ar'?'النظام':'System'}</option>
-          <option value="manual">{(localStorage.getItem('lang')||'ar')==='ar'?'إدخال يدوي':'Manual'}</option>
-        </select>
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.account')}</label>
-        <div className="flex flex-col gap-2">
-          <input value={filters.accountsQuery || ''} onChange={e => onChange({ ...filters, accountsQuery: e.target.value })} placeholder={t('labels.account_search')} className="px-3 py-2 border border-gray-200 rounded-lg min-w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-          <select multiple value={(filters.account_ids||[]).map(String)} onChange={e => { const vals = Array.from(e.target.selectedOptions).map(o=>o.value); onChange({ ...filters, account_ids: vals, account_id: '' }) }} className="px-3 py-2 border border-gray-200 rounded-lg min-w-60 h-28 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-            {(accounts||[]).filter(a => { const q = String(filters.accountsQuery||'').trim().toLowerCase(); if (!q) return true; const name = ((localStorage.getItem('lang')||'ar')==='ar'?(a.name||''):(a.name_en||a.name||''))||''; return name.toLowerCase().includes(q) || String(a.account_code||a.account_number).includes(q) }).map(a => (
-              <option key={a.id} value={String(a.id)}>{a.account_code || a.account_number} • {((localStorage.getItem('lang')||'ar')==='ar'?(a.name||''):(a.name_en||a.name||''))}</option>
+    <div className="bg-white/80 backdrop-blur border border-gray-200 p-4 rounded-xl shadow-sm space-y-3">
+      {/* الفلاتر الأساسية - صف واحد */}
+      <div className="flex flex-wrap gap-3 items-end">
+        {/* نوع العملية */}
+        <div>
+          <label className="text-xs text-gray-600 font-medium">{lang==='ar'?'نوع العملية':'Operation Type'}</label>
+          <select value={filters.type || ''} onChange={e => onChange({ ...filters, type: e.target.value, page: 1 })} className="px-3 py-2 border border-gray-200 rounded-lg min-w-44 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            <option value="">{lang==='ar'?'جميع العمليات':'All Operations'}</option>
+            <option value="invoice">{lang==='ar'?'فواتير بيع':'Sales Invoices'}</option>
+            <option value="supplier_invoice">{lang==='ar'?'فواتير شراء':'Purchase Invoices'}</option>
+            <option value="expense_invoice">{lang==='ar'?'مصروفات':'Expenses'}</option>
+            <option value="payroll_run">{lang==='ar'?'رواتب':'Payroll'}</option>
+            <option value="opening">{lang==='ar'?'أرصدة افتتاحية':'Opening Balances'}</option>
+            <option value="manual">{lang==='ar'?'قيود يدوية':'Manual Entries'}</option>
+            <option value="reversal">{lang==='ar'?'قيود عكسية':'Reversals'}</option>
+          </select>
+        </div>
+        
+        {/* الربع */}
+        <div>
+          <label className="text-xs text-gray-600 font-medium">{lang==='ar'?'الربع':'Quarter'}</label>
+          <select
+            value={filters.quarter || ''}
+            onChange={e => { const v = e.target.value; try { if (v) localStorage.setItem('selected_quarter', v); else localStorage.removeItem('selected_quarter') } catch {} ; onChange({ ...filters, quarter: v, page: 1 }) }}
+            className="px-3 py-2 border border-gray-200 rounded-lg min-w-36 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="">{lang==='ar'?'كل الفترات':'All Periods'}</option>
+            <option value="Q1">{lang==='ar'?'الربع الأول':'Q1 (Jan-Mar)'}</option>
+            <option value="Q2">{lang==='ar'?'الربع الثاني':'Q2 (Apr-Jun)'}</option>
+            <option value="Q3">{lang==='ar'?'الربع الثالث':'Q3 (Jul-Sep)'}</option>
+            <option value="Q4">{lang==='ar'?'الربع الرابع':'Q4 (Oct-Dec)'}</option>
+          </select>
+        </div>
+        
+        {/* الحسابات */}
+        <div>
+          <label className="text-xs text-gray-600 font-medium">{lang==='ar'?'الحساب':'Account'}</label>
+          <select 
+            value={(filters.account_ids && filters.account_ids.length === 1) ? filters.account_ids[0] : ''} 
+            onChange={e => { const v = e.target.value; onChange({ ...filters, account_ids: v ? [v] : [], account_id: '', page: 1 }) }} 
+            className="px-3 py-2 border border-gray-200 rounded-lg min-w-52 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="">{lang==='ar'?'جميع الحسابات':'All Accounts'}</option>
+            {(accounts||[]).slice(0, 100).map(a => (
+              <option key={a.id} value={String(a.id)}>{a.account_code || a.account_number} • {lang==='ar'?(a.name||''):(a.name_en||a.name||'')}</option>
             ))}
           </select>
-          <div className="flex items-center gap-2">
-            <button className="px-2 py-1 bg-gray-100 rounded" onClick={()=> onChange({ ...filters, account_ids: [], account_id: '' })}>{(localStorage.getItem('lang')||'ar')==='ar'?'مسح الاختيار':'Clear'}</button>
+        </div>
+        
+        {/* الحالة */}
+        <div>
+          <label className="text-xs text-gray-600 font-medium">{lang==='ar'?'الحالة':'Status'}</label>
+          <select value={filters.status || ''} onChange={e => onChange({ ...filters, status: e.target.value, page: 1 })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
+            <option value="">{lang==='ar'?'الكل':'All'}</option>
+            <option value="draft">{lang==='ar'?'مسودة':'Draft'}</option>
+            <option value="posted">{lang==='ar'?'منشور':'Posted'}</option>
+            <option value="reversed">{lang==='ar'?'معكوس':'Reversed'}</option>
+          </select>
+        </div>
+        
+        {/* البحث */}
+        <div className="flex-1 min-w-48">
+          <label className="text-xs text-gray-600 font-medium">{lang==='ar'?'بحث':'Search'}</label>
+          <div className="flex gap-2">
+            <input
+              value={filters.search || ''}
+              onChange={e => onChange({ ...filters, search: e.target.value })}
+              onKeyDown={e => { if (e.key === 'Enter') onChange({ ...filters, page: 1 }) }}
+              placeholder={lang==='ar'?'رقم القيد أو الوصف...':'Entry # or description...'}
+              className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            />
+            <button
+              className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg shadow-sm"
+              onClick={() => onChange({ ...filters, page: 1 })}
+            ><Search size={16}/></button>
           </div>
         </div>
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'نطاق الحسابات':'Accounts Scope'}</label>
-        <select value={filters.accounts_scope || ''} onChange={e => onChange({ ...filters, accounts_scope: e.target.value, page: 1 })} className="px-3 py-2 border border-gray-200 rounded-lg min-w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-          <option value="">{(localStorage.getItem('lang')||'ar')==='ar'?'الكل':'All'}</option>
-          <option value="balance_sheet">{(localStorage.getItem('lang')||'ar')==='ar'?'الميزانية فقط':'Balance Sheet Only'}</option>
-          <option value="income">{(localStorage.getItem('lang')||'ar')==='ar'?'الدخل فقط':'Income Only'}</option>
-        </select>
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.entry_number')}</label>
-        <input inputMode="numeric" lang="en" dir="ltr" value={filters.entry_number || ''} onChange={e => onChange({ ...filters, entry_number: normalizeDigits(e.target.value).replace(/[^0-9]/g,'') })} className="px-3 py-2 border border-gray-200 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'مرجع':'Reference'}</label>
-        <input value={filters.reference || ''} onChange={e => onChange({ ...filters, reference: e.target.value })} placeholder={(localStorage.getItem('lang')||'ar')==='ar'?'INV/… PI/… PAY/…':'INV/… PI/… PAY/…'} className="px-3 py-2 border border-gray-200 rounded-lg w-40 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.min_amount')}</label>
-        <input inputMode="decimal" lang="en" dir="ltr" value={filters.minAmount || ''} onChange={e => onChange({ ...filters, minAmount: sanitizeDecimal(e.target.value) })} className="px-3 py-2 border border-gray-200 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.max_amount')}</label>
-        <input inputMode="decimal" lang="en" dir="ltr" value={filters.maxAmount || ''} onChange={e => onChange({ ...filters, maxAmount: sanitizeDecimal(e.target.value) })} className="px-3 py-2 border border-gray-200 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'قيَم جاهزة':'Amount Presets'}</label>
-        <button className="px-2 py-1 bg-gray-100 rounded" onClick={()=> onChange({ ...filters, minAmount: '', maxAmount: '100' })}>{(localStorage.getItem('lang')||'ar')==='ar'?'أقل من 100':'< 100'}</button>
-        <button className="px-2 py-1 bg-gray-100 rounded" onClick={()=> onChange({ ...filters, minAmount: '100', maxAmount: '1000' })}>{(localStorage.getItem('lang')||'ar')==='ar'?'100 – 1,000':'100–1,000'}</button>
-        <button className="px-2 py-1 bg-gray-100 rounded" onClick={()=> onChange({ ...filters, minAmount: '10000', maxAmount: '' })}>{(localStorage.getItem('lang')||'ar')==='ar'?'أكثر من 10,000':'> 10,000'}</button>
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'قيود كبيرة فقط':'Outliers Only'}</label>
-        <input type="checkbox" checked={!!filters.outliersOnly} onChange={e => onChange({ ...filters, outliersOnly: e.target.checked })} />
-        <input inputMode="decimal" lang="en" dir="ltr" placeholder={(localStorage.getItem('lang')||'ar')==='ar'?'الحد':'Threshold'} value={filters.outliers_threshold || ''} onChange={e => onChange({ ...filters, outliers_threshold: sanitizeDecimal(e.target.value) })} className="px-3 py-2 border border-gray-200 rounded-lg w-28 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-gray-600">{t('labels.only_unbalanced')}</label>
-        <input type="checkbox" checked={!!filters.onlyUnbalanced} onChange={e => onChange({ ...filters, onlyUnbalanced: e.target.checked })} />
-      </div>
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-gray-600">{(localStorage.getItem('lang')||'ar')==='ar'?'عرض تجميعي':'Summary View'}</label>
-        <input type="checkbox" checked={!!filters.summary} onChange={e => onChange({ ...filters, summary: e.target.checked, page: 1 })} />
-      </div>
-      <div>
-        <label className="text-xs text-gray-600">{t('labels.sort')}</label>
-        <select value={filters.sort || ''} onChange={e => onChange({ ...filters, sort: e.target.value })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500">
-          <option value="date_desc">{t('labels.date_desc')}</option>
-          <option value="date_asc">{t('labels.date_asc')}</option>
-          <option value="amt_desc">{t('labels.amount_desc')}</option>
-          <option value="amt_asc">{t('labels.amount_asc')}</option>
-        </select>
-      </div>
-      <div className="flex-1">
-        <label className="text-xs text-gray-600">{t('labels.search')}</label>
+        
+        {/* أزرار */}
         <div className="flex gap-2">
-          <input
-            value={filters.search || ''}
-            onChange={e => onChange({ ...filters, search: e.target.value })}
-            onKeyDown={e => { if (e.key === 'Enter') onChange({ ...filters, page: 1, search: String(e.currentTarget.value || '').trim() }) }}
-            placeholder={t('labels.search_placeholder')}
-            autoComplete="off"
-            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-          />
-          <button
-            className="px-3 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg shadow-sm flex items-center gap-1"
-            onClick={() => onChange({ ...filters, page: 1, search: String(filters.search || '').trim() })}
-          ><Search size={16}/>{t('labels.search')}</button>
+          <button 
+            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+          >
+            {showAdvanced ? (lang==='ar'?'إخفاء':'Hide') : (lang==='ar'?'متقدم':'Advanced')}
+          </button>
+          <button 
+            className="px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm"
+            onClick={() => onChange({ status: 'posted', page: 1, pageSize: 20, type: '', quarter: '', account_ids: [], search: '' })}
+          >
+            {lang==='ar'?'مسح':'Clear'}
+          </button>
+          {canCreate && (
+            <button className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg shadow-sm" onClick={onCreate}>
+              {lang==='ar'?'+ قيد جديد':'+ New Entry'}
+            </button>
+          )}
         </div>
       </div>
-      {canCreate && (
-        <button className="px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500" onClick={onCreate}>{t('labels.create_entry')}</button>
+      
+      {/* الفلاتر المتقدمة (مخفية افتراضياً) */}
+      {showAdvanced && (
+        <div className="flex flex-wrap gap-3 items-end pt-3 border-t border-gray-200">
+          <div>
+            <label className="text-xs text-gray-600">{lang==='ar'?'من':'From'}</label>
+            <input type="date" value={filters.from || ''} onChange={e => onChange({ ...filters, from: e.target.value, preset: '' })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600">{lang==='ar'?'إلى':'To'}</label>
+            <input type="date" value={filters.to || ''} onChange={e => onChange({ ...filters, to: e.target.value, preset: '' })} className="px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
+          </div>
+          <div>
+            <label className="text-xs text-gray-600">{lang==='ar'?'رقم القيد':'Entry #'}</label>
+            <input inputMode="numeric" value={filters.entry_number || ''} onChange={e => onChange({ ...filters, entry_number: normalizeDigits(e.target.value).replace(/[^0-9]/g,'') })} className="px-3 py-2 border border-gray-200 rounded-lg w-24 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500" />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-gray-600">{lang==='ar'?'غير متوازنة فقط':'Unbalanced Only'}</label>
+            <input type="checkbox" checked={!!filters.onlyUnbalanced} onChange={e => onChange({ ...filters, onlyUnbalanced: e.target.checked })} className="rounded" />
+          </div>
+        </div>
       )}
     </div>
   )
@@ -620,19 +589,13 @@ export default function Journal() {
       <PageHeader
         icon={FileText}
         title={t('titles.journal', lang)}
-        subtitle={t('labels.actions', lang)}
+        subtitle={lang === 'ar' ? 'مصدر الحقيقة الوحيد للعمليات المالية' : 'Single Source of Truth for Financial Transactions'}
         onHomeClick={() => navigate('/')}
         homeLabel={t('labels.home', lang)}
         actions={[
-          (canJournalCreate ? (<button key="create" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={() => setModalOpen(true)}>{t('labels.create_entry', lang)}</button>) : null),
-          (<button key="reload" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={load}>{t('labels.reload', lang)}</button>),
-          (<button key="help" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={()=>setHelpOpen(true)}>{t('labels.help', lang)}</button>),
-          (<span key="period" className="px-2 py-1 bg-white/10 text-white rounded-lg border border-white/20"><StatusBadge status={periodStatus} type="period" /></span>),
-          (<button key="pdf" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={() => generateReportPDF({ reportType: 'journal', lang, fromDate: filters.from||'', toDate: filters.to||'' })}>PDF</button>),
+          (<button key="reload" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={load}>{lang === 'ar' ? 'تحديث' : 'Refresh'}</button>),
           (<button key="xlsx" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={() => exportExcel(visibleItems)}>Excel</button>),
-          (canJournalDelete ? (<button key="purge_unlinked" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={async()=>{ try { const ok = window.confirm(lang==='ar'?'تأكيد عملية التنظيف':'Confirm purge'); if (!ok) return; await apiDebug.purgeUnlinked(); await load(); setToast(t('messages.operation_success', lang)) } catch { setToast(t('messages.operation_failed_prefix', lang) + 'purge') } }}>Purge</button>) : null),
-          (<span key="qbadge" className="px-2 py-1 bg-white/10 text-white rounded-lg border border-white/20">{(localStorage.getItem('lang')||'ar')==='ar'?'الربع':'Quarter'}: {filters.quarter || localStorage.getItem('selected_quarter') || '—'}</span>),
-          (<button key="qclear" className="px-3 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg border border-white/20" onClick={()=>{ try { localStorage.removeItem('selected_quarter') } catch {}; setFilters(prev => ({ ...prev, quarter: '', page: 1 })) }}>{(localStorage.getItem('lang')||'ar')==='ar'?'إلغاء الربع':'Clear Quarter'}</button>),
+          (<span key="period" className="px-2 py-1 bg-white/10 text-white rounded-lg border border-white/20"><StatusBadge status={periodStatus} type="period" /></span>),
         ]}
       />
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-3">
@@ -641,38 +604,25 @@ export default function Journal() {
             <div className="font-semibold">{error}</div>
           </div>
         ) : null}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="flex items-center gap-2 px-3 py-2 bg-sky-50 border rounded">
-            <span className="inline-block w-2 h-2 bg-sky-500 rounded-full"></span>
-            <span className="text-sm text-sky-700">{t('labels.draft', lang)}</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-blue-800 text-white border border-blue-800 rounded">
-            <span className="inline-block w-2 h-2 bg-white rounded-full"></span>
-            <span className="text-sm">{t('labels.posted', lang)}</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-gray-100 border rounded">
-            <span className="inline-block w-2 h-2 bg-gray-600 rounded-full"></span>
-            <span className="text-sm text-gray-700">{t('labels.reversed', lang)}</span>
-          </div>
-        </div>
         <Filters filters={filters} onChange={setFilters} onCreate={createDraft} accounts={accounts} canCreate={canJournalCreate} />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <motion.div whileHover={{ scale: 1.02 }} className="bg-blue-50 p-4 rounded-lg border shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-2"><TrendingUp className="text-blue-700" size={18}/>{lang==='ar'?'إجمالي المدين':'Total Debit'}</div>
-            <div className="font-bold text-blue-700">{sumDebit(visibleItems).toFixed(2)}</div>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.02 }} className="bg-green-50 p-4 rounded-lg border shadow_sm flex items-center justify_between">
-            <div className="flex items-center gap-2"><TrendingDown className="text-green-700" size={18}/>{lang==='ar'?'إجمالي الدائن':'Total Credit'}</div>
-            <div className="font-bold text-green-700">{sumCredit(visibleItems).toFixed(2)}</div>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.02 }} className="bg-yellow-50 p-4 rounded-lg border shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-2"><FileText className="text-yellow-700" size={18}/>{lang==='ar'?'مسودة':'Draft'}</div>
-            <div className="font-bold text-yellow-700">{countStatus(visibleItems,'draft')}</div>
-          </motion.div>
-          <motion.div whileHover={{ scale: 1.02 }} className="bg-purple-50 p-4 rounded-lg border shadow-sm flex items-center justify-between">
-            <div className="flex items-center gap-2"><CheckCircle className="text-purple-700" size={18}/>{lang==='ar'?'منشور':'Posted'}</div>
-            <div className="font-bold text-purple-700">{countStatus(visibleItems,'posted')}</div>
-          </motion.div>
+        
+        {/* ملخص سريع */}
+        <div className="flex flex-wrap gap-4 text-sm">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg border">
+            <TrendingUp className="text-blue-600" size={16}/>
+            <span className="text-gray-600">{lang==='ar'?'مدين:':'Debit:'}</span>
+            <span className="font-bold text-blue-700">{sumDebit(visibleItems).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 rounded-lg border">
+            <TrendingDown className="text-red-600" size={16}/>
+            <span className="text-gray-600">{lang==='ar'?'دائن:':'Credit:'}</span>
+            <span className="font-bold text-red-700">{sumCredit(visibleItems).toLocaleString('en-US', {minimumFractionDigits: 2})}</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border">
+            <FileText className="text-gray-600" size={16}/>
+            <span className="text-gray-600">{lang==='ar'?'عدد القيود:':'Entries:'}</span>
+            <span className="font-bold text-gray-700">{visibleItems.length}</span>
+          </div>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
           <section className="lg:col-span-7 space-y-2">
@@ -850,135 +800,19 @@ export default function Journal() {
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-                  <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">نوع العملية: {operationTypeOf(selected, relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment)}</div>
-                  <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">رقم الفاتورة: {(() => {
-                    const inv = relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment
-                    // Try to get invoice_number from related data first
-                    if (inv?.invoice_number) return inv.invoice_number;
-                    if (inv?.number) return inv.number;
-                    // Try to extract from description using regex
-                    const descMatch = String(selected?.description||'').match(/INV\/[0-9]{4}\/[A-Z_]+_[0-9]+/);
-                    if (descMatch?.[0]) return descMatch[0];
-                    // Try to extract invoice number pattern from description (INV-9-302659 format)
-                    const invMatch = String(selected?.description||'').match(/INV-[\d-]+/);
-                    if (invMatch?.[0]) return invMatch[0];
-                    // Fallback to related_id if available
-                    if (selected?.related_id) return `#${selected.related_id}`;
-                    return '—';
-                  })()}</div>
-                  <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">نوع الدفع: {paymentTypeText(relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment, orderMeta, selected)}</div>
-                  <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">فرع النشاط: {branchNameOf(selected, relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment, orderMeta)}</div>
-                  
-                  {/* تفاصيل فواتير المبيعات */}
-                  {selected.related_type==='invoice' && relatedInvoice && (
-                    <>
-                      <div className="px-2 py-1 bg-green-50 text-green-700 rounded border">صافي المبيعات: {formatAmount(netSalesOfEntry(selected))} SAR</div>
-                      <div className="px-2 py-1 bg-purple-50 text-purple-700 rounded border">الضريبة: {formatAmount(vatOfEntry(selected, relatedInvoice))} SAR</div>
-                      <div className="px-2 py-1 bg-rose-50 text-rose-700 rounded border">الخصم: {formatAmount(discountAmountOf(selected, relatedInvoice))} SAR {discountPctOf(selected, relatedInvoice, orderMeta)}</div>
-                      {paymentTypeText(relatedInvoice, orderMeta, selected)==='ذمم مدينة' && (
-                        <div className="px-2 py-1 bg-sky-50 text-sky-700 rounded border">العملاء: ذمم مدينة</div>
-                      )}
-                      {relatedInvoice?.partner?.name && (
-                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">العميل: {relatedInvoice.partner.name}</div>
-                      )}
-                      {relatedInvoice?.total && (
-                        <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">الإجمالي: {formatAmount(relatedInvoice.total)} SAR</div>
-                      )}
-                    </>
-                  )}
-                  
-                  {/* تفاصيل فواتير الموردين */}
-                  {selected.related_type==='supplier_invoice' && relatedSupplierInvoice && (
-                    <>
-                      <div className="px-2 py-1 bg-orange-50 text-orange-700 rounded border">إجمالي المشتريات: {formatAmount(relatedSupplierInvoice.subtotal || relatedSupplierInvoice.total || 0)} SAR</div>
-                      <div className="px-2 py-1 bg-purple-50 text-purple-700 rounded border">الضريبة: {formatAmount(relatedSupplierInvoice.tax_amount || relatedSupplierInvoice.tax || 0)} SAR</div>
-                      {Number(relatedSupplierInvoice.discount_amount || relatedSupplierInvoice.discount_total || 0) > 0 && (
-                        <div className="px-2 py-1 bg-rose-50 text-rose-700 rounded border">الخصم: {formatAmount(relatedSupplierInvoice.discount_amount || relatedSupplierInvoice.discount_total || 0)} SAR</div>
-                      )}
-                      {relatedSupplierInvoice?.total && (
-                        <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">الإجمالي: {formatAmount(relatedSupplierInvoice.total)} SAR</div>
-                      )}
-                      {relatedSupplierInvoice?.partner?.name && (
-                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">المورد: {relatedSupplierInvoice.partner.name}</div>
-                      )}
-                      {relatedSupplierInvoice?.payment_status && (
-                        <div className="px-2 py-1 bg-yellow-50 text-yellow-700 rounded border">حالة الدفع: {relatedSupplierInvoice.payment_status === 'paid' ? 'مدفوعة' : relatedSupplierInvoice.payment_status === 'partial' ? 'مدفوعة جزئياً' : 'غير مدفوعة'}</div>
-                      )}
-                    </>
-                  )}
-                  
-                  {/* تفاصيل المصروفات */}
-                  {selected.related_type==='expense_invoice' && relatedExpense && (
-                    <>
-                      <div className="px-2 py-1 bg-red-50 text-red-700 rounded border">نوع المصروف: {relatedExpense.expense_type === 'expense' ? 'مصروف' : relatedExpense.expense_type === 'withdraw' ? 'سحب' : relatedExpense.expense_type === 'deposit' ? 'إيداع' : relatedExpense.expense_type === 'payment' ? 'سداد' : relatedExpense.expense_type || 'مصروف'}</div>
-                      <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">المبلغ: {formatAmount(relatedExpense.amount || relatedExpense.total || 0)} SAR</div>
-                      {relatedExpense?.account_code && (
-                        <div className="px-2 py-1 bg-blue-50 text-blue-700 rounded border">حساب المصروف: {relatedExpense.account_code}</div>
-                      )}
-                      {relatedExpense?.partner?.name && (
-                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">المستفيد: {relatedExpense.partner.name}</div>
-                      )}
-                      {relatedExpense?.description && (
-                        <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border col-span-2">الوصف: {relatedExpense.description}</div>
-                      )}
-                      {relatedExpense?.branch && (
-                        <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">الفرع: {relatedExpense.branch}</div>
-                      )}
-                    </>
-                  )}
-                  
-                  {/* تفاصيل المدفوعات */}
-                  {selected.related_type==='payment' && relatedPayment && (
-                    <>
-                      <div className="px-2 py-1 bg-green-50 text-green-700 rounded border">نوع الدفع: {relatedPayment.payment_method === 'cash' ? 'نقدي' : relatedPayment.payment_method === 'card' ? 'بطاقة' : relatedPayment.payment_method === 'bank' ? 'بنك' : relatedPayment.payment_method || '—'}</div>
-                      {relatedPayment?.total && (
-                        <div className="px-2 py-1 bg-teal-50 text-teal-700 rounded border">المبلغ: {formatAmount(relatedPayment.total)} SAR</div>
-                      )}
-                      {relatedPayment?.partner?.name && (
-                        <div className="px-2 py-1 bg-indigo-50 text-indigo-700 rounded border">الطرف: {relatedPayment.partner.name}</div>
-                      )}
-                      {relatedPayment?.invoice_id && (
-                        <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">فاتورة مرتبطة: #{relatedPayment.invoice_id}</div>
-                      )}
-                    </>
-                  )}
-                  
-                  {/* تفاصيل عامة لجميع الأنواع */}
-                  {selected.branch && (
-                    <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">الفرع: {selected.branch}</div>
-                  )}
-                  {selected.period && (
-                    <div className="px-2 py-1 bg-gray-50 text-gray-700 rounded border">الفترة: {selected.period}</div>
-                  )}
+                {/* معلومات مختصرة */}
+                <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                  <span className="px-2 py-1 bg-blue-50 text-blue-700 rounded">{operationTypeOf(selected, relatedInvoice || relatedSupplierInvoice || relatedExpense || relatedPayment)}</span>
+                  {selected.branch && <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded">{selected.branch}</span>}
+                  {selected.period && <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded">{selected.period}</span>}
                 </div>
               </div>
             ) : (
               <div className="bg-white/90 backdrop-blur border border-gray-200 rounded-xl p-6 shadow-sm">
-                <div className="text-gray-700 font-semibold mb-2">{lang==='ar'?'تحليل سريع':'Quick Analysis'}</div>
-                {Array.isArray(visibleItems) && visibleItems.length > 0 ? (
-                  <div className="grid grid-cols-1 gap-3" style={{height:300}}>
-                    <ResponsiveContainer width="100%" height={300} minHeight={200}>
-                      <BarChart data={aggregateByAccount(visibleItems)}>
-                        <XAxis dataKey="name" /><YAxis /><Tooltip /><Legend />
-                        <Bar dataKey="debit" fill="#2563eb" name={lang==='ar'?'مدين':'Debit'} />
-                        <Bar dataKey="credit" fill="#dc2626" name={lang==='ar'?'دائن':'Credit'} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <ResponsiveContainer width="100%" height={300} minHeight={200}>
-                      <PieChart>
-                      <Pie data={[{name:lang==='ar'?'مدين':'Debit',value:sumDebit(visibleItems)},{name:lang==='ar'?'دائن':'Credit',value:sumCredit(visibleItems)}]} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                          <Cell fill="#2563eb" /><Cell fill="#dc2626" />
-                        </Pie>
-                        <Tooltip /><Legend />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                ) : (
-                  <div className="h-64 flex items-center justify-center text-gray-500">
-                    {lang==='ar'?'لا توجد بيانات لعرضها':'No data to display'}
-                  </div>
-                )}
+                <div className="text-center text-gray-500 py-8">
+                  <FileText className="mx-auto text-gray-300 mb-3" size={48}/>
+                  <div>{lang==='ar'?'اختر قيداً من الجدول لعرض تفاصيله':'Select an entry from the table to view details'}</div>
+                </div>
               </div>
             )}
           </section>

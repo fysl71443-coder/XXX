@@ -37,6 +37,37 @@ export const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
+// CRITICAL: Wrap pool.query to add detailed error logging
+const originalQuery = pool.query.bind(pool);
+pool.query = function(text, params) {
+  // Check for NaN in params before executing
+  if (params && Array.isArray(params)) {
+    for (let i = 0; i < params.length; i++) {
+      if (typeof params[i] === 'number' && (isNaN(params[i]) || !isFinite(params[i]))) {
+        console.error('🔥 SQL ERROR: NaN detected in params!');
+        console.error('SQL:', text);
+        console.error('PARAMS:', params);
+        console.error(`PARAM[${i}] =`, params[i], `(type: ${typeof params[i]})`);
+        console.error('Stack trace:', new Error().stack);
+        throw new Error(`Invalid parameter at index ${i}: NaN or non-finite number`);
+      }
+    }
+  }
+  
+  return originalQuery(text, params).catch(err => {
+    // Enhanced error logging
+    if (err.message && err.message.includes('NaN')) {
+      console.error('🔥 SQL ERROR - NaN detected!');
+      console.error('SQL:', text);
+      console.error('PARAMS:', params);
+      console.error('Error:', err.message);
+      console.error('Stack trace:', err.stack);
+      console.error('Full error:', err);
+    }
+    throw err;
+  });
+};
+
 // MANDATORY: Test connection on startup - fail if connection fails
 pool.on('error', (err) => {
   console.error('❌ CRITICAL: PostgreSQL connection error:', err);

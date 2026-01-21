@@ -12,6 +12,7 @@ import { authenticateToken } from "./middleware/auth.js";
 import { authorize } from "./middleware/authorize.js";
 import { checkAccountingPeriod } from "./middleware/checkAccountingPeriod.js";
 import { isAdminUser } from "./utils/auth.js";
+import routes from "./routes/index.js";
 
 // CRITICAL: Register JSONB type parser for pg library
 // This ensures pg library correctly handles JSONB conversion
@@ -25,6 +26,30 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// ============================================
+// CRITICAL: CORS MUST BE FIRST (Before ANY routes)
+// ============================================
+// CORS middleware must be registered BEFORE any routes to handle preflight OPTIONS requests
+// This allows frontend on different ports (3000, 4000, 5000) to access the API
+app.use(cors({
+  origin: [
+    'http://localhost:3000',
+    'http://localhost:4000', 
+    'http://localhost:5000',
+    'http://127.0.0.1:3000',
+    'http://127.0.0.1:4000',
+    'http://127.0.0.1:5000'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-User-Permissions'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+}));
+
+// Explicitly handle OPTIONS requests for all routes (CORS preflight)
+app.options('*', cors());
 const port = Number(process.env.PORT || 4000); // Default 4000, but can be overridden (e.g., 5000 for dev)
 
 const buildPath = path.join(__dirname, "frontend", "build");
@@ -108,6 +133,21 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
+// ============================================
+// CRITICAL: Body Parsing MUST Come Before Routes
+// ============================================
+// express.json() must be registered BEFORE routes so that req.body is parsed
+// Otherwise, routes will receive undefined req.body
+// NOTE: CORS is now registered at the top (before this point)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// ============================================
+// API Routes (Modular)
+// ============================================
+// Mount modular routes (AFTER body parsing)
+app.use('/api', routes);
 
 // Bootstrap endpoint - load all initial data in one request
 app.get("/api/bootstrap", authenticateToken, async (req, res) => {
@@ -290,16 +330,8 @@ app.use((req, res, next) => {
 });
 
 // 3️⃣ Middleware for parsing (safe for static files)
-// CRITICAL: Increase body size limit for Base64 images in settings
-// CRITICAL: CORS configuration for development (allows localhost:3000 and localhost:4000)
-app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:4000', 'http://127.0.0.1:3000', 'http://127.0.0.1:4000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+// NOTE: express.json() and CORS are now moved BEFORE routes (see above)
+// This ensures req.body is parsed before routes receive requests
 
 // 4️⃣ Static file guard - skip ALL middleware for static files
 // This catches any static files that might slip through, including nested paths
@@ -671,6 +703,53 @@ async function ensureSchema() {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
     `);
+    // ============================================
+    // PAYROLL TABLES
+    // ============================================
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payroll_runs (
+        id SERIAL PRIMARY KEY,
+        period TEXT NOT NULL,
+        status TEXT DEFAULT 'draft',
+        journal_entry_id INTEGER,
+        approved_at TIMESTAMP WITH TIME ZONE,
+        posted_at TIMESTAMP WITH TIME ZONE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS payroll_run_items (
+        id SERIAL PRIMARY KEY,
+        run_id INTEGER REFERENCES payroll_runs(id) ON DELETE CASCADE,
+        employee_id INTEGER REFERENCES employees(id),
+        hours_worked NUMERIC(10,2) DEFAULT 0,
+        basic_salary NUMERIC(18,2) DEFAULT 0,
+        housing_allowance NUMERIC(18,2) DEFAULT 0,
+        transport_allowance NUMERIC(18,2) DEFAULT 0,
+        other_allowances NUMERIC(18,2) DEFAULT 0,
+        incentive_amount NUMERIC(18,2) DEFAULT 0,
+        manual_deduction NUMERIC(18,2) DEFAULT 0,
+        gosi_employee NUMERIC(18,2) DEFAULT 0,
+        gosi_employer NUMERIC(18,2) DEFAULT 0,
+        gross_salary NUMERIC(18,2) DEFAULT 0,
+        net_salary NUMERIC(18,2) DEFAULT 0,
+        paid_at TIMESTAMP WITH TIME ZONE,
+        payment_method TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS previous_dues (
+        id SERIAL PRIMARY KEY,
+        employee_id INTEGER REFERENCES employees(id),
+        period TEXT NOT NULL,
+        amount NUMERIC(18,2) DEFAULT 0,
+        description TEXT,
+        paid BOOLEAN DEFAULT false,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      )
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS products (
         id SERIAL PRIMARY KEY,
@@ -736,69 +815,7 @@ ensureSchema().catch((e) => {
   }
 })();
 
-async function handleLogin(req, res) {
-  try {
-    const { email, password } = req.body || {};
-    console.log(`[LOGIN] Attempt | email=${email || '(empty)'}`)
-    if (!email || !password) {
-      console.log(`[LOGIN] REJECTED: Missing credentials | email=${email || '(empty)'}`)
-      return res.status(400).json({ error: "invalid_credentials" });
-    }
-    if (!pool) {
-      console.error(`[LOGIN] ERROR: DB not configured | email=${email}`)
-      return res.status(500).json({ error: "server_error", details: "db_not_configured" });
-    }
-    const { rows } = await pool.query(
-      'SELECT id, email, password, role, default_branch, created_at FROM "users" WHERE email = $1 LIMIT 1',
-      [email]
-    );
-    const user = rows && rows[0];
-    if (!user) {
-      console.log(`[LOGIN] REJECTED: User not found | email=${email}`)
-      return res.status(404).json({ error: "not_found" });
-    }
-    const ok = await bcrypt.compare(String(password), String(user.password || ""));
-    if (!ok) {
-      console.log(`[LOGIN] REJECTED: Invalid password | userId=${user.id} email=${email}`)
-      return res.status(401).json({ error: "invalid_credentials" });
-    }
-    const token = jwt.sign({ id: user.id, email: user.email, role: user.role || "user" }, String(JWT_SECRET), { expiresIn: "12h" });
-    let perms = {};
-    try { perms = await loadUserPermissionsMap(user.id) } catch (permErr) {
-      console.error(`[LOGIN] ERROR loading permissions | userId=${user.id}`, permErr?.message)
-    }
-    const screens = Object.entries(perms || {}).filter(([_, v]) => {
-      const g = v?._global || {};
-      if (Object.values(g).some(Boolean)) return true;
-      return Object.values(v || {}).filter((_, k) => k !== '_global').some(obj => Object.values(obj || {}).some(Boolean));
-    }).map(([k]) => k);
-    const branches = (function(){
-      const keys = Object.keys(perms || {}).reduce((acc, sc) => {
-        for (const [b, obj] of Object.entries(perms[sc] || {})) {
-          if (b === '_global') continue;
-          if (Object.values(obj || {}).some(Boolean)) acc.add(String(b));
-        }
-        return acc;
-      }, new Set());
-      const arr = Array.from(keys);
-      if (arr.length) return arr;
-      const def = String(user.default_branch || '').trim() || 'china_town';
-      return [def];
-    })();
-    console.log(`[LOGIN] SUCCESS | userId=${user.id} email=${email} role=${user.role} screens=${screens.length} branches=${branches.length}`)
-    return res.json({
-      token,
-      user: { id: user.id, email: user.email, role: user.role || "user", default_branch: user.default_branch || null, created_at: user.created_at },
-      screens,
-      branches
-    });
-  } catch (e) {
-    console.error(`[LOGIN] ERROR: ${e?.message || 'unknown'}`, e?.stack)
-    return res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-}
-app.post("/api/auth/login", handleLogin);
-app.post("/auth/login", handleLogin);
+// Auth routes moved to routes/auth.js and controllers/authController.js
 
 app.post("/debug/bootstrap-admin", async (req, res) => {
   try {
@@ -977,91 +994,7 @@ app.post("/api/debug/purge-unlinked", authenticateToken, authorize("journal", "d
   }
 });
 
-// /auth/me endpoint - CRITICAL: Only returns user if token is valid
-// Does NOT check permissions - that's authorization, not authentication
-// Must NEVER fail due to permission loading errors
-app.get("/api/auth/me", authenticateToken, (req, res) => {
-  try {
-    const user = req.user;
-    if (!user) {
-      console.error('[AUTH/ME] No user in request after authentication');
-      return res.status(401).json({ error: "unauthorized" });
-    }
-    
-    // Return user data ONLY - no permissions, no complex logic
-    // Authentication is separate from Authorization
-    // Simple admin check based on role field only (no role_id dependency)
-    const role = String(user.role || '').toLowerCase();
-    const isAdmin = role === 'admin';
-    
-    const response = {
-      id: user.id,
-      email: user.email,
-      role: user.role || 'user',
-      default_branch: user.default_branch || null,
-      created_at: user.created_at,
-      isAdmin: isAdmin // Simple boolean flag
-    };
-    
-    console.log(`[AUTH/ME] SUCCESS | userId=${user.id} email=${user.email} role=${user.role} isAdmin=${response.isAdmin}`);
-    res.json(response);
-  } catch (e) {
-    console.error(`[AUTH/ME] ERROR: ${e?.message || 'unknown'}`, e);
-    // Even on error, if user exists, return it - don't fail auth due to other issues
-    if (req.user) {
-      const role = String(req.user.role || '').toLowerCase();
-      return res.json({
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role || 'user',
-        default_branch: req.user.default_branch,
-        created_at: req.user.created_at,
-        isAdmin: role === 'admin'
-      });
-    }
-    return res.status(401).json({ error: "unauthorized" });
-  }
-});
-
-app.get("/auth/me", authenticateToken, (req, res) => {
-  try {
-    const user = req.user;
-    if (!user) {
-      console.error('[AUTH/ME] No user in request after authentication');
-      return res.status(401).json({ error: "unauthorized" });
-    }
-    
-    // Simple admin check based on role field only (no role_id dependency)
-    const role = String(user.role || '').toLowerCase();
-    const isAdmin = role === 'admin';
-    
-    const response = {
-      id: user.id,
-      email: user.email,
-      role: user.role || 'user',
-      default_branch: user.default_branch || null,
-      created_at: user.created_at,
-      isAdmin: isAdmin // Simple boolean flag
-    };
-    
-    console.log(`[AUTH/ME] SUCCESS | userId=${user.id} email=${user.email} role=${user.role} isAdmin=${response.isAdmin}`);
-    res.json(response);
-  } catch (e) {
-    console.error(`[AUTH/ME] ERROR: ${e?.message || 'unknown'}`, e);
-    if (req.user) {
-      const role = String(req.user.role || '').toLowerCase();
-      return res.json({
-        id: req.user.id,
-        email: req.user.email,
-        role: req.user.role || 'user',
-        default_branch: req.user.default_branch,
-        created_at: req.user.created_at,
-        isAdmin: role === 'admin'
-      });
-    }
-    return res.status(401).json({ error: "unauthorized" });
-  }
-});
+// Auth routes (/api/auth/login, /api/auth/me) moved to routes/auth.js and controllers/authController.js
 
 // CRITICAL: requireAdmin - Simple admin check, no permissions, no screens, no actions
 // Admin has unrestricted access to everything
@@ -1089,142 +1022,7 @@ function requireAdmin(req, res, next){
   next();
 }
 
-app.get("/users", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
-    const { rows } = await pool.query('SELECT id, email, role, is_active, created_at FROM "users" ORDER BY id DESC');
-    const items = Array.isArray(rows) ? rows.map(r => ({ id: r.id, email: r.email, role: r.role || "user", is_active: r.is_active !== false, created_at: r.created_at })) : [];
-    res.json(items);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.get("/api/users", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
-    const { rows } = await pool.query('SELECT id, email, role, is_active, created_at FROM "users" ORDER BY id DESC');
-    const items = Array.isArray(rows) ? rows.map(r => ({ id: r.id, email: r.email, role: r.role || "user", is_active: r.is_active !== false, created_at: r.created_at })) : [];
-    res.json(items);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-
-// GET /api/users/:id - Get single user by ID
-app.get("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    if (!pool) return res.status(500).json({ error: "server_error", details: "db_not_configured" });
-    const id = Number(req.params.id || 0);
-    const { rows } = await pool.query('SELECT id, email, role, is_active, default_branch, created_at FROM "users" WHERE id = $1', [id]);
-    if (!rows || rows.length === 0) {
-      return res.status(404).json({ error: "not_found", details: "User not found" });
-    }
-    const user = rows[0];
-    res.json({ id: user.id, email: user.email, role: user.role || "user", is_active: user.is_active !== false, default_branch: user.default_branch, created_at: user.created_at });
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-
-app.post("/users", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { email, password, role, default_branch } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: "invalid_payload" });
-    const hashed = await bcrypt.hash(String(password), 10);
-    const { rows: existing } = await pool.query('SELECT id FROM "users" WHERE email = $1 LIMIT 1', [email]);
-    if (existing && existing.length > 0) return res.status(409).json({ error: "conflict" });
-    const { rows } = await pool.query('INSERT INTO "users" (email, password, role, default_branch) VALUES ($1, $2, $3, $4) RETURNING id, email, role, default_branch, created_at', [email, hashed, role || "user", default_branch || null]);
-    res.json(rows && rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.post("/api/users", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { email, password, role, default_branch } = req.body || {};
-    if (!email || !password) return res.status(400).json({ error: "invalid_payload" });
-    const hashed = await bcrypt.hash(String(password), 10);
-    const { rows: existing } = await pool.query('SELECT id FROM "users" WHERE email = $1 LIMIT 1', [email]);
-    if (existing && existing.length > 0) return res.status(409).json({ error: "conflict" });
-    const { rows } = await pool.query('INSERT INTO "users" (email, password, role, default_branch) VALUES ($1, $2, $3, $4) RETURNING id, email, role, default_branch, created_at', [email, hashed, role || "user", default_branch || null]);
-    res.json(rows && rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-
-app.put("/users/:id", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    const { email, role, default_branch } = req.body || {};
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { rows } = await pool.query('UPDATE "users" SET email = COALESCE($1, email), role = COALESCE($2, role), default_branch = COALESCE($3, default_branch) WHERE id = $4 RETURNING id, email, role, default_branch, created_at', [email || null, role || null, default_branch || null, id]);
-    res.json(rows && rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.put("/api/users/:id", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    const { email, role, default_branch } = req.body || {};
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { rows } = await pool.query('UPDATE "users" SET email = COALESCE($1, email), role = COALESCE($2, role), default_branch = COALESCE($3, default_branch) WHERE id = $4 RETURNING id, email, role, default_branch, created_at', [email || null, role || null, default_branch || null, id]);
-    res.json(rows && rows[0]);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-
-app.post("/users/:id/toggle", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { rows: cur } = await pool.query('SELECT is_active FROM "users" WHERE id = $1 LIMIT 1', [id]);
-    const next = !(cur && cur[0] && cur[0].is_active !== false);
-    await pool.query('UPDATE "users" SET is_active = $1 WHERE id = $2', [next, id]);
-    res.json({ ok: true, id, is_active: next });
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.post("/api/users/:id/toggle", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { rows: cur } = await pool.query('SELECT is_active FROM "users" WHERE id = $1 LIMIT 1', [id]);
-    const next = !(cur && cur[0] && cur[0].is_active !== false);
-    await pool.query('UPDATE "users" SET is_active = $1 WHERE id = $2', [next, id]);
-    res.json({ ok: true, id, is_active: next });
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-
-app.post("/users/:id/reset-password", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    const { password } = req.body || {};
-    if (!id || !password) return res.status(400).json({ error: "invalid_payload" });
-    const hashed = await bcrypt.hash(String(password), 10);
-    await pool.query('UPDATE "users" SET password = $1 WHERE id = $2', [hashed, id]);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.post("/api/users/:id/reset-password", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    const { password } = req.body || {};
-    if (!id || !password) return res.status(400).json({ error: "invalid_payload" });
-    const hashed = await bcrypt.hash(String(password), 10);
-    await pool.query('UPDATE "users" SET password = $1 WHERE id = $2', [hashed, id]);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+// Users routes moved to routes/users.js and controllers/userController.js
 
 function baseScreens(){
   return [
@@ -1305,95 +1103,7 @@ async function loadUserPermissionsMap(userId){
   return map;
 }
 
-app.get("/users/:id/permissions", authenticateToken, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { rows } = await pool.query('SELECT role FROM "users" WHERE id = $1 LIMIT 1', [id]);
-    const role = (rows && rows[0] && rows[0].role) ? String(rows[0].role).toLowerCase() : "user";
-    const existing = await loadUserPermissionsMap(id);
-    const hasAny = Object.keys(existing || {}).length > 0;
-    if (hasAny) return res.json(existing);
-    const m = defaultPermissions(role);
-    try { await saveUserPermissions(id, flattenPermissionsMap(m, id)) } catch {}
-    res.json(m);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.get("/api/users/:id/permissions", authenticateToken, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { rows } = await pool.query('SELECT role FROM "users" WHERE id = $1 LIMIT 1', [id]);
-    const role = (rows && rows[0] && rows[0].role) ? String(rows[0].role).toLowerCase() : "user";
-    const existing = await loadUserPermissionsMap(id);
-    const hasAny = Object.keys(existing || {}).length > 0;
-    if (hasAny) return res.json(existing);
-    const m = defaultPermissions(role);
-    try { await saveUserPermissions(id, flattenPermissionsMap(m, id)) } catch {}
-    res.json(m);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-
-app.put("/users/:id/permissions", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    const adminId = req.user?.id || 'unknown';
-    if (!id) {
-      console.log(`[PERMISSIONS] REJECTED: Invalid user ID | adminId=${adminId} targetId=${id}`)
-      return res.status(400).json({ error: "invalid_payload" });
-    }
-    const body = req.body || {};
-    console.log(`[PERMISSIONS] Saving permissions | adminId=${adminId} targetUserId=${id} payloadType=${Array.isArray(body) ? 'array' : 'object'} payloadSize=${Array.isArray(body) ? body.length : Object.keys(body).length}`)
-    let rows = [];
-    if (Array.isArray(body)) {
-      rows = flattenPermissionsList(body, id);
-      console.log(`[PERMISSIONS] Flattened array to ${rows.length} rows | targetUserId=${id}`)
-    } else {
-      rows = flattenPermissionsMap(body, id);
-      console.log(`[PERMISSIONS] Flattened map to ${rows.length} rows | targetUserId=${id}`)
-    }
-    await saveUserPermissions(id, rows);
-    console.log(`[PERMISSIONS] SUCCESS: Saved ${rows.length} permission rows | adminId=${adminId} targetUserId=${id}`)
-    res.json({ ok: true });
-  } catch (e) {
-    const adminId = req.user?.id || 'unknown';
-    const id = Number(req.params.id || 0);
-    console.error(`[PERMISSIONS] ERROR: Failed to save | adminId=${adminId} targetUserId=${id}`, e?.message, e?.stack);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.put("/api/users/:id/permissions", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    const adminId = req.user?.id || 'unknown';
-    if (!id) {
-      console.log(`[PERMISSIONS] REJECTED: Invalid user ID | adminId=${adminId} targetId=${id}`)
-      return res.status(400).json({ error: "invalid_payload" });
-    }
-    const body = req.body || {};
-    console.log(`[PERMISSIONS] Saving permissions (API) | adminId=${adminId} targetUserId=${id} payloadType=${Array.isArray(body) ? 'array' : 'object'} payloadSize=${Array.isArray(body) ? body.length : Object.keys(body).length}`)
-    let rows = [];
-    if (Array.isArray(body)) {
-      rows = flattenPermissionsList(body, id);
-      console.log(`[PERMISSIONS] Flattened array to ${rows.length} rows | targetUserId=${id}`)
-    } else {
-      rows = flattenPermissionsMap(body, id);
-      console.log(`[PERMISSIONS] Flattened map to ${rows.length} rows | targetUserId=${id}`)
-    }
-    await saveUserPermissions(id, rows);
-    console.log(`[PERMISSIONS] SUCCESS: Saved ${rows.length} permission rows (API) | adminId=${adminId} targetUserId=${id}`)
-    res.json({ ok: true });
-  } catch (e) {
-    const adminId = req.user?.id || 'unknown';
-    const id = Number(req.params.id || 0);
-    console.error(`[PERMISSIONS] ERROR: Failed to save (API) | adminId=${adminId} targetUserId=${id}`, e?.message, e?.stack);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+// Users permissions routes moved to routes/users.js and controllers/userController.js
 
 app.get("/roles", authenticateToken, requireAdmin, async (req, res) => {
   res.json([{ id: 1, name: "Admin" }, { id: 2, name: "User" }]);
@@ -1484,102 +1194,7 @@ app.get("/api/branches", authenticateToken, async (req, res) => {
   }
 });
 
-app.get("/users/:id/user-permissions", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { items: screens } = await (async()=>({ items: baseScreens().map((s, i)=>({ id: i+1, code: s, name: s, has_branches: s==='sales' })) }))();
-    const { items: actions } = await (async()=>({ items: ["view","create","edit","delete"].map((code,i)=>({ id:i+1, code })) }))();
-    const { items: branches } = await (async()=> {
-      const brRes = await (async()=> {
-        const map = await loadUserPermissionsMap(id);
-        const set = new Set();
-        for (const [screen, obj] of Object.entries(map || {})) {
-          for (const [b, acts] of Object.entries(obj || {})) {
-            if (b === '_global') continue;
-            if (Object.values(acts || {}).some(Boolean)) set.add(String(b));
-          }
-        }
-        const arr = Array.from(set);
-        if (arr.length === 0) {
-          const def = String((await pool.query('SELECT default_branch FROM "users" WHERE id = $1', [id]))?.rows?.[0]?.default_branch || '').trim() || 'china_town';
-          arr.push(def);
-        }
-        return arr.map((code, idx) => ({ id: idx + 1, code, name: code }))
-      })();
-      return { items: brRes };
-    })();
-    const screenIdByCode = Object.fromEntries((screens||[]).map(s => [String(s.code).toLowerCase(), s.id]));
-    const actionIdByCode = Object.fromEntries((actions||[]).map(a => [String(a.code).toLowerCase(), a.id]));
-    const branchIdByCode = Object.fromEntries((branches||[]).map(b => [String(b.code).toLowerCase(), b.id]));
-    const { rows } = await pool.query('SELECT screen_code, branch_code, action_code, allowed FROM user_permissions WHERE user_id = $1', [id]);
-    const list = [];
-    for (const r of rows || []) {
-      const sc = String(r.screen_code||'').toLowerCase();
-      const ac = String(r.action_code||'').toLowerCase();
-      const br = String(r.branch_code||'').toLowerCase();
-      list.push({
-        id: 0,
-        user_id: id,
-        screen_id: screenIdByCode[sc] || null,
-        action_id: actionIdByCode[ac] || null,
-        branch_id: br ? (branchIdByCode[br] || null) : null,
-        allowed: !!r.allowed
-      });
-    }
-    res.json(list);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-app.get("/api/users/:id/user-permissions", authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const id = Number(req.params.id || 0);
-    if (!id) return res.status(400).json({ error: "invalid_payload" });
-    const { items: screens } = await (async()=>({ items: baseScreens().map((s, i)=>({ id: i+1, code: s, name: s, has_branches: s==='sales' })) }))();
-    const { items: actions } = await (async()=>({ items: ["view","create","edit","delete"].map((code,i)=>({ id:i+1, code })) }))();
-    const { items: branches } = await (async()=> {
-      const brRes = await (async()=> {
-        const map = await loadUserPermissionsMap(id);
-        const set = new Set();
-        for (const [screen, obj] of Object.entries(map || {})) {
-          for (const [b, acts] of Object.entries(obj || {})) {
-            if (b === '_global') continue;
-            if (Object.values(acts || {}).some(Boolean)) set.add(String(b));
-          }
-        }
-        const arr = Array.from(set);
-        if (arr.length === 0) {
-          const def = String((await pool.query('SELECT default_branch FROM "users" WHERE id = $1', [id]))?.rows?.[0]?.default_branch || '').trim() || 'china_town';
-          arr.push(def);
-        }
-        return arr.map((code, idx) => ({ id: idx + 1, code, name: code }))
-      })();
-      return { items: brRes };
-    })();
-    const screenIdByCode = Object.fromEntries((screens||[]).map(s => [String(s.code).toLowerCase(), s.id]));
-    const actionIdByCode = Object.fromEntries((actions||[]).map(a => [String(a.code).toLowerCase(), a.id]));
-    const branchIdByCode = Object.fromEntries((branches||[]).map(b => [String(b.code).toLowerCase(), b.id]));
-    const { rows } = await pool.query('SELECT screen_code, branch_code, action_code, allowed FROM user_permissions WHERE user_id = $1', [id]);
-    const list = [];
-    for (const r of rows || []) {
-      const sc = String(r.screen_code||'').toLowerCase();
-      const ac = String(r.action_code||'').toLowerCase();
-      const br = String(r.branch_code||'').toLowerCase();
-      list.push({
-        id: 0,
-        user_id: id,
-        screen_id: screenIdByCode[sc] || null,
-        action_id: actionIdByCode[ac] || null,
-        branch_id: br ? (branchIdByCode[br] || null) : null,
-        allowed: !!r.allowed
-      });
-    }
-    res.json(list);
-  } catch (e) {
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
+// Users user-permissions routes moved to routes/users.js and controllers/userController.js
 
 if (String(process.env.ADMIN_CREATE_ENABLED || "false").toLowerCase() === "true") {
   app.get("/create-admin", async (req, res) => {
@@ -1798,15 +1413,7 @@ app.use("/customers", authenticateToken, async (req, res, next) => {
   }
 });
 // GET /api/customers - Alias for /api/partners with type=customer
-app.get("/api/customers", authenticateToken, authorize("clients", "view"), async (req, res) => {
-  try {
-    const { rows } = await pool.query('SELECT * FROM partners WHERE type = $1 OR type = $2 ORDER BY id DESC', ['customer', 'عميل']);
-    res.json({ items: rows || [] });
-  } catch (e) {
-    console.error('[CUSTOMERS] Error listing:', e);
-    res.json({ items: [] });
-  }
-});
+// Customers route moved to routes/index.js (alias for partners with type=customer)
 
 // REMOVED: /employees middleware - conflicts with frontend routes
 // All /employees API calls should use /api/employees instead
@@ -1845,103 +1452,7 @@ app.use("/journal", authenticateToken, async (req, res, next) => {
 });
 
 // ==================== JOURNAL ENTRIES API ====================
-// List journal entries with filters
-app.get("/journal", authenticateToken, authorize("journal", "view"), async (req, res) => {
-  try {
-    const {
-      status, page = 1, pageSize = 20, from, to, type, source,
-      reference_prefix, search, account_id, account_ids, accounts_scope,
-      min_amount, max_amount, outliersOnly, outliers_threshold,
-      unbalancedOnly, summary, period, quarter
-    } = req.query || {};
-    
-    let query = `
-      SELECT je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, 
-             je.status, je.created_at, je.branch,
-             COALESCE(SUM(jp.debit), 0) as total_debit,
-             COALESCE(SUM(jp.credit), 0) as total_credit
-      FROM journal_entries je
-      LEFT JOIN journal_postings jp ON jp.journal_entry_id = je.id
-      WHERE 1=1
-    `;
-    const params = [];
-    let paramIndex = 1;
-    
-    if (status) {
-      query += ` AND je.status = $${paramIndex++}`;
-      params.push(status);
-    }
-    if (from) {
-      query += ` AND je.date >= $${paramIndex++}`;
-      params.push(from);
-    }
-    if (to) {
-      query += ` AND je.date <= $${paramIndex++}`;
-      params.push(to);
-    }
-    if (search) {
-      query += ` AND (je.description ILIKE $${paramIndex++} OR je.entry_number::text LIKE $${paramIndex++})`;
-      params.push(`%${search}%`, `%${search}%`);
-    }
-    
-    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at, je.branch`;
-    
-    // Order and paginate
-    query += ` ORDER BY je.date DESC, je.entry_number DESC`;
-    
-    const { rows } = await pool.query(query, params);
-    
-    // Load postings for each entry with account details
-    const entryIds = (rows || []).map(r => r.id);
-    let postingsMap = new Map();
-    
-    if (entryIds.length > 0) {
-      const postingsQuery = `
-        SELECT jp.*, 
-               a.account_number, a.account_code, a.name as account_name, a.name_en as account_name_en, a.type as account_type
-        FROM journal_postings jp
-        LEFT JOIN accounts a ON a.id = jp.account_id
-        WHERE jp.journal_entry_id = ANY($1)
-        ORDER BY jp.id
-      `;
-      const { rows: postingsRows } = await pool.query(postingsQuery, [entryIds]);
-      
-      // Group postings by journal_entry_id
-      for (const p of postingsRows || []) {
-        if (!postingsMap.has(p.journal_entry_id)) {
-          postingsMap.set(p.journal_entry_id, []);
-        }
-        postingsMap.get(p.journal_entry_id).push({
-          ...p,
-          debit: Number(p.debit || 0),
-          credit: Number(p.credit || 0),
-          account: p.account_number || p.account_code ? {
-            id: p.account_id,
-            account_number: p.account_number,
-            account_code: p.account_code,
-            name: p.account_name,
-            name_en: p.account_name_en,
-            type: p.account_type
-          } : null
-        });
-      }
-    }
-    
-    // Calculate totals and add postings
-    const items = (rows || []).map(row => ({
-      ...row,
-      total_debit: Number(row.total_debit || 0),
-      total_credit: Number(row.total_credit || 0),
-      postings: postingsMap.get(row.id) || []
-    }));
-    
-    res.json({ items, total: items.length });
-  } catch (e) {
-    console.error('[JOURNAL] Error listing entries:', e);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
-  }
-});
-
+// Journal routes moved to routes/journal.js and controllers/journalController.js
 app.get("/api/journal", authenticateToken, authorize("journal", "view"), async (req, res) => {
   try {
     const {
@@ -4350,6 +3861,553 @@ app.delete("/api/employees/:id", authenticateToken, authorize("employees","delet
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
 
+// ============================================
+// PAYROLL API ENDPOINTS
+// ============================================
+
+// GET /api/payroll/runs - List all payroll runs
+app.get("/api/payroll/runs", authenticateToken, authorize("payroll","view"), async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT pr.id, pr.period, pr.status, pr.journal_entry_id, pr.approved_at, pr.posted_at, pr.created_at,
+             CASE 
+               WHEN pr.journal_entry_id IS NOT NULL THEN 'posted'
+               WHEN pr.status = 'approved' THEN 'approved'
+               ELSE 'draft'
+             END as derived_status
+      FROM payroll_runs pr
+      ORDER BY pr.period DESC, pr.id DESC
+    `);
+    const items = (rows || []).map(r => ({
+      ...r,
+      has_posted_journal: !!r.journal_entry_id,
+      allowed_actions: {
+        edit: r.status === 'draft' && !r.journal_entry_id,
+        delete: r.status === 'draft' && !r.journal_entry_id,
+        post: (r.status === 'approved' || r.status === 'draft') && !r.journal_entry_id,
+        pay: r.journal_entry_id !== null
+      }
+    }));
+    res.json(items);
+  } catch (e) {
+    console.error('[PAYROLL] Error listing runs:', e);
+    res.json([]);
+  }
+});
+
+// POST /api/payroll/run - Create a new payroll run
+app.post("/api/payroll/run", authenticateToken, authorize("payroll","create"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { period, employee_ids, hours } = req.body || {};
+    const runPeriod = period || new Date().toISOString().slice(0, 7);
+    
+    // Create run
+    const { rows: runRows } = await client.query(
+      'INSERT INTO payroll_runs(period, status) VALUES ($1, $2) RETURNING *',
+      [runPeriod, 'draft']
+    );
+    const run = runRows[0];
+    
+    // Get employees to include
+    let empIds = employee_ids || [];
+    if (!empIds.length) {
+      const { rows: emps } = await client.query("SELECT id FROM employees WHERE status = 'active'");
+      empIds = emps.map(e => e.id);
+    }
+    
+    // Create items for each employee
+    for (const empId of empIds) {
+      const { rows: empData } = await client.query('SELECT * FROM employees WHERE id = $1', [empId]);
+      const emp = empData[0];
+      if (!emp) continue;
+      
+      const hoursWorked = hours?.[empId] || 0;
+      const basic = Number(emp.basic_salary || 0);
+      const housing = Number(emp.housing_allowance || 0);
+      const transport = Number(emp.transport_allowance || 0);
+      const other = Number(emp.other_allowances || 0);
+      const gross = basic + housing + transport + other;
+      const gosiEmp = emp.gosi_enrolled ? gross * Number(emp.gosi_employee_rate || 0.09) : 0;
+      const gosiEmpr = emp.gosi_enrolled ? gross * Number(emp.gosi_employer_rate || 0.11) : 0;
+      const net = gross - gosiEmp;
+      
+      await client.query(`
+        INSERT INTO payroll_run_items(run_id, employee_id, hours_worked, basic_salary, housing_allowance, transport_allowance, other_allowances, gosi_employee, gosi_employer, gross_salary, net_salary)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `, [run.id, empId, hoursWorked, basic, housing, transport, other, gosiEmp, gosiEmpr, gross, net]);
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true, run, id: run.id });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PAYROLL] Error creating run:', e);
+    res.status(500).json({ error: "server_error", details: e?.message });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/payroll/run/:id/items - Get items for a payroll run
+app.get("/api/payroll/run/:id/items", authenticateToken, authorize("payroll","view"), async (req, res) => {
+  try {
+    const runId = Number(req.params.id || 0);
+    const { rows } = await pool.query(`
+      SELECT pri.*, 
+             e.full_name, e.employee_number, e.department, e.pay_type, e.hourly_rate, e.contract_type,
+             e.gosi_enrolled, e.gosi_employee_rate, e.gosi_employer_rate
+      FROM payroll_run_items pri
+      LEFT JOIN employees e ON e.id = pri.employee_id
+      WHERE pri.run_id = $1
+      ORDER BY e.full_name
+    `, [runId]);
+    
+    const items = (rows || []).map(r => ({
+      ...r,
+      employee: {
+        id: r.employee_id,
+        full_name: r.full_name,
+        employee_number: r.employee_number,
+        department: r.department,
+        pay_type: r.pay_type,
+        hourly_rate: r.hourly_rate,
+        contract_type: r.contract_type,
+        gosi_enrolled: r.gosi_enrolled
+      }
+    }));
+    res.json(items);
+  } catch (e) {
+    console.error('[PAYROLL] Error getting run items:', e);
+    res.json([]);
+  }
+});
+
+// PUT /api/payroll/run/:id/items - Update items for a payroll run
+app.put("/api/payroll/run/:id/items", authenticateToken, authorize("payroll","edit"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const runId = Number(req.params.id || 0);
+    const { items, replace } = req.body || {};
+    
+    // Check if run exists and is editable
+    const { rows: runCheck } = await client.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
+    if (!runCheck.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'not_found' });
+    }
+    if (runCheck[0].journal_entry_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'cannot_edit_posted' });
+    }
+    
+    if (replace) {
+      await client.query('DELETE FROM payroll_run_items WHERE run_id = $1', [runId]);
+    }
+    
+    for (const item of (items || [])) {
+      const empId = item.employee_id;
+      const { rows: empData } = await client.query('SELECT * FROM employees WHERE id = $1', [empId]);
+      const emp = empData[0];
+      
+      const basic = Number(item.basic_salary ?? emp?.basic_salary ?? 0);
+      const housing = Number(item.housing_allowance ?? emp?.housing_allowance ?? 0);
+      const transport = Number(item.transport_allowance ?? emp?.transport_allowance ?? 0);
+      const other = Number(item.other_allowances ?? emp?.other_allowances ?? 0);
+      const incentive = Number(item.incentive_amount || 0);
+      const deduction = Number(item.manual_deduction || 0);
+      const gross = basic + housing + transport + other + incentive;
+      const gosiEnrolled = emp?.gosi_enrolled || false;
+      const gosiEmp = gosiEnrolled ? gross * Number(emp?.gosi_employee_rate || 0.09) : 0;
+      const gosiEmpr = gosiEnrolled ? gross * Number(emp?.gosi_employer_rate || 0.11) : 0;
+      const net = gross - gosiEmp - deduction;
+      
+      if (replace) {
+        await client.query(`
+          INSERT INTO payroll_run_items(run_id, employee_id, hours_worked, basic_salary, housing_allowance, transport_allowance, other_allowances, incentive_amount, manual_deduction, gosi_employee, gosi_employer, gross_salary, net_salary)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        `, [runId, empId, item.hours_worked||0, basic, housing, transport, other, incentive, deduction, gosiEmp, gosiEmpr, gross, net]);
+      } else {
+        await client.query(`
+          UPDATE payroll_run_items 
+          SET hours_worked = $1, basic_salary = $2, housing_allowance = $3, transport_allowance = $4, 
+              other_allowances = $5, incentive_amount = $6, manual_deduction = $7, gosi_employee = $8,
+              gosi_employer = $9, gross_salary = $10, net_salary = $11
+          WHERE run_id = $12 AND employee_id = $13
+        `, [item.hours_worked||0, basic, housing, transport, other, incentive, deduction, gosiEmp, gosiEmpr, gross, net, runId, empId]);
+      }
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PAYROLL] Error updating items:', e);
+    res.status(500).json({ error: "server_error" });
+  } finally {
+    client.release();
+  }
+});
+
+// POST /api/payroll/run/:id/approve - Approve a payroll run
+app.post("/api/payroll/run/:id/approve", authenticateToken, authorize("payroll","approve"), async (req, res) => {
+  try {
+    const runId = Number(req.params.id || 0);
+    const { rows } = await pool.query(
+      "UPDATE payroll_runs SET status = 'approved', approved_at = NOW(), updated_at = NOW() WHERE id = $1 AND status = 'draft' RETURNING *",
+      [runId]
+    );
+    if (!rows.length) return res.status(400).json({ error: 'not_approved' });
+    res.json({ ok: true, run: rows[0] });
+  } catch (e) {
+    console.error('[PAYROLL] Error approving run:', e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// POST /api/payroll/run/:id/draft - Revert a run to draft
+app.post("/api/payroll/run/:id/draft", authenticateToken, authorize("payroll","edit"), async (req, res) => {
+  try {
+    const runId = Number(req.params.id || 0);
+    const { rows: check } = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
+    if (!check.length) return res.status(404).json({ error: 'not_found' });
+    if (check[0].journal_entry_id) return res.status(400).json({ error: 'cannot_revert_posted' });
+    
+    const { rows } = await pool.query(
+      "UPDATE payroll_runs SET status = 'draft', approved_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *",
+      [runId]
+    );
+    res.json({ ok: true, run: rows[0] });
+  } catch (e) {
+    console.error('[PAYROLL] Error reverting to draft:', e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// POST /api/payroll/run/:id/post - Post a payroll run (create journal entry)
+app.post("/api/payroll/run/:id/post", authenticateToken, authorize("payroll","post"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const runId = Number(req.params.id || 0);
+    const { date } = req.body || {};
+    const postDate = date || new Date().toISOString().slice(0, 10);
+    
+    // Check run
+    const { rows: runCheck } = await client.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
+    if (!runCheck.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'not_found' });
+    }
+    if (runCheck[0].journal_entry_id) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'already_posted' });
+    }
+    
+    // Get items
+    const { rows: items } = await client.query('SELECT * FROM payroll_run_items WHERE run_id = $1', [runId]);
+    if (!items.length) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'no_items' });
+    }
+    
+    // Calculate totals
+    let totalNet = 0, totalGosi = 0, totalGross = 0;
+    for (const item of items) {
+      totalNet += Number(item.net_salary || 0);
+      totalGosi += Number(item.gosi_employee || 0) + Number(item.gosi_employer || 0);
+      totalGross += Number(item.gross_salary || 0);
+    }
+    
+    // Create journal entry
+    const entryNumber = await getNextEntryNumber();
+    const { rows: entryRows } = await client.query(
+      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, period)
+       VALUES ($1, $2, $3, 'payroll', $4, 'posted', $5) RETURNING id`,
+      [entryNumber, `مسير رواتب ${runCheck[0].period}`, postDate, runId, runCheck[0].period]
+    );
+    const entryId = entryRows[0].id;
+    
+    // Get account IDs
+    const salaryExpenseId = await getAccountIdByNumber('5210');
+    const gosiLiabilityId = await getAccountIdByNumber('2120');
+    const payrollPayableId = await getAccountIdByNumber('2130');
+    
+    // Create postings
+    // Debit: Salary Expense
+    if (salaryExpenseId && totalGross > 0) {
+      await client.query(
+        'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)',
+        [entryId, salaryExpenseId, totalGross]
+      );
+    }
+    // Credit: GOSI Liability
+    if (gosiLiabilityId && totalGosi > 0) {
+      await client.query(
+        'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)',
+        [entryId, gosiLiabilityId, totalGosi]
+      );
+    }
+    // Credit: Payroll Payable
+    if (payrollPayableId && totalNet > 0) {
+      await client.query(
+        'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)',
+        [entryId, payrollPayableId, totalNet]
+      );
+    }
+    
+    // Update run
+    await client.query(
+      "UPDATE payroll_runs SET status = 'posted', journal_entry_id = $1, posted_at = NOW(), updated_at = NOW() WHERE id = $2",
+      [entryId, runId]
+    );
+    
+    await client.query('COMMIT');
+    res.json({ ok: true, journal_entry_id: entryId });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PAYROLL] Error posting run:', e);
+    res.status(500).json({ error: "server_error", details: e?.message });
+  } finally {
+    client.release();
+  }
+});
+
+// DELETE /api/payroll/run/:id - Delete a payroll run
+app.delete("/api/payroll/run/:id", authenticateToken, authorize("payroll","delete"), async (req, res) => {
+  try {
+    const runId = Number(req.params.id || 0);
+    const { rows: check } = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
+    if (!check.length) return res.status(404).json({ error: 'not_found' });
+    if (check[0].journal_entry_id) return res.status(400).json({ error: 'cannot_delete_posted' });
+    
+    await pool.query('DELETE FROM payroll_run_items WHERE run_id = $1', [runId]);
+    await pool.query('DELETE FROM payroll_runs WHERE id = $1', [runId]);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error('[PAYROLL] Error deleting run:', e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// POST /api/payroll/pay - Pay selected employees from a run
+app.post("/api/payroll/pay", authenticateToken, authorize("payroll","pay"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const { run_id, date, method, items } = req.body || {};
+    const payDate = date || new Date().toISOString().slice(0, 10);
+    const payMethod = method || 'bank';
+    
+    for (const item of (items || [])) {
+      const empId = item.employee_id;
+      await client.query(
+        `UPDATE payroll_run_items SET paid_at = $1, payment_method = $2 WHERE run_id = $3 AND employee_id = $4`,
+        [payDate, payMethod, run_id, empId]
+      );
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PAYROLL] Error paying:', e);
+    res.status(500).json({ error: "server_error" });
+  } finally {
+    client.release();
+  }
+});
+
+// GET /api/payroll/previous-dues - Get previous dues
+app.get("/api/payroll/previous-dues", authenticateToken, authorize("payroll","view"), async (req, res) => {
+  try {
+    const { employee_id } = req.query || {};
+    let query = 'SELECT * FROM previous_dues';
+    const params = [];
+    if (employee_id) {
+      query += ' WHERE employee_id = $1';
+      params.push(employee_id);
+    }
+    query += ' ORDER BY period DESC';
+    const { rows } = await pool.query(query, params);
+    res.json(rows || []);
+  } catch (e) {
+    console.error('[PAYROLL] Error getting previous dues:', e);
+    res.json([]);
+  }
+});
+
+// POST /api/payroll/previous-due - Create a previous due
+app.post("/api/payroll/previous-due", authenticateToken, authorize("payroll","create"), async (req, res) => {
+  try {
+    const { employee_id, amount, period, description } = req.body || {};
+    const { rows } = await pool.query(
+      'INSERT INTO previous_dues(employee_id, amount, period, description) VALUES ($1, $2, $3, $4) RETURNING *',
+      [employee_id, amount, period, description]
+    );
+    res.json(rows[0]);
+  } catch (e) {
+    console.error('[PAYROLL] Error creating previous due:', e);
+    res.status(500).json({ error: "server_error" });
+  }
+});
+
+// GET /api/payroll/outstanding - Get outstanding (unpaid) items
+app.get("/api/payroll/outstanding", authenticateToken, authorize("payroll","view"), async (req, res) => {
+  try {
+    const { employee_id } = req.query || {};
+    let query = `
+      SELECT pri.*, pr.period, e.full_name, e.department
+      FROM payroll_run_items pri
+      JOIN payroll_runs pr ON pr.id = pri.run_id
+      LEFT JOIN employees e ON e.id = pri.employee_id
+      WHERE pri.paid_at IS NULL AND pr.journal_entry_id IS NOT NULL
+    `;
+    const params = [];
+    if (employee_id) {
+      query += ' AND pri.employee_id = $1';
+      params.push(employee_id);
+    }
+    query += ' ORDER BY pr.period DESC';
+    const { rows } = await pool.query(query, params);
+    res.json(rows || []);
+  } catch (e) {
+    console.error('[PAYROLL] Error getting outstanding:', e);
+    res.json([]);
+  }
+});
+
+// Employee advance endpoints
+app.post("/api/employees/:id/advance", authenticateToken, authorize("payroll","create"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const empId = Number(req.params.id || 0);
+    const { amount, method, duration_months } = req.body || {};
+    const advAmount = Number(amount || 0);
+    if (advAmount <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'invalid_amount' });
+    }
+    
+    // Create journal entry for advance
+    const entryNumber = await getNextEntryNumber();
+    const postDate = new Date().toISOString().slice(0, 10);
+    const { rows: entryRows } = await client.query(
+      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
+       VALUES ($1, $2, $3, 'employee_advance', $4, 'posted') RETURNING id`,
+      [entryNumber, `سلفة موظف #${empId}`, postDate, empId]
+    );
+    const entryId = entryRows[0].id;
+    
+    // Debit: Employee Advances (1140) or Receivables
+    const advanceAccountId = await getAccountIdByNumber('1140') || await getAccountIdByNumber('1130');
+    // Credit: Cash or Bank
+    const paymentAccountId = method === 'bank' ? await getAccountIdByNumber('1121') : await getAccountIdByNumber('1111');
+    
+    if (advanceAccountId) {
+      await client.query('INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)', [entryId, advanceAccountId, advAmount]);
+    }
+    if (paymentAccountId) {
+      await client.query('INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)', [entryId, paymentAccountId, advAmount]);
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true, journal_entry_id: entryId });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PAYROLL] Error creating advance:', e);
+    res.status(500).json({ error: "server_error" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/employees/:id/advance-balance", authenticateToken, async (req, res) => {
+  try {
+    const empId = Number(req.params.id || 0);
+    // Calculate balance from journal entries for employee advances
+    const { rows } = await pool.query(`
+      SELECT COALESCE(SUM(jp.debit) - SUM(jp.credit), 0) as balance
+      FROM journal_postings jp
+      JOIN journal_entries je ON je.id = jp.journal_entry_id
+      WHERE je.reference_type IN ('employee_advance', 'advance_collection') AND je.reference_id = $1
+    `, [empId]);
+    res.json({ balance: Number(rows[0]?.balance || 0) });
+  } catch (e) {
+    console.error('[PAYROLL] Error getting advance balance:', e);
+    res.json({ balance: 0 });
+  }
+});
+
+app.post("/api/employees/:id/advance/collect", authenticateToken, authorize("payroll","create"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const empId = Number(req.params.id || 0);
+    const { amount, method } = req.body || {};
+    const collectAmount = Number(amount || 0);
+    if (collectAmount <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'invalid_amount' });
+    }
+    
+    // Create journal entry for collection
+    const entryNumber = await getNextEntryNumber();
+    const postDate = new Date().toISOString().slice(0, 10);
+    const { rows: entryRows } = await client.query(
+      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status)
+       VALUES ($1, $2, $3, 'advance_collection', $4, 'posted') RETURNING id`,
+      [entryNumber, `تحصيل سلفة موظف #${empId}`, postDate, empId]
+    );
+    const entryId = entryRows[0].id;
+    
+    // Debit: Cash or Bank
+    const paymentAccountId = method === 'bank' ? await getAccountIdByNumber('1121') : await getAccountIdByNumber('1111');
+    // Credit: Employee Advances
+    const advanceAccountId = await getAccountIdByNumber('1140') || await getAccountIdByNumber('1130');
+    
+    if (paymentAccountId) {
+      await client.query('INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)', [entryId, paymentAccountId, collectAmount]);
+    }
+    if (advanceAccountId) {
+      await client.query('INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)', [entryId, advanceAccountId, collectAmount]);
+    }
+    
+    await client.query('COMMIT');
+    res.json({ ok: true, journal_entry_id: entryId });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[PAYROLL] Error collecting advance:', e);
+    res.status(500).json({ error: "server_error" });
+  } finally {
+    client.release();
+  }
+});
+
+// Legacy routes (without /api prefix)
+app.get("/payroll/runs", authenticateToken, authorize("payroll","view"), (req, res) => res.redirect(307, `/api/payroll/runs?${new URLSearchParams(req.query).toString()}`));
+app.post("/payroll/run", authenticateToken, authorize("payroll","create"), (req, res) => res.redirect(307, '/api/payroll/run'));
+app.get("/payroll/run/:id/items", authenticateToken, authorize("payroll","view"), (req, res) => res.redirect(307, `/api/payroll/run/${req.params.id}/items`));
+app.put("/payroll/run/:id/items", authenticateToken, authorize("payroll","edit"), (req, res) => res.redirect(307, `/api/payroll/run/${req.params.id}/items`));
+app.post("/payroll/run/:id/approve", authenticateToken, authorize("payroll","approve"), (req, res) => res.redirect(307, `/api/payroll/run/${req.params.id}/approve`));
+app.post("/payroll/run/:id/draft", authenticateToken, authorize("payroll","edit"), (req, res) => res.redirect(307, `/api/payroll/run/${req.params.id}/draft`));
+app.post("/payroll/run/:id/post", authenticateToken, authorize("payroll","post"), (req, res) => res.redirect(307, `/api/payroll/run/${req.params.id}/post`));
+app.delete("/payroll/run/:id", authenticateToken, authorize("payroll","delete"), (req, res) => res.redirect(307, `/api/payroll/run/${req.params.id}`));
+app.post("/payroll/pay", authenticateToken, authorize("payroll","pay"), (req, res) => res.redirect(307, '/api/payroll/pay'));
+app.get("/payroll/previous-dues", authenticateToken, authorize("payroll","view"), (req, res) => res.redirect(307, `/api/payroll/previous-dues?${new URLSearchParams(req.query).toString()}`));
+app.post("/payroll/previous-due", authenticateToken, authorize("payroll","create"), (req, res) => res.redirect(307, '/api/payroll/previous-due'));
+app.get("/payroll/outstanding", authenticateToken, authorize("payroll","view"), (req, res) => res.redirect(307, `/api/payroll/outstanding?${new URLSearchParams(req.query).toString()}`));
+app.post("/employees/:id/advance", authenticateToken, authorize("payroll","create"), (req, res) => res.redirect(307, `/api/employees/${req.params.id}/advance`));
+app.get("/employees/:id/advance-balance", authenticateToken, (req, res) => res.redirect(307, `/api/employees/${req.params.id}/advance-balance`));
+app.post("/employees/:id/advance/collect", authenticateToken, authorize("payroll","create"), (req, res) => res.redirect(307, `/api/employees/${req.params.id}/advance/collect`));
+
+// ============================================
+// END OF PAYROLL API ENDPOINTS
+// ============================================
+
 app.get("/expenses", authenticateToken, async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at FROM expenses ORDER BY id DESC');
@@ -6105,10 +6163,116 @@ app.post("/payments", authenticateToken, authorize("sales","create", { branchFro
     res.json(rows && rows[0]);
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
+// GET /ar/summary - Accounts Receivable Summary (from posted journal entries only)
 app.get("/ar/summary", authenticateToken, authorize("reports","view"), async (req, res) => {
   try {
+    // Get all customer partners with their account_ids
+    const { rows: customers } = await pool.query(`
+      SELECT p.id as partner_id, p.name, p.account_id
+      FROM partners p
+      WHERE p.type = 'customer' AND p.is_active = true AND p.account_id IS NOT NULL
+    `);
+    
+    if (!customers || customers.length === 0) {
+      return res.json({ items: [] });
+    }
+    
+    // Calculate balance for each customer from posted journal entries
+    const items = [];
+    for (const customer of customers) {
+      const { rows: balanceRows } = await pool.query(`
+        SELECT 
+          COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0) as balance
+        FROM journal_entry_lines jel
+        JOIN journal_entries je ON jel.entry_id = je.id
+        WHERE jel.account_id = $1 AND je.status = 'posted'
+      `, [customer.account_id]);
+      
+      const balance = parseFloat(balanceRows[0]?.balance || 0);
+      
+      // Get last payment date
+      const { rows: lastPayment } = await pool.query(`
+        SELECT je.date as last_payment_at
+        FROM journal_entry_lines jel
+        JOIN journal_entries je ON jel.entry_id = je.id
+        WHERE jel.account_id = $1 AND je.status = 'posted' AND jel.credit > 0
+        ORDER BY je.date DESC LIMIT 1
+      `, [customer.account_id]);
+      
+      items.push({
+        partner_id: customer.partner_id,
+        name: customer.name,
+        balance,
+        last_payment_at: lastPayment[0]?.last_payment_at || null
+      });
+    }
+    
+    res.json({ items });
+  } catch (e) {
+    console.error('[AR/SUMMARY] Error:', e);
     res.json({ items: [] });
-  } catch (e) { res.json({ items: [] }); }
+  }
+});
+
+// GET /customers/aging - Aging Report for Customers (from posted journal entries only)
+app.get("/customers/aging", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    // Get unpaid/partially paid invoices from posted journal entries
+    const { rows } = await pool.query(`
+      SELECT 
+        i.id,
+        i.invoice_number,
+        i.date,
+        i.total,
+        i.partner_id,
+        p.name as partner_name,
+        COALESCE((
+          SELECT SUM(pay.amount) 
+          FROM payments pay 
+          WHERE pay.invoice_id = i.id
+        ), 0) as paid_amount
+      FROM invoices i
+      LEFT JOIN partners p ON i.partner_id = p.id
+      WHERE i.type = 'sale'
+        AND i.status IN ('posted', 'open', 'partial')
+      ORDER BY i.date ASC
+    `);
+    
+    const today = new Date();
+    const items = (rows || []).map(inv => {
+      const invDate = new Date(inv.date);
+      const diffDays = Math.ceil((today - invDate) / (1000 * 60 * 60 * 24));
+      const total = parseFloat(inv.total || 0);
+      const paidAmount = parseFloat(inv.paid_amount || 0);
+      const remaining = Math.max(0, total - paidAmount);
+      
+      // Only include invoices with remaining balance
+      if (remaining <= 0) return null;
+      
+      let aging_bucket = '0-30';
+      if (diffDays > 90) aging_bucket = '90+';
+      else if (diffDays > 60) aging_bucket = '61-90';
+      else if (diffDays > 30) aging_bucket = '31-60';
+      
+      return {
+        id: inv.id,
+        invoice_number: inv.invoice_number,
+        date: inv.date,
+        total,
+        paid_amount: paidAmount,
+        remaining,
+        days: diffDays,
+        aging_bucket,
+        partner_id: inv.partner_id,
+        partner_name: inv.partner_name
+      };
+    }).filter(Boolean);
+    
+    res.json({ items });
+  } catch (e) {
+    console.error('[CUSTOMERS/AGING] Error:', e);
+    res.json({ items: [] });
+  }
 });
 // POS Tables Layout - both paths
 async function handleGetTablesLayout(req, res) {
@@ -7463,6 +7627,338 @@ app.get("/api/reports/expenses-by-branch", authenticateToken, authorize("reports
     console.error('[REPORTS] Error getting expenses by branch:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
+});
+
+// ============================================
+// ADDITIONAL REPORT ENDPOINTS
+// ============================================
+
+// GET /api/reports/trial-balance/drilldown - Get detailed entries for a specific account
+app.get("/api/reports/trial-balance/drilldown", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { account_id, from, to, period } = req.query || {};
+    
+    if (!account_id) {
+      return res.status(400).json({ error: "missing_account_id", details: "account_id is required" });
+    }
+    
+    let whereConditions = [`je.status = 'posted'`, `jp.account_id = $1`];
+    const params = [Number(account_id)];
+    let paramIndex = 2;
+    
+    if (from) {
+      whereConditions.push(`je.date >= $${paramIndex++}::date`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`je.date <= $${paramIndex++}::date`);
+      params.push(to);
+    }
+    
+    const query = `
+      SELECT 
+        je.id as entry_id,
+        je.entry_number,
+        je.date,
+        je.description,
+        je.related_type,
+        je.related_id,
+        je.branch,
+        jp.debit,
+        jp.credit,
+        a.account_code,
+        a.account_number,
+        COALESCE(a.name, a.name_en, '') as account_name,
+        COALESCE(a.name_en, a.name, '') as account_name_en
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
+      JOIN accounts a ON a.id = jp.account_id
+      WHERE ${whereConditions.join(' AND ')}
+      ORDER BY je.date ASC, je.id ASC
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      entry_id: row.entry_id,
+      entry_number: row.entry_number,
+      date: row.date,
+      description: row.description,
+      related_type: row.related_type,
+      related_id: row.related_id,
+      branch: row.branch,
+      debit: Number(row.debit || 0),
+      credit: Number(row.credit || 0),
+      account_code: row.account_code || row.account_number,
+      account_name: row.account_name,
+      account_name_en: row.account_name_en
+    }));
+    
+    res.json({ items });
+  } catch (e) {
+    console.error('[REPORTS] Error getting trial balance drilldown:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Legacy endpoint
+app.get("/reports/trial-balance/drilldown", authenticateToken, authorize("reports","view"), async (req, res) => {
+  return res.redirect(307, `/api/reports/trial-balance/drilldown?${new URLSearchParams(req.query).toString()}`);
+});
+
+// GET /api/reports/income-statement - Get income statement report
+app.get("/api/reports/income-statement", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period } = req.query || {};
+    
+    // CRITICAL: Use journal entries (posted) to compute income statement
+    // Revenue accounts: type = 'revenue' or account_code starts with 4
+    // Expense accounts: type = 'expense' or account_code starts with 5
+    
+    let whereConditions = [`je.status = 'posted'`];
+    const params = [];
+    let paramIndex = 1;
+    
+    if (from) {
+      whereConditions.push(`je.date >= $${paramIndex++}::date`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`je.date <= $${paramIndex++}::date`);
+      params.push(to);
+    }
+    
+    // Get revenue accounts totals
+    const revenueQuery = `
+      SELECT 
+        a.id,
+        a.account_code,
+        COALESCE(a.name, a.name_en, '') as name,
+        COALESCE(SUM(jp.credit) - SUM(jp.debit), 0) as amount
+      FROM accounts a
+      LEFT JOIN journal_postings jp ON jp.account_id = a.id
+      LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id AND ${whereConditions.join(' AND ')}
+      WHERE (a.type = 'revenue' OR a.account_code LIKE '4%' OR a.account_number LIKE '4%')
+      GROUP BY a.id, a.account_code, a.name, a.name_en
+      HAVING COALESCE(SUM(jp.credit) - SUM(jp.debit), 0) <> 0
+      ORDER BY a.account_code
+    `;
+    
+    // Get expense accounts totals
+    const expenseQuery = `
+      SELECT 
+        a.id,
+        a.account_code,
+        COALESCE(a.name, a.name_en, '') as name,
+        COALESCE(SUM(jp.debit) - SUM(jp.credit), 0) as amount
+      FROM accounts a
+      LEFT JOIN journal_postings jp ON jp.account_id = a.id
+      LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id AND ${whereConditions.join(' AND ')}
+      WHERE (a.type = 'expense' OR a.account_code LIKE '5%' OR a.account_number LIKE '5%')
+      GROUP BY a.id, a.account_code, a.name, a.name_en
+      HAVING COALESCE(SUM(jp.debit) - SUM(jp.credit), 0) <> 0
+      ORDER BY a.account_code
+    `;
+    
+    const [revenueResult, expenseResult] = await Promise.all([
+      pool.query(revenueQuery, params),
+      pool.query(expenseQuery, params)
+    ]);
+    
+    const revenues = (revenueResult.rows || []).map(r => ({
+      code: r.account_code,
+      name: r.name,
+      amount: Number(r.amount || 0)
+    }));
+    
+    const expenses = (expenseResult.rows || []).map(r => ({
+      code: r.account_code,
+      name: r.name,
+      amount: Number(r.amount || 0)
+    }));
+    
+    const totalRevenue = revenues.reduce((s, r) => s + r.amount, 0);
+    const totalExpenses = expenses.reduce((s, r) => s + r.amount, 0);
+    const netIncome = totalRevenue - totalExpenses;
+    
+    res.json({
+      revenues,
+      expenses,
+      total_revenue: totalRevenue,
+      total_expenses: totalExpenses,
+      net_income: netIncome
+    });
+  } catch (e) {
+    console.error('[REPORTS] Error getting income statement:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Legacy endpoint
+app.get("/reports/income-statement", authenticateToken, authorize("reports","view"), async (req, res) => {
+  return res.redirect(307, `/api/reports/income-statement?${new URLSearchParams(req.query).toString()}`);
+});
+
+// GET /api/reports/ledger-summary - Get ledger summary report
+app.get("/api/reports/ledger-summary", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, period } = req.query || {};
+    
+    let whereConditions = [`je.status = 'posted'`];
+    const params = [];
+    let paramIndex = 1;
+    
+    if (from) {
+      whereConditions.push(`je.date >= $${paramIndex++}::date`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`je.date <= $${paramIndex++}::date`);
+      params.push(to);
+    }
+    
+    const query = `
+      SELECT 
+        a.id,
+        a.account_code,
+        a.account_number,
+        COALESCE(a.name, a.name_en, '') as name,
+        COALESCE(a.name_en, a.name, '') as name_en,
+        a.type,
+        COALESCE(SUM(jp.debit), 0) as debit,
+        COALESCE(SUM(jp.credit), 0) as credit
+      FROM accounts a
+      LEFT JOIN journal_postings jp ON jp.account_id = a.id
+      LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id AND ${whereConditions.join(' AND ')}
+      GROUP BY a.id, a.account_code, a.account_number, a.name, a.name_en, a.type
+      HAVING COALESCE(SUM(jp.debit), 0) + COALESCE(SUM(jp.credit), 0) > 0
+      ORDER BY a.account_code
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(r => ({
+      account_id: r.id,
+      account_code: r.account_code || r.account_number,
+      name: r.name,
+      name_en: r.name_en,
+      type: r.type,
+      debit: Number(r.debit || 0),
+      credit: Number(r.credit || 0),
+      balance: Number(r.debit || 0) - Number(r.credit || 0)
+    }));
+    
+    const totals = items.reduce((acc, item) => ({
+      debit: acc.debit + item.debit,
+      credit: acc.credit + item.credit
+    }), { debit: 0, credit: 0 });
+    
+    res.json({
+      items,
+      totals,
+      balanced: Math.abs(totals.debit - totals.credit) < 0.01
+    });
+  } catch (e) {
+    console.error('[REPORTS] Error getting ledger summary:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Legacy endpoint
+app.get("/reports/ledger-summary", authenticateToken, authorize("reports","view"), async (req, res) => {
+  return res.redirect(307, `/api/reports/ledger-summary?${new URLSearchParams(req.query).toString()}`);
+});
+
+// GET /api/reports/business-day-sales - Get business day sales report
+app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { branch, date } = req.query || {};
+    
+    if (!date) {
+      return res.status(400).json({ error: "missing_date", details: "date parameter is required (YYYY-MM-DD)" });
+    }
+    
+    // CRITICAL: Use journal entries (posted) to compute daily sales
+    // Sales accounts: 4111, 4112, 4121, 4122
+    const salesAccountCodes = ['4111', '4112', '4121', '4122'];
+    
+    // Get account IDs
+    const { rows: accountRows } = await pool.query(
+      `SELECT id FROM accounts WHERE account_code = ANY($1) OR account_number = ANY($1)`,
+      [salesAccountCodes]
+    );
+    const salesAccountIds = accountRows.map(r => r.id);
+    
+    if (salesAccountIds.length === 0) {
+      return res.json({ items: [], totals: { gross: 0, net: 0, tax: 0, discount: 0, count: 0 } });
+    }
+    
+    let whereConditions = [
+      `je.status = 'posted'`,
+      `jp.account_id = ANY($1::int[])`,
+      `je.date = $2::date`
+    ];
+    const params = [salesAccountIds, date];
+    let paramIndex = 3;
+    
+    if (branch && branch !== 'all' && branch !== 'كل الفروع') {
+      whereConditions.push(`je.branch = $${paramIndex++}`);
+      params.push(branch);
+    }
+    
+    const query = `
+      SELECT 
+        je.id,
+        je.entry_number,
+        je.date,
+        je.description,
+        je.related_type,
+        je.related_id,
+        je.branch,
+        COALESCE(SUM(jp.credit), 0) as amount
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
+      WHERE ${whereConditions.join(' AND ')}
+      GROUP BY je.id, je.entry_number, je.date, je.description, je.related_type, je.related_id, je.branch
+      ORDER BY je.date, je.id
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      id: row.id,
+      entry_number: row.entry_number,
+      date: row.date,
+      description: row.description,
+      related_type: row.related_type,
+      related_id: row.related_id,
+      branch: row.branch,
+      amount: Number(row.amount || 0)
+    }));
+    
+    const totalAmount = items.reduce((s, i) => s + i.amount, 0);
+    
+    res.json({
+      items,
+      totals: {
+        gross: totalAmount,
+        net: totalAmount,
+        tax: 0,
+        discount: 0,
+        count: items.length
+      },
+      date,
+      branch: branch || 'all'
+    });
+  } catch (e) {
+    console.error('[REPORTS] Error getting business day sales:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Legacy endpoint
+app.get("/reports/business-day-sales", authenticateToken, authorize("reports","view"), async (req, res) => {
+  return res.redirect(307, `/api/reports/business-day-sales?${new URLSearchParams(req.query).toString()}`);
 });
 
 // POS Save Draft - both paths for compatibility

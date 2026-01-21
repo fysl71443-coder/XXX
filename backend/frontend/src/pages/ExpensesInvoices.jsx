@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { accounts as apiAccounts, expenses as apiExpenses, settings as apiSettings } from '../services/api'
-import { FaHome, FaReceipt, FaChartLine, FaEdit, FaTrash, FaCheck, FaUndo, FaFileExcel, FaFilePdf, FaEye } from 'react-icons/fa'
+import { accounts as apiAccounts, expenses as apiExpenses } from '../services/api'
+import { FaHome, FaReceipt, FaChartLine, FaEdit, FaTrash, FaCheck, FaUndo, FaFileExcel, FaFilePdf, FaEye, FaPlus, FaArrowRight, FaSearch, FaFilter } from 'react-icons/fa'
 import { motion } from 'framer-motion'
 import { useNavigate, useLocation } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { printExpensesInvoicesPDF } from '../printing/pdf/autoReports'
-import { t } from '../utils/i18n'
 import { useAuth } from '../context/AuthContext'
 
 // Fixed imports
@@ -20,9 +19,15 @@ export default function ExpensesInvoices(){
   const [tree, setTree] = useState([])
   const [accounts, setAccounts] = useState([])
   const [list, setList] = useState([])
-  const [filters, setFilters] = useState({ from: '', to: '', account_code: '', category: '' })
+  const [filters, setFilters] = useState({ from: '', to: '', account_code: '', category: '', search: '' })
   const [toast, setToast] = useState('')
   const { can } = useAuth()
+  
+  useEffect(() => {
+    function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') }
+    window.addEventListener('storage', onStorage)
+    return () => window.removeEventListener('storage', onStorage)
+  }, [])
 
   
   const [filterType, setFilterType] = useState('expense')
@@ -32,8 +37,7 @@ export default function ExpensesInvoices(){
   const [viewLoading, setViewLoading] = useState(false)
   const [exportingExcel, setExportingExcel] = useState(false)
   const [exportingPDF, setExportingPDF] = useState(false)
-
-  useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])
+  const [showFilters, setShowFilters] = useState(false)
   
   useEffect(()=>{ (async()=>{ try { const t = await apiAccounts.tree(); setTree(t||[]) } catch {} })() },[])
   useEffect(()=>{ const flat = flatten(tree); const allowed = flat.filter(a => String(a.type).toLowerCase()==='expense' && (a.allow_manual_entry !== false)); setAccounts(allowed) },[tree])
@@ -82,7 +86,25 @@ export default function ExpensesInvoices(){
   }
 
   const rows = useMemo(()=> Array.isArray(list) ? list : [], [list])
-  const filteredRows = useMemo(()=> Array.isArray(rows) ? rows : [], [rows])
+  const filteredRows = useMemo(()=> {
+    let result = Array.isArray(rows) ? rows : []
+    if (filters.search) {
+      const s = filters.search.toLowerCase()
+      result = result.filter(r => 
+        String(r.invoice_number||'').toLowerCase().includes(s) ||
+        String(r.description||'').toLowerCase().includes(s)
+      )
+    }
+    return result
+  }, [rows, filters.search])
+  
+  // Statistics
+  const stats = useMemo(() => {
+    const total = filteredRows.reduce((s, r) => s + parseFloat(r.total || 0), 0)
+    const posted = filteredRows.filter(r => r.status === 'posted').length
+    const draft = filteredRows.filter(r => r.status !== 'posted').length
+    return { total, posted, draft, count: filteredRows.length }
+  }, [filteredRows])
   const canCreate = can('expenses:create')
   const canPost = can('expenses:post')
   const canEdit = can('expenses:edit')
@@ -134,7 +156,7 @@ export default function ExpensesInvoices(){
   async function exportPDF(){ setExportingPDF(true); try { await printExpensesInvoicesPDF({ invoices: list, lang }) } finally { setExportingPDF(false) } }
 
   return (
-    <div className="min-h-screen bg-gray-50" dir="rtl">
+    <div className="min-h-screen bg-gray-50" dir={lang==='ar'?'rtl':'ltr'}>
       <header className="px-6 py-4 bg-gradient-to-r from-primary-700 to-primary-600 text-white shadow-lg">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -142,27 +164,36 @@ export default function ExpensesInvoices(){
               <FaReceipt className="text-xl" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold">{lang==='ar'?"فواتير المصروفات فقط":"Expense Invoices Only"}</h2>
-              <p className="text-sm opacity-90">{lang==='ar'?"هذه الصفحة مخصصة لفواتير المصروفات فقط":"This page lists expense invoices only"}</p>
+              <h2 className="text-2xl font-bold">{lang==='ar'?"فواتير المصروفات":"Expense Invoices"}</h2>
+              <p className="text-sm opacity-90">{lang==='ar'?"عرض وإدارة فواتير المصروفات":"View and manage expense invoices"}</p>
             </div>
           </div>
           <div className="flex gap-2 items-center">
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 border ${location.pathname==='/expenses'?'bg-white text-primary-700 border-white':'bg-white/10 text-white border-white/20'} ${canCreate? 'hover:bg-white/20' : 'opacity-60 cursor-not-allowed'}`}
+              className={`px-4 py-2 rounded-lg flex items-center gap-2 border bg-white/10 text-white border-white/20 ${canCreate? 'hover:bg-white/20' : 'opacity-60 cursor-not-allowed'}`}
               onClick={() => { if (canCreate) navigate('/expenses') }}
             >
-              <FaChartLine className="text-sm" />
+              <FaPlus className="text-sm" />
               <span className="text-sm">{lang==='ar'?"إنشاء فاتورة":"Create Invoice"}</span>
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              className={`px-4 py-2 rounded-lg flex items-center gap-2 border ${location.pathname==='/expenses/invoices'?'bg-white text-primary-700 border-white':'bg-white/10 text-white border-white/20 hover:bg-white/20'}`}
+              className="px-4 py-2 rounded-lg flex items-center gap-2 border bg-white text-primary-700 border-white"
             >
               <FaReceipt className="text-sm" />
               <span className="text-sm">{lang==='ar'?"قائمة الفواتير":"Invoices List"}</span>
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg flex items-center gap-2 backdrop-blur-sm border border-white/20"
+              onClick={() => navigate('/expenses')}
+            >
+              <FaArrowRight className="text-sm" />
+              <span className="text-sm">{lang==='ar'?"الرجوع":"Back"}</span>
             </motion.button>
             <motion.button
               whileHover={{ scale: 1.03 }}
@@ -173,94 +204,154 @@ export default function ExpensesInvoices(){
               <FaHome className="text-sm" />
               <span className="text-sm">{lang==='ar'?"الرئيسية":"Home"}</span>
             </motion.button>
+            <button className="px-3 py-1 rounded-md border border-white/30 text-sm hover:bg-white/10" onClick={()=>{ const next = lang==='ar'?'en':'ar'; setLang(next); localStorage.setItem('lang', next) }}>{lang==='ar'?'EN':'عربي'}</button>
           </div>
         </div>
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-6 space-y-4">
-        {(() => {
-          const opts = accounts.map(a => ({ value: a.account_code, label: `${String(a.account_code).padStart(4,'0')} • ${labelName(a, lang)}` }))
-          const hasCategories = accounts.some(a => !!a.expense_category)
-          const catsUnique = Array.from(new Set(accounts.map(a => a.expense_category).filter(Boolean)))
-          const cats = catsUnique.length ? catsUnique.map(c => ({ value: c, label: c })) : []
-          const AdvancedFilters = require('../components/AdvancedFilters').default
-          const fields = [
-            { key: 'from', type: 'month', labelAr: 'من', labelEn: 'From' },
-            { key: 'to', type: 'month', labelAr: 'إلى', labelEn: 'To' },
-            { key: 'account_code', type: 'select', labelAr: 'الحساب', labelEn: 'Account', options: opts },
-          ]
-          if (hasCategories && cats.length) fields.push({ key: 'category', type: 'select', labelAr: 'التصنيف', labelEn: 'Category', options: cats })
-          return (
-            <AdvancedFilters value={filters} onChange={setFilters} lang={lang} fields={fields} />
-          )
-        })()}
+        {/* Statistics Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-xl border shadow-sm p-4">
+            <div className="text-xs text-gray-500 mb-1">{lang==='ar'?'إجمالي المصروفات':'Total Expenses'}</div>
+            <div className="text-xl font-bold text-red-600">{stats.total.toLocaleString('en-US', {minimumFractionDigits:2})} <span className="text-xs font-normal">SAR</span></div>
+          </div>
+          <div className="bg-white rounded-xl border shadow-sm p-4">
+            <div className="text-xs text-gray-500 mb-1">{lang==='ar'?'عدد الفواتير':'Invoices Count'}</div>
+            <div className="text-xl font-bold text-primary-600">{stats.count}</div>
+          </div>
+          <div className="bg-white rounded-xl border shadow-sm p-4">
+            <div className="text-xs text-gray-500 mb-1">{lang==='ar'?'منشورة':'Posted'}</div>
+            <div className="text-xl font-bold text-green-600">{stats.posted}</div>
+          </div>
+          <div className="bg-white rounded-xl border shadow-sm p-4">
+            <div className="text-xs text-gray-500 mb-1">{lang==='ar'?'مسودة':'Draft'}</div>
+            <div className="text-xl font-bold text-gray-600">{stats.draft}</div>
+          </div>
+        </div>
 
-        <div className="bg-white border rounded p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="font-semibold flex items-center gap-2"><FaReceipt /> {t('titles.expense_invoices', lang)}</div>
+        {/* Search and Filters */}
+        <div className="bg-white rounded-xl border shadow-sm p-4">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex-1 min-w-[200px]">
+              <div className="relative">
+                <FaSearch className={`absolute top-1/2 -translate-y-1/2 text-gray-400 ${lang==='ar'?'right-3':'left-3'}`} />
+                <input
+                  type="text"
+                  className={`w-full border rounded-lg py-2 ${lang==='ar'?'pr-10 pl-3':'pl-10 pr-3'} focus:ring-2 focus:ring-primary-500 focus:border-primary-500`}
+                  placeholder={lang==='ar'?'بحث برقم الفاتورة أو الوصف...':'Search by invoice number or description...'}
+                  value={filters.search}
+                  onChange={e => setFilters({...filters, search: e.target.value})}
+                />
+              </div>
+            </div>
+            <button 
+              className={`px-4 py-2 rounded-lg border flex items-center gap-2 ${showFilters ? 'bg-primary-50 border-primary-300 text-primary-700' : 'bg-white border-gray-300 text-gray-700'} hover:bg-gray-50`}
+              onClick={() => setShowFilters(!showFilters)}
+            >
+              <FaFilter /> {lang==='ar'?'فلترة':'Filters'}
+            </button>
+          </div>
+          
+          {showFilters && (
+            <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{lang==='ar'?'من تاريخ':'From Date'}</label>
+                <input type="month" className="w-full border rounded-lg px-3 py-2" value={filters.from} onChange={e => setFilters({...filters, from: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{lang==='ar'?'إلى تاريخ':'To Date'}</label>
+                <input type="month" className="w-full border rounded-lg px-3 py-2" value={filters.to} onChange={e => setFilters({...filters, to: e.target.value})} />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{lang==='ar'?'الحساب':'Account'}</label>
+                <select className="w-full border rounded-lg px-3 py-2" value={filters.account_code} onChange={e => setFilters({...filters, account_code: e.target.value})}>
+                  <option value="">{lang==='ar'?'جميع الحسابات':'All Accounts'}</option>
+                  {accounts.map(a => (
+                    <option key={a.id} value={a.account_code}>{String(a.account_code).padStart(4,'0')} • {labelName(a, lang)}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white border rounded-xl shadow-sm p-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-semibold flex items-center gap-2 text-gray-800"><FaReceipt className="text-primary-600" /> {lang==='ar'?'فواتير المصروفات':'Expense Invoices'}</div>
             <div className="flex gap-2">
-              <button onClick={exportExcel} className="px-3 py-1 bg-gray-800 text-white rounded text-sm flex items-center gap-2 hover:bg-gray-700 disabled:opacity-50" disabled={exportingExcel}>
-                <FaFileExcel /> {exportingExcel ? (lang==='ar'?'جارٍ التصدير...':'Exporting...') : (lang==='ar'?'تصدير Excel':'Export Excel')}
+              <button onClick={exportExcel} className="px-3 py-2 bg-green-600 text-white rounded-lg text-sm flex items-center gap-2 hover:bg-green-700 disabled:opacity-50 transition-colors" disabled={exportingExcel}>
+                <FaFileExcel /> {exportingExcel ? (lang==='ar'?'جارٍ التصدير...':'Exporting...') : (lang==='ar'?'Excel':'Excel')}
               </button>
-              <button onClick={exportPDF} className="px-3 py-1 bg-red-700 text-white rounded text-sm flex items-center gap-2 hover:bg-red-800 disabled:opacity-50" disabled={exportingPDF}>
-                <FaFilePdf /> {exportingPDF ? (lang==='ar'?'جارٍ التوليد...':'Generating...') : (lang==='ar'?'تصدير PDF':'Export PDF')}
+              <button onClick={exportPDF} className="px-3 py-2 bg-red-600 text-white rounded-lg text-sm flex items-center gap-2 hover:bg-red-700 disabled:opacity-50 transition-colors" disabled={exportingPDF}>
+                <FaFilePdf /> {exportingPDF ? (lang==='ar'?'جارٍ التوليد...':'Generating...') : (lang==='ar'?'PDF':'PDF')}
               </button>
             </div>
           </div>
           <div className="flex items-center justify-between mb-3">
-            <div className="flex flex-wrap gap-2">
-              <button className={`px-3 py-1 rounded-full text-sm border bg-primary-600 text-white border-primary-600`} disabled>{lang==='ar'?'مصروف':'Expense'}</button>
+            <div className="flex items-center gap-2">
+              <span className="px-3 py-1 rounded-full text-sm bg-primary-100 text-primary-700">{lang==='ar'?'مصروفات':'Expenses'}</span>
+              <span className="text-sm text-gray-500">({filteredRows.length} {lang==='ar'?'فاتورة':'invoices'})</span>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={toggleSelectAll} className="px-3 py-1 rounded text-sm border bg-white hover:bg-gray-50">{lang==='ar'?'تحديد/إلغاء تحديد الكل':'Toggle Select All'}</button>
-              <span className="text-xs text-gray-500">{lang==='ar'?'المحدد:':'Selected:'} {selectedIds.length}</span>
+              <button onClick={toggleSelectAll} className="px-3 py-1.5 rounded-lg text-sm border bg-white hover:bg-gray-50 transition-colors">{lang==='ar'?'تحديد الكل':'Select All'}</button>
+              {selectedIds.length > 0 && <span className="text-xs text-primary-600 bg-primary-50 px-2 py-1 rounded">{lang==='ar'?'المحدد:':'Selected:'} {selectedIds.length}</span>}
             </div>
           </div>
-          <table className="w-full text-right border-collapse table-fixed">
-            <thead>
-              <tr className="border-b bg-gray-50">
-                <th className="p-2 w-10"><input type="checkbox" checked={filteredRows.length>0 && filteredRows.every(r=>selectedIds.includes(r.id))} onChange={toggleSelectAll} /></th>
-                <th className="p-2">{lang==='ar'?'رقم الفاتورة':'Invoice #'}</th>
-                <th className="p-2">{lang==='ar'?'التاريخ':'Date'}</th>
-                <th className="p-2">{lang==='ar'?'النوع':'Type'}</th>
-                <th className="p-2">{lang==='ar'?'الإجمالي':'Total'}</th>
-                <th className="p-2">{lang==='ar'?'طريقة الدفع':'Payment'}</th>
-                <th className="p-2">{lang==='ar'?'الحالة':'Status'}</th>
-                <th className="p-2">{lang==='ar'?'الإجراءات':'Actions'}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(Array.isArray(filteredRows) ? filteredRows : []).map(r => (
-                <tr key={r.id} className="border-b odd:bg-white even:bg-gray-50 hover:bg-blue-50/50">
-                  <td className="p-2 text-center"><input type="checkbox" checked={selectedIds.includes(r.id)} onChange={()=>toggleSelect(r.id)} /></td>
-                  <td className="p-2">{r.invoice_number||''}</td>
-                  <td className="p-2">{String(r.date||'').slice(0,10)}</td>
-                  <td className="p-2"><span className={`px-2 py-1 rounded text-xs ${typeBadgeClass()}`}>{typeLabel()}</span></td>
-                  <td className="p-2"><span className="px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-xs">{Number(r.total||0).toLocaleString('en-US')}</span></td>
-                  <td className="p-2"><span className={`px-2 py-1 rounded text-xs ${fmtMethod(r.payment_method, lang)===(lang==='ar'?'نقد':'Cash')?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700'}`}>{fmtMethod(r.payment_method, lang)}</span></td>
-                  <td className="p-2">
-                    {(() => {
-                      const ds = String(r.derived_status||'draft')
-                      const cls = ds==='paid' ? 'bg-green-100 text-green-700' : (ds==='posted' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700')
-                      const label = lang==='ar' ? (ds==='paid' ? 'مدفوعة' : (ds==='posted' ? 'منشورة' : 'مسودة')) : (ds==='paid' ? 'Paid' : (ds==='posted' ? 'Posted' : 'Draft'))
-                      return <span className={`px-2 py-1 rounded text-xs ${cls}`}>{label}</span>
-                    })()}
-                  </td>
-                  <td className="p-2 flex items-center gap-2">
-                    <button onClick={() => openView(r.id)} className="p-1 rounded text-indigo-600 hover:bg-indigo-50" title={lang==='ar'?'عرض':'View'}><FaEye /></button>
-                    {r?.has_posted_journal ? null : (
-                      <>
-                        <button disabled={!r?.allowed_actions?.post || !canPost} onClick={() => { if (canPost) handleAction('post', r.id) }} className={`p-1 rounded ${r?.allowed_actions?.post && canPost ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 cursor-not-allowed'}`} title={lang==='ar'?'نشر':'Post'}><FaCheck /></button>
-                        <button disabled={!r?.allowed_actions?.edit || !canEdit} onClick={() => { if (canEdit) navigate('/expenses', { state: { editId: r.id } }) }} className={`p-1 rounded ${r?.allowed_actions?.edit && canEdit ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-400 cursor-not-allowed'}`} title={lang==='ar'?'تعديل':'Edit'}><FaEdit /></button>
-                        <button disabled={!r?.allowed_actions?.delete || !canDelete} onClick={() => { if (canDelete) handleAction('delete', r.id) }} className={`p-1 rounded ${r?.allowed_actions?.delete && canDelete ? 'text-red-600 hover:bg-red-50' : 'text-gray-400 cursor-not-allowed'}`} title={lang==='ar'?'حذف':'Delete'}><FaTrash /></button>
-                      </>
-                    )}
-                    <button disabled={!r?.allowed_actions?.reverse || !canReverse} onClick={() => { if (canReverse) handleAction('reverse', r.id) }} className={`p-1 rounded ${r?.allowed_actions?.reverse && canReverse ? 'text-orange-600 hover:bg-orange-50' : 'text-gray-400 cursor-not-allowed'}`} title={lang==='ar'?'عكس القيد':'Reverse'}><FaUndo /></button>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className={`w-full ${lang==='ar'?'text-right':'text-left'} border-collapse`}>
+              <thead>
+                <tr className="border-b bg-gray-50">
+                  <th className="p-3 w-10"><input type="checkbox" checked={filteredRows.length>0 && filteredRows.every(r=>selectedIds.includes(r.id))} onChange={toggleSelectAll} className="w-4 h-4 text-primary-600 rounded" /></th>
+                  <th className="p-3 text-sm font-semibold text-gray-600">{lang==='ar'?'رقم الفاتورة':'Invoice #'}</th>
+                  <th className="p-3 text-sm font-semibold text-gray-600">{lang==='ar'?'التاريخ':'Date'}</th>
+                  <th className="p-3 text-sm font-semibold text-gray-600">{lang==='ar'?'الإجمالي':'Total'}</th>
+                  <th className="p-3 text-sm font-semibold text-gray-600">{lang==='ar'?'طريقة الدفع':'Payment'}</th>
+                  <th className="p-3 text-sm font-semibold text-gray-600">{lang==='ar'?'الحالة':'Status'}</th>
+                  <th className="p-3 text-sm font-semibold text-gray-600">{lang==='ar'?'الإجراءات':'Actions'}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-8 text-center text-gray-500">{lang==='ar'?'لا توجد فواتير':'No invoices found'}</td>
+                  </tr>
+                ) : filteredRows.map(r => (
+                  <tr key={r.id} className="border-b odd:bg-white even:bg-gray-50/50 hover:bg-primary-50/30 transition-colors">
+                    <td className="p-3 text-center"><input type="checkbox" checked={selectedIds.includes(r.id)} onChange={()=>toggleSelect(r.id)} className="w-4 h-4 text-primary-600 rounded" /></td>
+                    <td className="p-3">
+                      <div className="font-medium text-gray-800">{r.invoice_number||`#${r.id}`}</div>
+                      {r.description && <div className="text-xs text-gray-500 truncate max-w-[150px]">{r.description}</div>}
+                    </td>
+                    <td className="p-3 text-sm text-gray-600">{String(r.date||'').slice(0,10)}</td>
+                    <td className="p-3"><span className="font-bold text-red-600">{Number(r.total||0).toLocaleString('en-US', {minimumFractionDigits:2})}</span> <span className="text-xs text-gray-500">SAR</span></td>
+                    <td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-medium ${fmtMethod(r.payment_method, lang)===(lang==='ar'?'نقد':'Cash')?'bg-amber-100 text-amber-700':'bg-blue-100 text-blue-700'}`}>{fmtMethod(r.payment_method, lang)}</span></td>
+                    <td className="p-3">
+                      {(() => {
+                        const ds = String(r.status || r.derived_status||'draft')
+                        const cls = ds==='paid' ? 'bg-green-100 text-green-700' : (ds==='posted' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700')
+                        const label = lang==='ar' ? (ds==='paid' ? 'مدفوعة' : (ds==='posted' ? 'مرحلة' : 'مسودة')) : (ds==='paid' ? 'Paid' : (ds==='posted' ? 'Posted' : 'Draft'))
+                        return <span className={`px-2 py-1 rounded-full text-xs font-medium ${cls}`}>{label}</span>
+                      })()}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => openView(r.id)} className="p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50 transition-colors" title={lang==='ar'?'عرض':'View'}><FaEye /></button>
+                        {r?.has_posted_journal ? null : (
+                          <>
+                            <button disabled={!r?.allowed_actions?.post || !canPost} onClick={() => { if (canPost) handleAction('post', r.id) }} className={`p-1.5 rounded-lg ${r?.allowed_actions?.post && canPost ? 'text-green-600 hover:bg-green-50' : 'text-gray-400 cursor-not-allowed'} transition-colors`} title={lang==='ar'?'ترحيل':'Post'}><FaCheck /></button>
+                            <button disabled={!r?.allowed_actions?.edit || !canEdit} onClick={() => { if (canEdit) navigate('/expenses', { state: { editId: r.id } }) }} className={`p-1.5 rounded-lg ${r?.allowed_actions?.edit && canEdit ? 'text-blue-600 hover:bg-blue-50' : 'text-gray-400 cursor-not-allowed'} transition-colors`} title={lang==='ar'?'تعديل':'Edit'}><FaEdit /></button>
+                            <button disabled={!r?.allowed_actions?.delete || !canDelete} onClick={() => { if (canDelete) handleAction('delete', r.id) }} className={`p-1.5 rounded-lg ${r?.allowed_actions?.delete && canDelete ? 'text-red-600 hover:bg-red-50' : 'text-gray-400 cursor-not-allowed'} transition-colors`} title={lang==='ar'?'حذف':'Delete'}><FaTrash /></button>
+                          </>
+                        )}
+                        <button disabled={!r?.allowed_actions?.reverse || !canReverse} onClick={() => { if (canReverse) handleAction('reverse', r.id) }} className={`p-1.5 rounded-lg ${r?.allowed_actions?.reverse && canReverse ? 'text-orange-600 hover:bg-orange-50' : 'text-gray-400 cursor-not-allowed'} transition-colors`} title={lang==='ar'?'عكس القيد':'Reverse'}><FaUndo /></button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
         {viewOpen && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-start md:items-center justify-center p-4" onClick={closeView}>
