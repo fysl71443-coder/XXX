@@ -1230,13 +1230,13 @@ export default function POSInvoice(){
       if (String(selectedPartnerType||'')==='credit' && !discountApplied) { setPlatformDiscountOpen(true); showAlert(t('errors.discount_required', lang), t('errors.discount_note', lang)); return }
       
       // OPTIMIZATION: Run resolvePartner and saveDraft in parallel for faster execution
-      const [pid, id] = await Promise.all([
+      const [pid, draftId] = await Promise.all([
         resolvePartner(),
         saveDraft()
       ]);
       // CRITICAL: Normalize id to number - saveDraft returns string, must be > 0
       // saveDraft returns order_id from resp.order_id (lockedSaveDraft response)
-      id = id ? Number(String(id).trim()) : 0;
+      let id = draftId ? Number(String(draftId).trim()) : 0;
       if (process.env.NODE_ENV === 'development') {
         console.log('[ISSUE] saveDraft returned order_id:', id);
       }
