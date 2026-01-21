@@ -6599,8 +6599,11 @@ async function getNextInvoiceNumber() {
   }
 }
 
-async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discount, tax, total, paymentMethod, branch) {
+async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discount, tax, total, paymentMethod, branch, client = null) {
   try {
+    // Use provided client (for transaction) or pool (standalone)
+    const db = client || pool;
+    
     // Get next entry number (reuses deleted numbers)
     const entryNumber = await getNextEntryNumber();
 
@@ -6621,30 +6624,34 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
     // Get customer account (if credit sale)
     if (customerId && paymentMethod && String(paymentMethod).toLowerCase() === 'credit') {
       const customerAccountId = await getOrCreatePartnerAccount(customerId, 'customer');
-      if (customerAccountId) {
-        // Debit: Customer Receivable (حساب فرعي تحت 1141)
-        postings.push({ account_id: customerAccountId, debit: total, credit: 0 });
+      if (!customerAccountId) {
+        throw new Error(`JOURNAL_CREATION_FAILED: Customer account not found for customer ${customerId}`);
       }
+      // Debit: Customer Receivable (حساب فرعي تحت 1141)
+      postings.push({ account_id: customerAccountId, debit: total, credit: 0 });
     } else {
       // Cash sale - use main cash account (1111 - صندوق رئيسي)
       const cashAccountId = await getAccountIdByNumber('1111');
-      if (cashAccountId) {
-        postings.push({ account_id: cashAccountId, debit: total, credit: 0 });
+      if (!cashAccountId) {
+        throw new Error('JOURNAL_CREATION_FAILED: Cash account (1111) not found');
       }
+      postings.push({ account_id: cashAccountId, debit: total, credit: 0 });
     }
 
     // Credit: Sales Revenue (حسب الفرع وطريقة الدفع)
     const salesAccountId = await getAccountIdByNumber(salesAccountNumber);
-    if (salesAccountId) {
-      postings.push({ account_id: salesAccountId, debit: 0, credit: subtotal - discount });
+    if (!salesAccountId) {
+      throw new Error(`JOURNAL_CREATION_FAILED: Sales account (${salesAccountNumber}) not found`);
     }
+    postings.push({ account_id: salesAccountId, debit: 0, credit: subtotal - discount });
 
     // Credit: VAT Output (2141) if tax > 0
     if (tax > 0) {
       const vatAccountId = await getAccountIdByNumber('2141');
-      if (vatAccountId) {
-        postings.push({ account_id: vatAccountId, debit: 0, credit: tax });
+      if (!vatAccountId) {
+        throw new Error('JOURNAL_CREATION_FAILED: VAT account (2141) not found');
       }
+      postings.push({ account_id: vatAccountId, debit: 0, credit: tax });
     }
 
     // Validate postings balance
@@ -6652,7 +6659,7 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
     const totalCredit = postings.reduce((sum, p) => sum + Number(p.credit || 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
       console.error('[ACCOUNTING] Journal entry unbalanced:', { totalDebit, totalCredit, postings });
-      return null;
+      throw new Error(`JOURNAL_CREATION_FAILED: Unbalanced entry (Debit: ${totalDebit}, Credit: ${totalCredit})`);
     }
 
     // Extract period from date (YYYY-MM format)
@@ -6661,27 +6668,30 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
     
     // Create journal entry with period
     // CRITICAL FIX: Set status='posted' when creating journal entry
-    const { rows: entryRows } = await pool.query(
+    const { rows: entryRows } = await db.query(
       'INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
       [entryNumber, `فاتورة مبيعات #${invoiceId}`, entryDate, period, 'invoice', invoiceId, 'posted', branch || 'china_town']
     );
 
     const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
-    if (!entryId) return null;
+    if (!entryId) {
+      throw new Error('JOURNAL_CREATION_FAILED: Failed to create journal entry record');
+    }
 
     // Create postings
     for (const posting of postings) {
-      await pool.query(
+      await db.query(
         'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1,$2,$3,$4)',
         [entryId, posting.account_id, posting.debit, posting.credit]
       );
     }
 
-    console.log(`[ACCOUNTING] Created journal entry #${entryNumber} for invoice ${invoiceId}`);
+    console.log(`[ACCOUNTING] Created journal entry #${entryNumber} (ID: ${entryId}) for invoice ${invoiceId}`);
     return entryId;
   } catch (e) {
-    console.error('[ACCOUNTING] Error creating journal entry for invoice:', invoiceId, e);
-    return null;
+    console.error('[ACCOUNTING] Error creating journal entry for invoice:', invoiceId, e?.message || e);
+    // Re-throw error instead of returning null - this will cause transaction rollback
+    throw e;
   }
 }
 
@@ -7080,21 +7090,47 @@ async function handleIssueInvoice(req, res) {
     }
 
     // Create journal entry automatically
+    let journalEntryId = null;
     if (status === 'posted' && total > 0) {
-      await createInvoiceJournalEntry(
-        invoice.id,
-        customer_id,
-        subtotal,
-        discount_amount,
-        tax_amount,
-        total,
-        payment_method,
-        branch
-      );
+      try {
+        journalEntryId = await createInvoiceJournalEntry(
+          invoice.id,
+          customer_id,
+          subtotal,
+          discount_amount,
+          tax_amount,
+          total,
+          payment_method,
+          branch,
+          client // Pass client for transaction
+        );
+        
+        // CRITICAL: Link journal entry to invoice
+        if (journalEntryId) {
+          await client.query(
+            'UPDATE invoices SET journal_entry_id = $1 WHERE id = $2',
+            [journalEntryId, invoice.id]
+          );
+          console.log(`[ACCOUNTING] Linked journal entry ${journalEntryId} to invoice ${invoice.id}`);
+        } else {
+          throw new Error('JOURNAL_CREATION_FAILED: Journal entry ID is null after creation');
+        }
+      } catch (journalError) {
+        console.error('[ACCOUNTING] CRITICAL: Failed to create journal entry for invoice:', invoice.id, journalError);
+        await client.query('ROLLBACK');
+        return res.status(500).json({ 
+          error: "journal_creation_failed", 
+          details: journalError?.message || "Failed to create journal entry for invoice",
+          invoice_id: invoice.id
+        });
+      }
     }
 
     await client.query('COMMIT');
-    res.json(invoice);
+    res.json({
+      ...invoice,
+      journal_entry_id: journalEntryId
+    });
   } catch (e) {
     await client.query('ROLLBACK');
     const errorMsg = e?.message || String(e || 'unknown');

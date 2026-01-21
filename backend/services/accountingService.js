@@ -132,30 +132,34 @@ export async function createInvoiceJournalEntry(invoiceId, customerId, subtotal,
     // Get customer account (if credit sale)
     if (customerId && paymentMethod && String(paymentMethod).toLowerCase() === 'credit') {
       const customerAccountId = await getOrCreatePartnerAccount(customerId, 'customer');
-      if (customerAccountId) {
-        // Debit: Customer Receivable (حساب فرعي تحت 1141)
-        postings.push({ account_id: customerAccountId, debit: total, credit: 0 });
+      if (!customerAccountId) {
+        throw new Error(`JOURNAL_CREATION_FAILED: Customer account not found for customer ${customerId}`);
       }
+      // Debit: Customer Receivable (حساب فرعي تحت 1141)
+      postings.push({ account_id: customerAccountId, debit: total, credit: 0 });
     } else {
       // Cash sale - use main cash account (1111 - صندوق رئيسي)
       const cashAccountId = await getAccountIdByNumber('1111');
-      if (cashAccountId) {
-        postings.push({ account_id: cashAccountId, debit: total, credit: 0 });
+      if (!cashAccountId) {
+        throw new Error('JOURNAL_CREATION_FAILED: Cash account (1111) not found');
       }
+      postings.push({ account_id: cashAccountId, debit: total, credit: 0 });
     }
 
     // Credit: Sales Revenue (حسب الفرع وطريقة الدفع)
     const salesAccountId = await getAccountIdByNumber(salesAccountNumber);
-    if (salesAccountId) {
-      postings.push({ account_id: salesAccountId, debit: 0, credit: subtotal - discount });
+    if (!salesAccountId) {
+      throw new Error(`JOURNAL_CREATION_FAILED: Sales account (${salesAccountNumber}) not found`);
     }
+    postings.push({ account_id: salesAccountId, debit: 0, credit: subtotal - discount });
 
     // Credit: VAT Output (2141) if tax > 0
     if (tax > 0) {
       const vatAccountId = await getAccountIdByNumber('2141');
-      if (vatAccountId) {
-        postings.push({ account_id: vatAccountId, debit: 0, credit: tax });
+      if (!vatAccountId) {
+        throw new Error('JOURNAL_CREATION_FAILED: VAT account (2141) not found');
       }
+      postings.push({ account_id: vatAccountId, debit: 0, credit: tax });
     }
 
     // Validate postings balance
@@ -163,7 +167,7 @@ export async function createInvoiceJournalEntry(invoiceId, customerId, subtotal,
     const totalCredit = postings.reduce((sum, p) => sum + Number(p.credit || 0), 0);
     if (Math.abs(totalDebit - totalCredit) > 0.01) {
       console.error('[ACCOUNTING] Journal entry unbalanced:', { totalDebit, totalCredit, postings });
-      return null;
+      throw new Error(`JOURNAL_CREATION_FAILED: Unbalanced entry (Debit: ${totalDebit}, Credit: ${totalCredit})`);
     }
 
     // Extract period from date (YYYY-MM format)
@@ -178,7 +182,9 @@ export async function createInvoiceJournalEntry(invoiceId, customerId, subtotal,
     );
 
     const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
-    if (!entryId) return null;
+    if (!entryId) {
+      throw new Error('JOURNAL_CREATION_FAILED: Failed to create journal entry record');
+    }
 
     // Create postings
     for (const posting of postings) {
@@ -188,10 +194,11 @@ export async function createInvoiceJournalEntry(invoiceId, customerId, subtotal,
       );
     }
 
-    console.log(`[ACCOUNTING] Created journal entry #${entryNumber} for invoice ${invoiceId}`);
+    console.log(`[ACCOUNTING] Created journal entry #${entryNumber} (ID: ${entryId}) for invoice ${invoiceId}`);
     return entryId;
   } catch (e) {
-    console.error('[ACCOUNTING] Error creating journal entry for invoice:', invoiceId, e);
-    return null;
+    console.error('[ACCOUNTING] Error creating journal entry for invoice:', invoiceId, e?.message || e);
+    // Re-throw error instead of returning null - this will cause transaction rollback
+    throw e;
   }
 }

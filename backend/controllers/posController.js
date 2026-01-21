@@ -756,21 +756,46 @@ export async function issueInvoice(req, res) {
     }
 
     // Create journal entry automatically
+    let journalEntryId = null;
     if (status === 'posted' && total > 0) {
-      await createInvoiceJournalEntry(
-        invoice.id,
-        customer_id,
-        subtotal,
-        discount_amount,
-        tax_amount,
-        total,
-        payment_method,
-        branch
-      );
+      try {
+        journalEntryId = await createInvoiceJournalEntry(
+          invoice.id,
+          customer_id,
+          subtotal,
+          discount_amount,
+          tax_amount,
+          total,
+          payment_method,
+          branch
+        );
+        
+        // CRITICAL: Link journal entry to invoice
+        if (journalEntryId) {
+          await client.query(
+            'UPDATE invoices SET journal_entry_id = $1 WHERE id = $2',
+            [journalEntryId, invoice.id]
+          );
+          console.log(`[ACCOUNTING] Linked journal entry ${journalEntryId} to invoice ${invoice.id}`);
+        } else {
+          throw new Error('JOURNAL_CREATION_FAILED: Journal entry ID is null after creation');
+        }
+      } catch (journalError) {
+        console.error('[ACCOUNTING] CRITICAL: Failed to create journal entry for invoice:', invoice.id, journalError);
+        await client.query('ROLLBACK');
+        return res.status(500).json({ 
+          error: "journal_creation_failed", 
+          details: journalError?.message || "Failed to create journal entry for invoice",
+          invoice_id: invoice.id
+        });
+      }
     }
 
     await client.query('COMMIT');
-    res.json(invoice);
+    res.json({
+      ...invoice,
+      journal_entry_id: journalEntryId
+    });
   } catch (e) {
     await client.query('ROLLBACK');
     const errorMsg = e?.message || String(e || 'unknown');
