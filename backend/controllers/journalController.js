@@ -11,6 +11,7 @@ auditService.ensureAuditTable().catch(e => console.warn('[JOURNAL] Could not ens
  */
 export async function list(req, res) {
   try {
+    console.log('[JOURNAL] GET /api/journal - Starting request');
     const {
       status, page = 1, pageSize = 20, from, to, type, source,
       reference_prefix, search, account_id, account_ids, accounts_scope,
@@ -194,9 +195,10 @@ export async function list(req, res) {
       postings: postingsMap.get(row.id) || []
     }));
     
+    console.log('[JOURNAL] GET /api/journal - Returning', items.length, 'entries');
     res.json({ items, total: items.length });
   } catch (e) {
-    console.error('[JOURNAL] Error listing entries:', e);
+    console.error('[JOURNAL] Error listing entries:', e?.message, e?.stack);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 }
