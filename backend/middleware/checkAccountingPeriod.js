@@ -50,8 +50,9 @@ export function checkAccountingPeriod(options = {}) {
       }
 
       // Get period status from database
+      // Note: locked_by column doesn't exist in accounting_periods table
       const { rows } = await pool.query(
-        'SELECT id, period, status, opened_at, closed_at, locked_by FROM accounting_periods WHERE period = $1 LIMIT 1',
+        'SELECT id, period, status, opened_at, closed_at FROM accounting_periods WHERE period = $1 LIMIT 1',
         [period]
       );
 
@@ -150,7 +151,6 @@ export function checkAccountingPeriod(options = {}) {
           period: period,
           status: periodData.status,
           closed_at: periodData.closed_at,
-          locked_by: periodData.locked_by,
           endpoint: req.path || req.url,
           action: action,
           user_id: req.user?.id || 'unknown'
@@ -164,7 +164,6 @@ export function checkAccountingPeriod(options = {}) {
           details_ar: `الفترة المحاسبية ${period} مقفلة. لا يمكن إجراء أي تعديلات.`,
           period: period,
           closed_at: periodData.closed_at,
-          locked_by: periodData.locked_by,
           action_attempted: action
         });
       }

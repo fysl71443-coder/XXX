@@ -23,10 +23,11 @@ export async function list(req, res) {
 
     // Note: orders table uses "customerId" (camelCase) not customer_id
     // and stores items in 'lines' JSON column, not in order_items table
+    // Note: orders table doesn't have 'number' column, use id instead
     let query = `
       SELECT 
         o.id,
-        o.number as invoice_number,
+        o.id::text as invoice_number,
         o.total_amount as total,
         o.subtotal,
         o.tax_amount as tax,
@@ -42,9 +43,9 @@ export async function list(req, res) {
     const params = [];
     let paramIndex = 1;
 
-    // Search by invoice number
+    // Search by invoice number (search by id since number column doesn't exist)
     if (invoiceNumber) {
-      query += ` AND o.number ILIKE $${paramIndex}`;
+      query += ` AND o.id::text ILIKE $${paramIndex}`;
       params.push(`%${invoiceNumber}%`);
       paramIndex++;
     }

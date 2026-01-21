@@ -35,7 +35,7 @@ export async function list(req, res) {
     
     let query = `
       SELECT je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, 
-             je.status, je.created_at, je.branch, je.period, je.posted_at,
+             je.status, je.created_at, je.branch, je.period,
              COALESCE(SUM(jp.debit), 0) as total_debit,
              COALESCE(SUM(jp.credit), 0) as total_credit
       FROM journal_entries je
@@ -130,7 +130,7 @@ export async function list(req, res) {
       params.push(Number(account_id));
     }
     
-    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at, je.branch, je.period, je.posted_at`;
+    query += ` GROUP BY je.id, je.entry_number, je.description, je.date, je.reference_type, je.reference_id, je.status, je.created_at, je.branch, je.period`;
     
     // Filter by amount range (after aggregation)
     if (min_amount || max_amount) {
