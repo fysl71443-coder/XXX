@@ -489,8 +489,9 @@ export async function postEntry(req, res) {
     }
     
     // Post the entry
+    // Note: posted_at column doesn't exist in journal_entries table
     await client.query(
-      `UPDATE journal_entries SET status = 'posted', posted_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      `UPDATE journal_entries SET status = 'posted', updated_at = NOW() WHERE id = $1`,
       [id]
     );
     
@@ -559,8 +560,9 @@ export async function returnToDraft(req, res) {
     }
     
     // Return to draft
+    // Note: posted_at column doesn't exist in journal_entries table
     await client.query(
-      `UPDATE journal_entries SET status = 'draft', posted_at = NULL, updated_at = NOW() WHERE id = $1`,
+      `UPDATE journal_entries SET status = 'draft', updated_at = NOW() WHERE id = $1`,
       [id]
     );
     
@@ -642,9 +644,10 @@ export async function reverse(req, res) {
     const period = now.toISOString().slice(0, 7);
     
     // Create reversing entry
+    // Note: posted_at column doesn't exist in journal_entries table
     const { rows: newEntryRows } = await client.query(
-      `INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status, posted_at, branch)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+      `INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status, branch)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
       [
         entryNumber,
         `عكس قيد #${originalEntry.entry_number} - ${originalEntry.description || ''}`,
@@ -653,7 +656,6 @@ export async function reverse(req, res) {
         'reversal',
         id, // Reference to original entry
         'posted',
-        now,
         originalEntry.branch
       ]
     );
