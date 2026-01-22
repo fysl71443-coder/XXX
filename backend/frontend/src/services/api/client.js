@@ -174,9 +174,29 @@ api.interceptors.response.use(
     // - Any other error is NOT a reason to logout
     
     if (status === 401) {
-      // Log but DO NOT logout - let AuthContext handle authentication
-      console.warn('[API] 401 Unauthorized - AuthContext will handle if needed');
-      // DO NOT redirect, DO NOT clear token, DO NOT logout
+      // CRITICAL: 401 means token is invalid or expired
+      // Clear token and redirect to login immediately
+      console.warn('[API] 401 Unauthorized - Token invalid or expired, redirecting to login');
+      
+      // Clear all auth-related localStorage items
+      try {
+        localStorage.removeItem('token');
+        localStorage.removeItem('auth_user');
+        localStorage.removeItem('screens');
+        localStorage.removeItem('branches');
+        localStorage.removeItem('user_permissions_cache');
+      } catch (e) {
+        console.error('[API] Error clearing localStorage:', e);
+      }
+      
+      // Redirect to login page (preserve intended destination)
+      const currentPath = window.location.pathname;
+      const redirectUrl = `/login?next=${encodeURIComponent(currentPath)}`;
+      
+      // Only redirect if not already on login page
+      if (!currentPath.includes('/login')) {
+        window.location.href = redirectUrl;
+      }
     }
     
     if (status === 403) {

@@ -7767,8 +7767,8 @@ app.get("/api/reports/trial-balance/drilldown", authenticateToken, authorize("re
         je.entry_number,
         je.date,
         je.description,
-        je.related_type,
-        je.related_id,
+        je.reference_type,
+        je.reference_id,
         je.branch,
         jp.debit,
         jp.credit,
@@ -7790,8 +7790,8 @@ app.get("/api/reports/trial-balance/drilldown", authenticateToken, authorize("re
       entry_number: row.entry_number,
       date: row.date,
       description: row.description,
-      related_type: row.related_type,
-      related_id: row.related_id,
+      related_type: row.reference_type, // Map reference_type to related_type for frontend compatibility
+      related_id: row.reference_id, // Map reference_id to related_id for frontend compatibility
       branch: row.branch,
       debit: Number(row.debit || 0),
       credit: Number(row.credit || 0),
@@ -8018,14 +8018,14 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
         je.entry_number,
         je.date,
         je.description,
-        je.related_type,
-        je.related_id,
+        je.reference_type,
+        je.reference_id,
         je.branch,
         COALESCE(SUM(jp.credit), 0) as amount
       FROM journal_entries je
       JOIN journal_postings jp ON jp.journal_entry_id = je.id
       WHERE ${whereConditions.join(' AND ')}
-      GROUP BY je.id, je.entry_number, je.date, je.description, je.related_type, je.related_id, je.branch
+      GROUP BY je.id, je.entry_number, je.date, je.description, je.reference_type, je.reference_id, je.branch
       ORDER BY je.date, je.id
     `;
     
@@ -8036,8 +8036,8 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
       entry_number: row.entry_number,
       date: row.date,
       description: row.description,
-      related_type: row.related_type,
-      related_id: row.related_id,
+      related_type: row.reference_type, // Map reference_type to related_type for frontend compatibility
+      related_id: row.reference_id, // Map reference_id to related_id for frontend compatibility
       branch: row.branch,
       amount: Number(row.amount || 0)
     }));
