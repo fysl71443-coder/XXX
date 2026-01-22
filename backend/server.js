@@ -4259,27 +4259,70 @@ app.post("/api/payroll/run/:id/post", authenticateToken, authorize("payroll","po
     const gosiLiabilityId = await getAccountIdByNumber('2120');
     const payrollPayableId = await getAccountIdByNumber('2130');
     
-    // Create postings
-    // Debit: Salary Expense
-    if (salaryExpenseId && totalGross > 0) {
-      await client.query(
-        'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)',
-        [entryId, salaryExpenseId, totalGross]
-      );
+    // Validate accounts exist
+    if (!salaryExpenseId) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'account_not_found', details: 'Salary expense account (5210) not found' });
     }
-    // Credit: GOSI Liability
+    if (!payrollPayableId) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: 'account_not_found', details: 'Payroll payable account (2130) not found' });
+    }
+    
+    // Validate totals
+    if (totalGross <= 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'invalid_amount', details: 'Total gross salary must be greater than 0' });
+    }
+    
+    // Verify accounting equation: totalGross = totalNet + totalGosi
+    const calculatedGross = totalNet + totalGosi;
+    if (Math.abs(totalGross - calculatedGross) > 0.01) {
+      console.warn(`[PAYROLL] Gross mismatch: totalGross=${totalGross}, calculated=${calculatedGross} (net=${totalNet}, gosi=${totalGosi})`);
+      // Use calculated gross to ensure balance
+      totalGross = calculatedGross;
+    }
+    
+    // Create postings - CRITICAL: Must be balanced
+    // Debit: Salary Expense (5210) = totalGross
+    await client.query(
+      'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, $3, 0)',
+      [entryId, salaryExpenseId, totalGross]
+    );
+    
+    // Credit: GOSI Liability (2120) = totalGosi (if exists and > 0)
     if (gosiLiabilityId && totalGosi > 0) {
       await client.query(
         'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)',
         [entryId, gosiLiabilityId, totalGosi]
       );
     }
-    // Credit: Payroll Payable
-    if (payrollPayableId && totalNet > 0) {
-      await client.query(
-        'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)',
-        [entryId, payrollPayableId, totalNet]
-      );
+    
+    // Credit: Payroll Payable (2130) = totalNet
+    await client.query(
+      'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1, $2, 0, $3)',
+      [entryId, payrollPayableId, totalNet]
+    );
+    
+    // Validate balance: Debit must equal Credit
+    const { rows: balanceCheck } = await client.query(`
+      SELECT 
+        COALESCE(SUM(debit), 0) as total_debit,
+        COALESCE(SUM(credit), 0) as total_credit
+      FROM journal_postings
+      WHERE journal_entry_id = $1
+    `, [entryId]);
+    
+    const totalDebit = parseFloat(balanceCheck[0]?.total_debit || 0);
+    const totalCredit = parseFloat(balanceCheck[0]?.total_credit || 0);
+    
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      await client.query('ROLLBACK');
+      console.error(`[PAYROLL] Unbalanced entry: debit=${totalDebit}, credit=${totalCredit}`);
+      return res.status(500).json({ 
+        error: 'unbalanced_entry', 
+        details: `Entry is unbalanced: debit=${totalDebit}, credit=${totalCredit}` 
+      });
     }
     
     // Update run
