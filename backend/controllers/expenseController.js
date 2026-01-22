@@ -194,7 +194,7 @@ export async function create(req, res) {
               );
             }
             
-            await client.query('UPDATE expenses SET journal_entry_id = $1 WHERE id = $2', [entryId, expense.id]);
+            await client.query('UPDATE expenses SET journal_entry_id = $1, status = $2 WHERE id = $3', [entryId, 'posted', expense.id]);
             console.log(`[EXPENSES] Auto-posted expense ${expense.id}, created journal entry ${entryId}`);
           }
         } else {
@@ -229,11 +229,20 @@ export async function create(req, res) {
     }
     
     await client.query('COMMIT');
+    
+    // Fetch the expense again to ensure we have the latest status and journal_entry_id
+    const { rows: finalRows } = await client.query(
+      'SELECT id, invoice_number, type, amount, total, account_code, partner_id, description, status, branch, date, payment_method, items, journal_entry_id, created_at FROM expenses WHERE id = $1',
+      [expense.id]
+    );
+    const finalExpense = finalRows && finalRows[0] ? finalRows[0] : expense;
+    
     const formattedExpense = {
-      ...expense,
-      invoice_number: expense.invoice_number || `EXP-${expense.id}`,
-      total: Number(expense.total || expense.amount || 0),
-      status: expense.status || status
+      ...finalExpense,
+      invoice_number: finalExpense.invoice_number || `EXP-${finalExpense.id}`,
+      total: Number(finalExpense.total || finalExpense.amount || 0),
+      status: finalExpense.status || status, // Ensure status is always set
+      journal_entry_id: finalExpense.journal_entry_id || null
     };
     res.json(formattedExpense);
   } catch (e) {
@@ -355,7 +364,7 @@ export async function update(req, res) {
                 );
               }
               
-              await client.query('UPDATE expenses SET journal_entry_id = $1 WHERE id = $2', [entryId, expense.id]);
+              await client.query('UPDATE expenses SET journal_entry_id = $1, status = $2 WHERE id = $3', [entryId, 'posted', expense.id]);
             }
           }
         }
@@ -441,7 +450,7 @@ export async function post(req, res) {
           [entryId, paymentAccountId, 0, amount]
         );
         
-        await client.query('UPDATE expenses SET journal_entry_id = $1 WHERE id = $2', [entryId, id]);
+        await client.query('UPDATE expenses SET journal_entry_id = $1, status = $2 WHERE id = $3', [entryId, 'posted', id]);
       }
     }
     

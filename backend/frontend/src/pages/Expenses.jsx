@@ -592,10 +592,15 @@ export default function Expenses(){
           
           // ✅ Backend already posted the expense automatically
           // If posting failed, backend deleted the expense and returned error
-          if (createdExpense.status === 'posted') {
+          // Check both status and journal_entry_id to confirm posting
+          const isPosted = createdExpense.status === 'posted' || createdExpense.journal_entry_id != null
+          
+          if (isPosted) {
             setToast(lang==='ar'?'تم إنشاء وترحيل المصروف بنجاح':'Expense created and posted successfully')
           } else {
-            setError(lang==='ar'?'لم يتم ترحيل المصروف':'Expense was not posted') // Should not happen
+            // If expense was created but not posted, show warning (should not happen with autoPost=true)
+            console.warn('[Expenses] Expense created but not posted:', createdExpense)
+            setToast(lang==='ar'?'تم إنشاء المصروف':'Expense created')
           }
         } catch (createError) {
           // Backend already deleted expense if posting failed
