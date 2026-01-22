@@ -3936,25 +3936,68 @@ app.delete("/api/employees/:id", authenticateToken, authorize("employees","delet
 app.get("/api/payroll/runs", authenticateToken, authorize("payroll","view"), async (req, res) => {
   try {
     const { rows } = await pool.query(`
-      SELECT pr.id, pr.period, pr.status, pr.journal_entry_id, pr.approved_at, pr.posted_at, pr.created_at,
-             CASE 
-               WHEN pr.journal_entry_id IS NOT NULL THEN 'posted'
-               WHEN pr.status = 'approved' THEN 'approved'
-               ELSE 'draft'
-             END as derived_status
+      SELECT 
+        pr.id, 
+        pr.period, 
+        pr.status, 
+        pr.journal_entry_id, 
+        pr.approved_at, 
+        pr.posted_at, 
+        pr.created_at,
+        CASE 
+          WHEN pr.journal_entry_id IS NOT NULL THEN 'posted'
+          WHEN pr.status = 'approved' THEN 'approved'
+          ELSE 'draft'
+        END as derived_status,
+        COALESCE(SUM(pri.net_salary), 0) as total_net_salary,
+        COUNT(pri.id) as items_count,
+        COUNT(CASE WHEN pri.paid_at IS NOT NULL THEN 1 END) as paid_count
       FROM payroll_runs pr
+      LEFT JOIN payroll_run_items pri ON pri.run_id = pr.id
+      GROUP BY pr.id, pr.period, pr.status, pr.journal_entry_id, pr.approved_at, pr.posted_at, pr.created_at
       ORDER BY pr.period DESC, pr.id DESC
     `);
-    const items = (rows || []).map(r => ({
-      ...r,
-      has_posted_journal: !!r.journal_entry_id,
-      allowed_actions: {
-        edit: r.status === 'draft' && !r.journal_entry_id,
-        delete: r.status === 'draft' && !r.journal_entry_id,
-        post: (r.status === 'approved' || r.status === 'draft') && !r.journal_entry_id,
-        pay: r.journal_entry_id !== null
+    const items = (rows || []).map(r => {
+      // Parse period to extract month and year (format: YYYY-MM)
+      let month = null;
+      let year = null;
+      if (r.period) {
+        const periodMatch = String(r.period).match(/^(\d{4})-(\d{2})/);
+        if (periodMatch) {
+          year = periodMatch[1];
+          month = periodMatch[2];
+        }
       }
-    }));
+      
+      // Determine payment_status: 'paid' if all items are paid, 'partial' if some are paid, 'unpaid' if none are paid
+      const totalCount = Number(r.items_count || 0);
+      const paidCount = Number(r.paid_count || 0);
+      let payment_status = 'unpaid';
+      if (totalCount > 0) {
+        if (paidCount === totalCount) {
+          payment_status = 'paid';
+        } else if (paidCount > 0) {
+          payment_status = 'partial';
+        }
+      }
+      
+      return {
+        ...r,
+        total_net_salary: Number(r.total_net_salary || 0),
+        items_count: totalCount,
+        month,
+        year,
+        payment_status,
+        has_posted_journal: !!r.journal_entry_id,
+        allowed_actions: {
+          edit: r.status === 'draft' && !r.journal_entry_id,
+          delete: r.status === 'draft' && !r.journal_entry_id,
+          post: (r.status === 'approved' || r.status === 'draft') && !r.journal_entry_id,
+          pay: r.journal_entry_id !== null
+        }
+      };
+    });
+    
     res.json(items);
   } catch (e) {
     console.error('[PAYROLL] Error listing runs:', e);

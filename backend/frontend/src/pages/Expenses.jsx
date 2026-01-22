@@ -203,7 +203,20 @@ export default function Expenses(){
 
   useEffect(() => {
     if (form.expense_type === 'payment' && form.payment_details.payment_type === 'salary') {
-      apiPayroll.runs().then(res => setPayrollRuns((res||[]).filter(r => r.status === 'posted' && r.payment_status !== 'paid')))
+      apiPayroll.runs().then(res => {
+        // Filter for posted runs (either status='posted' or derived_status='posted' or has journal_entry_id)
+        const posted = (res||[]).filter(r => {
+          const isPosted = r.status === 'posted' || r.derived_status === 'posted' || !!r.journal_entry_id || !!r.has_posted_journal;
+          const isNotFullyPaid = r.payment_status !== 'paid';
+          return isPosted && isNotFullyPaid;
+        });
+        setPayrollRuns(posted);
+      }).catch(err => {
+        console.error('[Expenses] Error loading payroll runs:', err);
+        setPayrollRuns([]);
+      });
+    } else {
+      setPayrollRuns([]);
     }
   }, [form.expense_type, form.payment_details.payment_type])
   
