@@ -6160,9 +6160,10 @@ async function handleCreateSupplierInvoice(req, res) {
     const linesJson = JSON.stringify(lines);
     
     console.log('[SUPPLIER INVOICE] Executing INSERT...');
+    // Note: journal_entry_id is added later after journal entry creation, so it's NULL initially
     const { rows } = await client.query(
       'INSERT INTO supplier_invoices(number, date, due_date, supplier_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch',
-      [b.invoice_number||b.number||null, b.date||null, b.due_date||null, b.partner_id||b.supplier_id||null, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, paymentMethod, 'posted', branch]
+      [b.invoice_number||b.number||null, b.date||null, b.due_date||null, b.partner_id||b.supplier_id||null, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, paymentMethod, 'posted', branch]
     );
     
     const invoice = rows && rows[0];
