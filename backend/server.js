@@ -8358,6 +8358,11 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
     `;
     
     // Get VAT (credit from VAT account 2141)
+    // Build separate params for VAT query (only date range and branch, no account IDs)
+    const vatParams = [dateStart, dateEnd];
+    if (branch && branch !== 'all' && branch !== 'كل الفروع') {
+      vatParams.push(branch);
+    }
     const vatQuery = `
       SELECT 
         je.id,
@@ -8365,13 +8370,18 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
       FROM journal_entries je
       JOIN journal_postings jp ON jp.journal_entry_id = je.id
       JOIN accounts a ON a.id = jp.account_id
-      WHERE je.status = 'posted'
-        AND je.date >= $${salesAccountIds.length + 1} AND je.date < $${salesAccountIds.length + 2}
-        ${branch && branch !== 'all' && branch !== 'كل الفروع' ? `AND je.branch = $${salesAccountIds.length + 3}` : ''}
+      WHERE je.status = $1
+        AND je.date >= $2 AND je.date < $3
+        ${branch && branch !== 'all' && branch !== 'كل الفروع' ? `AND je.branch = $4` : ''}
       GROUP BY je.id
     `;
     
     // Get discount (debit from discount account 4190, if exists)
+    // Build separate params for discount query (only date range and branch, no account IDs)
+    const discountParams = [dateStart, dateEnd];
+    if (branch && branch !== 'all' && branch !== 'كل الفروع') {
+      discountParams.push(branch);
+    }
     const discountQuery = `
       SELECT 
         je.id,
@@ -8379,16 +8389,16 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
       FROM journal_entries je
       JOIN journal_postings jp ON jp.journal_entry_id = je.id
       JOIN accounts a ON a.id = jp.account_id
-      WHERE je.status = 'posted'
-        AND je.date >= $${salesAccountIds.length + 1} AND je.date < $${salesAccountIds.length + 2}
-        ${branch && branch !== 'all' && branch !== 'كل الفروع' ? `AND je.branch = $${salesAccountIds.length + 3}` : ''}
+      WHERE je.status = $1
+        AND je.date >= $2 AND je.date < $3
+        ${branch && branch !== 'all' && branch !== 'كل الفروع' ? `AND je.branch = $4` : ''}
       GROUP BY je.id
     `;
     
     const [salesResult, vatResult, discountResult] = await Promise.all([
       pool.query(salesQuery, params),
-      pool.query(vatQuery, params),
-      pool.query(discountQuery, params)
+      pool.query(vatQuery, ['posted', ...vatParams]),
+      pool.query(discountQuery, ['posted', ...discountParams])
     ]);
     
     // Create maps for VAT and discount
