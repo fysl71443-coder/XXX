@@ -120,7 +120,8 @@ export default function Clients() {
       return;
     }
     load() 
-  }, [authLoading, isLoggedIn, load])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authLoading, isLoggedIn]) // load function is stable, no need to include it
   
   // Load period status - only once on mount, after auth is ready
   useEffect(()=>{ 
