@@ -109,8 +109,8 @@ export function PrintedReceiptsModal({ isOpen, onClose, branchId }) {
         return;
       }
 
-      // Build receipt HTML
-      const receiptHTML = generateReceiptHTML(receipt, isAr);
+      // Use saved receipt HTML if available, otherwise generate new one
+      const receiptHTML = receipt.receipt_html || generateReceiptHTML(receipt, isAr);
       
       printWindow.document.write(receiptHTML);
       printWindow.document.close();

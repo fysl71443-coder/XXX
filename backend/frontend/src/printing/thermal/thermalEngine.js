@@ -9,6 +9,12 @@ function defaultAutoPrint(template){
 
 export async function printThermal(template, data, autoPrint){
   const html = await renderThermalReceipt(template, data||{})
+  
+  // Return HTML for saving (without opening print window)
+  if (data && data.returnHtml) {
+    return html;
+  }
+  
   const w = window.open('', '_blank', 'fullscreen=yes,resizable=yes,scrollbars=yes')
   if (!w) return false
   w.document.open()

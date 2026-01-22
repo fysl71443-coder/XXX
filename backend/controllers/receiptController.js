@@ -35,7 +35,8 @@ export async function list(req, res) {
         o.created_at,
         o.branch,
         o.customer_name,
-        o.lines as items
+        o.lines as items,
+        o.receipt_html
       FROM orders o
       WHERE o.printed_at IS NOT NULL
     `;
@@ -101,7 +102,8 @@ export async function list(req, res) {
       }
       return {
         ...row,
-        items
+        items,
+        receipt_html: row.receipt_html || null // Include saved receipt HTML
       };
     });
 
@@ -161,17 +163,40 @@ export async function get(req, res) {
 /**
  * Mark order as printed
  * POST /api/receipts/:id/mark-printed
+ * Body: { receipt_html?: string } - Optional receipt HTML to save
  */
 export async function markPrinted(req, res) {
   try {
     const id = parseInt(req.params.id, 10);
+    const { receipt_html } = req.body || {};
+
+    // First, ensure receipt_html column exists
+    try {
+      await pool.query(`
+        ALTER TABLE orders 
+        ADD COLUMN IF NOT EXISTS receipt_html TEXT
+      `);
+    } catch (colErr) {
+      // Column might already exist, ignore error
+      console.log('[RECEIPTS] receipt_html column check:', colErr.message);
+    }
+
+    const updateFields = ['printed_at = COALESCE(printed_at, NOW())'];
+    const params = [];
+    let paramIndex = 1;
+
+    if (receipt_html) {
+      updateFields.push(`receipt_html = $${paramIndex}`);
+      params.push(receipt_html);
+      paramIndex++;
+    }
 
     const { rows } = await pool.query(`
       UPDATE orders
-      SET printed_at = COALESCE(printed_at, NOW())
-      WHERE id = $1
+      SET ${updateFields.join(', ')}
+      WHERE id = $${paramIndex}
       RETURNING *
-    `, [id]);
+    `, [...params, id]);
 
     if (!rows || rows.length === 0) {
       return res.status(404).json({ error: 'not_found' });

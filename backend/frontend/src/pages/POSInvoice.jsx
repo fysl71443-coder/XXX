@@ -1587,13 +1587,20 @@ export default function POSInvoice(){
             paymentMethod: String(paymentMethod||'').toUpperCase(),
             paymentLines: paymentLinesOut
           }
+          // Generate and print receipt, also get HTML for saving
+          const receiptHtml = await print({ type: 'thermal', template: 'posInvoice', data: { ...data, returnHtml: true }, autoPrint: false })
+          // Print the receipt
           await print({ type: 'thermal', template: 'posInvoice', data, autoPrint: true })
-          // Mark order as printed
+          // Mark order as printed and save receipt HTML
           try {
             const token = localStorage.getItem('token')
             await fetch(`/api/receipts/${id}/mark-printed`, {
               method: 'POST',
-              headers: { 'Authorization': `Bearer ${token}` }
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ receipt_html: receiptHtml || null })
             })
           } catch {}
           if (process.env.NODE_ENV === 'development') {
@@ -1761,7 +1768,24 @@ export default function POSInvoice(){
           paymentMethod: 'CREDIT',
           paymentLines: []
         }
+        // Generate and print receipt, also get HTML for saving
+        const receiptHtml2 = await print({ type: 'thermal', template: 'posInvoice', data: { ...data, returnHtml: true }, autoPrint: false })
+        // Print the receipt
         await print({ type: 'thermal', template: 'posInvoice', data, autoPrint: true })
+        // Save receipt HTML if we have an order ID
+        if (res?.order_id || res?.id) {
+          try {
+            const token = localStorage.getItem('token')
+            await fetch(`/api/receipts/${res.order_id || res.id}/mark-printed`, {
+              method: 'POST',
+              headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ receipt_html: receiptHtml2 || null })
+            })
+          } catch {}
+        }
       } catch {}
       try {
         const norm = (v)=>{ const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'_'); if (s==='palace_india' || s==='palce_india') return 'place_india'; return s }

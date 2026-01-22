@@ -15,7 +15,12 @@ export async function print({ type, template, data, autoPrint }){
     } catch (_) {
       // Fallback to browser thermal HTML print
     }
-    return printThermal(String(template||'posInvoice'), data||{}, (typeof autoPrint==='boolean')?autoPrint:undefined)
+    const result = await printThermal(String(template||'posInvoice'), data||{}, (typeof autoPrint==='boolean')?autoPrint:undefined)
+    // If data.returnHtml is true, return the HTML string
+    if (data && data.returnHtml && typeof result === 'string') {
+      return result
+    }
+    return result
   }
   if (t === 'pdf') return printPdf(String(template||'generic'), data||{}, !!autoPrint)
   return Promise.resolve(false)
