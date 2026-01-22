@@ -548,14 +548,14 @@ export async function rollover(req, res) {
         a.id as account_id,
         a.account_number,
         a.name as account_name,
-        a.account_type,
+        a.type as account_type,
         COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) as balance
       FROM accounts a
       LEFT JOIN journal_postings jp ON jp.account_id = a.id
       LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id
       WHERE je.date BETWEEN $1 AND $2
         OR je.id IS NULL
-      GROUP BY a.id, a.account_number, a.name, a.account_type
+      GROUP BY a.id, a.account_number, a.name, a.type
       HAVING COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) != 0
     `, [sourceYear.start_date, sourceYear.end_date]);
 
@@ -668,7 +668,7 @@ export async function compareYears(req, res) {
       // Account balances year 1
       pool.query(`
         SELECT 
-          a.id, a.account_number, a.name, a.account_type,
+          a.id, a.account_number, a.name, a.type as account_type,
           COALESCE(SUM(jp.debit), 0) as total_debit,
           COALESCE(SUM(jp.credit), 0) as total_credit,
           COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) as balance
@@ -676,14 +676,14 @@ export async function compareYears(req, res) {
         LEFT JOIN journal_postings jp ON jp.account_id = a.id
         LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id
           AND je.date BETWEEN $1 AND $2
-        GROUP BY a.id, a.account_number, a.name, a.account_type
+        GROUP BY a.id, a.account_number, a.name, a.type
         ORDER BY a.account_number
       `, [fy1.start_date, fy1.end_date]),
 
       // Account balances year 2
       pool.query(`
         SELECT 
-          a.id, a.account_number, a.name, a.account_type,
+          a.id, a.account_number, a.name, a.type as account_type,
           COALESCE(SUM(jp.debit), 0) as total_debit,
           COALESCE(SUM(jp.credit), 0) as total_credit,
           COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) as balance
@@ -691,7 +691,7 @@ export async function compareYears(req, res) {
         LEFT JOIN journal_postings jp ON jp.account_id = a.id
         LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id
           AND je.date BETWEEN $1 AND $2
-        GROUP BY a.id, a.account_number, a.name, a.account_type
+        GROUP BY a.id, a.account_number, a.name, a.type
         ORDER BY a.account_number
       `, [fy2.start_date, fy2.end_date]),
 
@@ -912,7 +912,7 @@ export async function getNotifications(req, res) {
     }
 
     // Check for unbalanced entries
-    const { rows: unbalanced } = await pool.query(`
+    const unbalanced = await pool.query(`
       SELECT COUNT(*) as count
       FROM journal_entries je
       WHERE je.date BETWEEN $1 AND $2
@@ -923,7 +923,8 @@ export async function getNotifications(req, res) {
         ) != 0
     `, [`${currentYear}-01-01`, `${currentYear}-12-31`]);
 
-    if (parseInt(unbalanced.rows[0]?.count || 0, 10) > 0) {
+    if (unbalanced.rows && unbalanced.rows.length > 0 && parseInt(unbalanced.rows[0]?.count || 0, 10) > 0) {
+      const count = parseInt(unbalanced.rows[0].count || 0, 10);
       notifications.push({
         id: 'unbalanced_entries',
         type: 'error',
@@ -931,8 +932,8 @@ export async function getNotifications(req, res) {
         icon: '⚖️',
         title: 'قيود غير متوازنة',
         titleEn: 'Unbalanced Entries',
-        message: `يوجد ${unbalanced.rows[0].count} قيد غير متوازن يحتاج مراجعة`,
-        messageEn: `${unbalanced.rows[0].count} unbalanced entries need review`,
+        message: `يوجد ${count} قيد غير متوازن يحتاج مراجعة`,
+        messageEn: `${count} unbalanced entries need review`,
         action: 'review_journal',
         actionLabel: 'مراجعة القيود',
         actionLabelEn: 'Review Journal'
