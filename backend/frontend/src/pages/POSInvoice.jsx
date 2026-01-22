@@ -1149,6 +1149,14 @@ export default function POSInvoice(){
     // CRITICAL: Log final order_id before building payload
     console.log('[ISSUE INVOICE] Final order_id determined:', finalOrderId, 'type:', typeof finalOrderId);
     
+    // CRITICAL: Do not send "Auto" as invoice number - backend will generate it
+    // Invoice number should only be sent if it's a real number (not placeholder)
+    const invoiceNumberToSend = (invoiceNumber && 
+                                  String(invoiceNumber).trim() !== '' && 
+                                  String(invoiceNumber).toLowerCase() !== 'auto') 
+                                  ? String(invoiceNumber) 
+                                  : null;
+    
     const payload = {
       order_id: finalOrderId,  // CRITICAL: Send order_id as NUMBER - must match backend exactly
       tableId: (/^\d+$/.test(String(table))) ? Number(table) : undefined,
@@ -1158,7 +1166,7 @@ export default function POSInvoice(){
       lines: lines,  // Send lines instead of items
       customer_id: partnerId||null,  // Use customer_id instead of customerId
       payment_method: pmSend,  // Use payment_method instead of paymentType
-      number: String(invoiceNumber||''),  // Use number instead of invoiceNumber
+      number: invoiceNumberToSend,  // CRITICAL: Send null if "Auto" - backend will generate
       discount_pct: Number(discountPct||0),  // Use discount_pct instead of discountPct
       tax_pct: taxPctVal,  // Use tax_pct instead of taxPct
       subtotal: subtotalVal,
