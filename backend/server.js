@@ -931,11 +931,14 @@ app.post("/debug/purge-unlinked", authenticateToken, authorize("journal", "delet
       orders: 0
     };
     
-    // 1. Delete expenses that have NO journal_entry_id (completely unlinked)
-    // Do NOT delete expenses linked to draft journal entries
+    // 1. Delete expenses that are orphaned (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
     const { rows: unlinkedExpenses } = await client.query(`
       SELECT id FROM expenses 
-      WHERE journal_entry_id IS NULL
+      WHERE (
+        journal_entry_id IS NULL
+        OR (status IN ('posted', 'reversed') AND journal_entry_id IS NULL)
+      )
     `);
     
     for (const expense of unlinkedExpenses || []) {
@@ -943,11 +946,14 @@ app.post("/debug/purge-unlinked", authenticateToken, authorize("journal", "delet
       deletedCount.expenses++;
     }
     
-    // 2. Delete invoices that have NO journal_entry_id (completely unlinked)
-    // Do NOT delete invoices linked to draft journal entries
+    // 2. Delete invoices that are orphaned (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
     const { rows: unlinkedInvoices } = await client.query(`
       SELECT id FROM invoices 
-      WHERE journal_entry_id IS NULL
+      WHERE (
+        journal_entry_id IS NULL
+        OR (status IN ('posted', 'reversed') AND journal_entry_id IS NULL)
+      )
     `);
     
     for (const invoice of unlinkedInvoices || []) {
@@ -955,10 +961,14 @@ app.post("/debug/purge-unlinked", authenticateToken, authorize("journal", "delet
       deletedCount.invoices++;
     }
     
-    // 3. Delete supplier_invoices that have NO journal_entry_id (completely unlinked)
+    // 3. Delete supplier_invoices that are orphaned (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
     const { rows: unlinkedSupplierInvoices } = await client.query(`
       SELECT id FROM supplier_invoices 
-      WHERE journal_entry_id IS NULL
+      WHERE (
+        journal_entry_id IS NULL
+        OR (status IN ('posted', 'reversed') AND journal_entry_id IS NULL)
+      )
     `);
     
     for (const supplierInvoice of unlinkedSupplierInvoices || []) {
@@ -1009,11 +1019,14 @@ app.post("/api/debug/purge-unlinked", authenticateToken, authorize("journal", "d
       orders: 0
     };
     
-    // 1. Delete expenses that have NO journal_entry_id (completely unlinked)
-    // Do NOT delete expenses linked to draft journal entries
+    // 1. Delete expenses that are orphaned (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
     const { rows: unlinkedExpenses } = await client.query(`
       SELECT id FROM expenses 
-      WHERE journal_entry_id IS NULL
+      WHERE (
+        journal_entry_id IS NULL
+        OR (status IN ('posted', 'reversed') AND journal_entry_id IS NULL)
+      )
     `);
     
     for (const expense of unlinkedExpenses || []) {
@@ -1021,11 +1034,14 @@ app.post("/api/debug/purge-unlinked", authenticateToken, authorize("journal", "d
       deletedCount.expenses++;
     }
     
-    // 2. Delete invoices that have NO journal_entry_id (completely unlinked)
-    // Do NOT delete invoices linked to draft journal entries
+    // 2. Delete invoices that are orphaned (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
     const { rows: unlinkedInvoices } = await client.query(`
       SELECT id FROM invoices 
-      WHERE journal_entry_id IS NULL
+      WHERE (
+        journal_entry_id IS NULL
+        OR (status IN ('posted', 'reversed') AND journal_entry_id IS NULL)
+      )
     `);
     
     for (const invoice of unlinkedInvoices || []) {
@@ -1033,10 +1049,14 @@ app.post("/api/debug/purge-unlinked", authenticateToken, authorize("journal", "d
       deletedCount.invoices++;
     }
     
-    // 3. Delete supplier_invoices that have NO journal_entry_id (completely unlinked)
+    // 3. Delete supplier_invoices that are orphaned (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
     const { rows: unlinkedSupplierInvoices } = await client.query(`
       SELECT id FROM supplier_invoices 
-      WHERE journal_entry_id IS NULL
+      WHERE (
+        journal_entry_id IS NULL
+        OR (status IN ('posted', 'reversed') AND journal_entry_id IS NULL)
+      )
     `);
     
     for (const supplierInvoice of unlinkedSupplierInvoices || []) {
