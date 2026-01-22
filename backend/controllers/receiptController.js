@@ -11,6 +11,17 @@ import { pool } from '../db.js';
  */
 export async function list(req, res) {
   try {
+    // First, ensure receipt_html column exists
+    try {
+      await pool.query(`
+        ALTER TABLE orders 
+        ADD COLUMN IF NOT EXISTS receipt_html TEXT
+      `);
+    } catch (colErr) {
+      // Column might already exist, ignore error
+      console.log('[RECEIPTS] receipt_html column check:', colErr.message);
+    }
+
     const { 
       invoiceNumber, 
       date, 

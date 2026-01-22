@@ -680,6 +680,14 @@ async function ensureSchema() {
     await pool.query(`
       ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_id INTEGER
     `);
+    // Add printed_at column if it doesn't exist (for tracking when receipt was printed)
+    await pool.query(`
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS printed_at TIMESTAMP WITH TIME ZONE
+    `);
+    // Add receipt_html column if it doesn't exist (for storing rendered receipt HTML)
+    await pool.query(`
+      ALTER TABLE orders ADD COLUMN IF NOT EXISTS receipt_html TEXT
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
