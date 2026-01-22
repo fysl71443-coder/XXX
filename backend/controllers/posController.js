@@ -411,7 +411,27 @@ export async function issueInvoice(req, res) {
     console.log('[ISSUE DEBUG] order_id:', order_id);
     console.log('[ISSUE DEBUG] b.lines type:', typeof b.lines, 'isArray:', Array.isArray(b.lines));
     
-    const number = b.number || null;
+    // CRITICAL: Generate invoice number if "Auto" or empty/null
+    // Invoice number MUST be generated on backend - never accept "Auto" from frontend
+    let number = b.number || null;
+    if (!number || number === 'Auto' || String(number).trim() === '' || String(number).toLowerCase() === 'auto') {
+      // Generate next invoice number using same logic as invoiceController.nextNumber
+      const { rows } = await client.query(
+        'SELECT number FROM invoices WHERE number IS NOT NULL AND number ~ $1 ORDER BY id DESC LIMIT 1',
+        ['^INV/\\d{4}/\\d+$']
+      );
+      const last = rows && rows[0] ? String(rows[0].number || '') : '';
+      const year = (new Date()).getFullYear();
+      const m = /INV\/(\d{4})\/(\d+)/.exec(last);
+      let nextN = 1;
+      if (m && Number(m[1]) === year) {
+        const parsed = Number(m[2] || 0);
+        nextN = isFinite(parsed) && parsed > 0 ? parsed + 1 : 1;
+      }
+      number = `INV/${year}/${String(nextN).padStart(10, '0')}`;
+      console.log('[ISSUE] Generated invoice number:', number);
+    }
+    
     const date = b.date || new Date();
     const customer_id = b.customer_id || null;
     const subtotal = Number(b.subtotal||0);
