@@ -2104,6 +2104,10 @@ app.post("/journal/:id/return-to-draft", authenticateToken, authorize("journal",
         // Update payroll run status to draft and clear journal_entry_id
         await client.query('UPDATE payroll_runs SET status = $1, journal_entry_id = NULL, posted_at = NULL WHERE id = $2', ['draft', entry.reference_id]);
         console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated payroll run ${entry.reference_id} to draft`);
+      } else if (entry.reference_type === 'supplier_invoice') {
+        // Update supplier invoice status to draft and clear journal_entry_id
+        await client.query('UPDATE supplier_invoices SET status = $1, journal_entry_id = NULL WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated supplier invoice ${entry.reference_id} to draft`);
       }
     }
     
@@ -2161,6 +2165,10 @@ app.post("/api/journal/:id/return-to-draft", authenticateToken, authorize("journ
         // Update payroll run status to draft and clear journal_entry_id
         await client.query('UPDATE payroll_runs SET status = $1, journal_entry_id = NULL, posted_at = NULL WHERE id = $2', ['draft', entry.reference_id]);
         console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated payroll run ${entry.reference_id} to draft`);
+      } else if (entry.reference_type === 'supplier_invoice') {
+        // Update supplier invoice status to draft and clear journal_entry_id
+        await client.query('UPDATE supplier_invoices SET status = $1, journal_entry_id = NULL WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated supplier invoice ${entry.reference_id} to draft`);
       }
     }
     
@@ -2225,6 +2233,11 @@ app.delete("/journal/:id", authenticateToken, authorize("journal", "delete"), as
         await client.query('DELETE FROM payroll_run_items WHERE run_id = $1', [entry.reference_id]);
         await client.query('DELETE FROM payroll_runs WHERE id = $1', [entry.reference_id]);
         console.log(`[JOURNAL] Deleted journal entry ${id}, deleted payroll run ${entry.reference_id}`);
+      } else if (entry.reference_type === 'supplier_invoice') {
+        // Delete supplier invoice and clear journal_entry_id reference
+        await client.query('UPDATE supplier_invoices SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM supplier_invoices WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted supplier invoice ${entry.reference_id}`);
       }
     }
     
@@ -2298,6 +2311,11 @@ app.delete("/api/journal/:id", authenticateToken, authorize("journal", "delete")
         await client.query('DELETE FROM payroll_run_items WHERE run_id = $1', [entry.reference_id]);
         await client.query('DELETE FROM payroll_runs WHERE id = $1', [entry.reference_id]);
         console.log(`[JOURNAL] Deleted journal entry ${id}, deleted payroll run ${entry.reference_id}`);
+      } else if (entry.reference_type === 'supplier_invoice') {
+        // Delete supplier invoice and clear journal_entry_id reference
+        await client.query('UPDATE supplier_invoices SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM supplier_invoices WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted supplier invoice ${entry.reference_id}`);
       }
     }
     
@@ -4629,9 +4647,70 @@ app.post("/employees/:id/advance/collect", authenticateToken, authorize("payroll
 // END OF PAYROLL API ENDPOINTS
 // ============================================
 
+// POST /api/expenses/cleanup-orphaned - Cleanup orphaned expenses (posted/reversed without journal_entry_id)
+// Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
+app.post("/api/expenses/cleanup-orphaned", authenticateToken, authorize("expenses","delete"), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    // Find expenses that are posted/reversed but have no journal_entry_id
+    const { rows: orphanedExpenses } = await client.query(`
+      SELECT id, invoice_number, status, journal_entry_id, amount, total, date
+      FROM expenses
+      WHERE (status = 'posted' OR status = 'reversed')
+        AND journal_entry_id IS NULL
+    `);
+    
+    if (orphanedExpenses.length === 0) {
+      await client.query('COMMIT');
+      return res.json({ deleted: 0, items: [], message: 'لا توجد فواتير يتيمة' });
+    }
+    
+    // Delete orphaned expenses
+    const deletedIds = orphanedExpenses.map(e => e.id);
+    await client.query(
+      `DELETE FROM expenses WHERE id = ANY($1::int[])`,
+      [deletedIds]
+    );
+    
+    await client.query('COMMIT');
+    
+    console.log(`[EXPENSES] Cleaned up ${deletedIds.length} orphaned expenses`);
+    
+    res.json({
+      deleted: deletedIds.length,
+      items: orphanedExpenses.map(e => ({
+        id: e.id,
+        invoice_number: e.invoice_number || `EXP-${e.id}`,
+        status: e.status,
+        amount: e.total || e.amount,
+        date: e.date
+      })),
+      message: `تم حذف ${deletedIds.length} فاتورة يتيمة`
+    });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[EXPENSES] Error cleaning up orphaned expenses:', e);
+    res.status(500).json({ error: "server_error", details: e?.message });
+  } finally {
+    client.release();
+  }
+});
+
 app.get("/expenses", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at FROM expenses ORDER BY id DESC');
+    // CRITICAL: Filter out orphaned expenses (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
+    const { rows } = await pool.query(`
+      SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, created_at 
+      FROM expenses 
+      WHERE NOT (
+        (status = 'posted' OR status = 'reversed') 
+        AND journal_entry_id IS NULL
+      )
+      ORDER BY id DESC
+    `);
     // Map items to format expected by frontend
     const items = (rows || []).map(row => {
       const status = String(row.status || 'draft');
@@ -4658,7 +4737,17 @@ app.get("/expenses", authenticateToken, async (req, res) => {
 });
 app.get("/api/expenses", authenticateToken, async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, journal_entry_id, created_at FROM expenses ORDER BY id DESC');
+    // CRITICAL: Filter out orphaned expenses (posted/reversed without journal_entry_id)
+    // Rule: كل عملية لها قيد، إذا كانت الفاتورة posted/reversed بدون قيد فهي يتيمة ويجب حذفها
+    const { rows } = await pool.query(`
+      SELECT id, invoice_number, type, amount, COALESCE(total, amount) as total, account_code, partner_id, description, status, branch, date, payment_method, items, journal_entry_id, created_at 
+      FROM expenses 
+      WHERE NOT (
+        (status = 'posted' OR status = 'reversed') 
+        AND journal_entry_id IS NULL
+      )
+      ORDER BY id DESC
+    `);
     // Map items to format expected by frontend
     const items = (rows || []).map(row => {
       const status = String(row.status || 'draft');
