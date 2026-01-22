@@ -2,7 +2,7 @@ import './App.css';
 import { motion } from 'framer-motion';
 import { useEffect, useState, Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
-import { FaUsers, FaTruck, FaUserTie, FaReceipt, FaBox, FaCashRegister, FaShoppingCart, FaChartPie, FaCog } from 'react-icons/fa';
+import { FaUsers, FaTruck, FaUserTie, FaReceipt, FaBox, FaCashRegister, FaShoppingCart, FaChartPie, FaCog, FaCalendarAlt } from 'react-icons/fa';
 import { GiMoneyStack } from 'react-icons/gi';
 import { settings as apiSettings } from './services/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -68,6 +68,7 @@ const LoadingFallback = () => (
 const modules = [
   { key: 'accounting', titleAr: 'المحاسبة', titleEn: 'Accounting', icon: GiMoneyStack, color: 'bg-primary-600' },
   { key: 'journal', titleAr: 'القيود اليومية', titleEn: 'Journal', icon: GiMoneyStack, color: 'bg-primary-600' },
+  { key: 'fiscal_years', titleAr: 'السنوات المالية', titleEn: 'Fiscal Years', icon: FaCalendarAlt, color: 'bg-purple-600' },
   { key: 'clients', titleAr: 'العملاء', titleEn: 'Clients', icon: FaUsers, color: 'bg-primary-600' },
   { key: 'suppliers', titleAr: 'الموردون', titleEn: 'Suppliers', icon: FaTruck, color: 'bg-primary-600' },
   { key: 'employees', titleAr: 'الموظفون', titleEn: 'Employees', icon: FaUserTie, color: 'bg-primary-600' },
@@ -124,6 +125,13 @@ function Dashboard() {
           {modules.filter(({ key }) => {
             const userIsAdmin = isAdmin(user);
             if (userIsAdmin) return true
+            // Fiscal years should be visible to admins and users with accounting permissions
+            if (key === 'fiscal_years') {
+              const accountingPerms = permissionsMap['accounting'] || null;
+              if (!accountingPerms) return false;
+              const g = accountingPerms._global || {};
+              return Object.values(g).some(v => v === true);
+            }
             const map = { clients:'clients', suppliers:'suppliers', employees:'employees', expenses:'expenses', products:'products', sales:'sales', purchase:'purchases', reports:'reports', accounting:'accounting', journal:'journal' }
             const sc = map[key]
             if (!sc) return true
@@ -147,6 +155,7 @@ function Dashboard() {
                 if (key === 'products') navigate('/products')
                 if (key === 'accounting') navigate('/accounting')
                 if (key === 'journal') navigate('/journal')
+                if (key === 'fiscal_years') navigate('/fiscal-years')
                 if (key === 'employees') navigate('/employees')
                 if (key === 'expenses') navigate('/expenses')
                 if (key === 'purchase') navigate('/supplier-invoices/new')
@@ -162,7 +171,12 @@ function Dashboard() {
                 </div>
                 <div className="flex-1">
                   <h3 className="text-lg font-semibold text-gray-800">{lang==='ar'?titleAr:titleEn}</h3>
-                  <p className="text-sm text-gray-500">{lang==='ar'?'عرض التفاصيل، تعديل، حذف، إنشاء PDF':'View details, edit, delete, generate PDF'}</p>
+                  <p className="text-sm text-gray-500">
+                    {key === 'fiscal_years' 
+                      ? (lang==='ar'?'إدارة السنوات المالية وترحيلها':'Manage and rollover fiscal years')
+                      : (lang==='ar'?'عرض التفاصيل، تعديل، حذف، إنشاء PDF':'View details, edit, delete, generate PDF')
+                    }
+                  </p>
                 </div>
               </div>
               <div className="px-6 pb-4 flex gap-2">
