@@ -8249,7 +8249,7 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
     
     // Get account IDs
     const { rows: accountRows } = await pool.query(
-      `SELECT id FROM accounts WHERE account_code = ANY($1) OR account_number = ANY($1)`,
+      `SELECT id FROM accounts WHERE account_code = ANY($1::text[]) OR account_number = ANY($1::text[])`,
       [salesAccountCodes]
     );
     const salesAccountIds = accountRows.map(r => r.id);
@@ -8259,27 +8259,31 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
     }
     
     // Use date range to handle timezone correctly
-    // Convert input date to UTC range: from 00:00:00 UTC to 23:59:59 UTC of the target date
-    // But since dates are stored in UTC, we need to account for timezone offset
     // For Saudi Arabia (UTC+3), a local date like 2026-01-22 means UTC range 2026-01-21 21:00:00 to 2026-01-22 20:59:59
-    // Simpler approach: use date range from date 00:00:00 to date+1 00:00:00 (exclusive)
-    const dateStart = new Date(date + 'T00:00:00Z').toISOString();
-    const dateEnd = new Date(new Date(date + 'T00:00:00Z').getTime() + 24 * 60 * 60 * 1000).toISOString();
+    // But we'll use a wider range to catch all entries: from date-1 00:00:00 UTC to date+1 00:00:00 UTC
+    // This ensures we catch entries that were created on the local date but stored in UTC
+    const dateObj = new Date(date + 'T00:00:00Z');
+    const dateStart = new Date(dateObj.getTime() - 24 * 60 * 60 * 1000).toISOString(); // date-1 00:00:00 UTC
+    const dateEnd = new Date(dateObj.getTime() + 48 * 60 * 60 * 1000).toISOString(); // date+2 00:00:00 UTC
     
+    // Build WHERE conditions with proper parameter indexing
+    // Use IN instead of ANY for better compatibility
+    const accountIdPlaceholders = salesAccountIds.map((_, i) => `$${i + 1}`).join(', ');
     let whereConditions = [
       `je.status = 'posted'`,
-      `jp.account_id = ANY($1::int[])`,
-      `je.date >= $2::timestamptz AND je.date < $3::timestamptz`
+      `jp.account_id IN (${accountIdPlaceholders})`,
+      `je.date >= $${salesAccountIds.length + 1} AND je.date < $${salesAccountIds.length + 2}`
     ];
-    const params = [salesAccountIds, dateStart, dateEnd];
-    let paramIndex = 4;
+    const params = [...salesAccountIds, dateStart, dateEnd];
+    let paramIndex = salesAccountIds.length + 3;
     
     if (branch && branch !== 'all' && branch !== 'كل الفروع') {
       whereConditions.push(`je.branch = $${paramIndex++}`);
       params.push(branch);
     }
     
-    const query = `
+    // Get sales revenue (credit from sales accounts)
+    const salesQuery = `
       SELECT 
         je.id,
         je.entry_number,
@@ -8288,7 +8292,7 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
         je.reference_type,
         je.reference_id,
         je.branch,
-        COALESCE(SUM(jp.credit), 0) as amount
+        COALESCE(SUM(CASE WHEN jp.account_id IN (${accountIdPlaceholders}) THEN jp.credit ELSE 0 END), 0) as revenue_amount
       FROM journal_entries je
       JOIN journal_postings jp ON jp.journal_entry_id = je.id
       WHERE ${whereConditions.join(' AND ')}
@@ -8296,28 +8300,79 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
       ORDER BY je.date, je.id
     `;
     
-    const { rows } = await pool.query(query, params);
+    // Get VAT (credit from VAT account 2141)
+    const vatQuery = `
+      SELECT 
+        je.id,
+        COALESCE(SUM(CASE WHEN a.account_code = '2141' OR a.account_number = '2141' THEN jp.credit ELSE 0 END), 0) as tax_amount
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
+      JOIN accounts a ON a.id = jp.account_id
+      WHERE je.status = 'posted'
+        AND je.date >= $${salesAccountIds.length + 1} AND je.date < $${salesAccountIds.length + 2}
+        ${branch && branch !== 'all' && branch !== 'كل الفروع' ? `AND je.branch = $${salesAccountIds.length + 3}` : ''}
+      GROUP BY je.id
+    `;
     
-    const items = (rows || []).map(row => ({
-      id: row.id,
-      entry_number: row.entry_number,
-      date: row.date,
-      description: row.description,
-      related_type: row.reference_type, // Map reference_type to related_type for frontend compatibility
-      related_id: row.reference_id, // Map reference_id to related_id for frontend compatibility
-      branch: row.branch,
-      amount: Number(row.amount || 0)
-    }));
+    // Get discount (debit from discount account 4190, if exists)
+    const discountQuery = `
+      SELECT 
+        je.id,
+        COALESCE(SUM(CASE WHEN a.account_code = '4190' OR a.account_number = '4190' THEN jp.debit ELSE 0 END), 0) as discount_amount
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
+      JOIN accounts a ON a.id = jp.account_id
+      WHERE je.status = 'posted'
+        AND je.date >= $${salesAccountIds.length + 1} AND je.date < $${salesAccountIds.length + 2}
+        ${branch && branch !== 'all' && branch !== 'كل الفروع' ? `AND je.branch = $${salesAccountIds.length + 3}` : ''}
+      GROUP BY je.id
+    `;
     
-    const totalAmount = items.reduce((s, i) => s + i.amount, 0);
+    const [salesResult, vatResult, discountResult] = await Promise.all([
+      pool.query(salesQuery, params),
+      pool.query(vatQuery, params),
+      pool.query(discountQuery, params)
+    ]);
+    
+    // Create maps for VAT and discount
+    const vatMap = new Map((vatResult.rows || []).map(r => [r.id, Number(r.tax_amount || 0)]));
+    const discountMap = new Map((discountResult.rows || []).map(r => [r.id, Number(r.discount_amount || 0)]));
+    
+    const items = (salesResult.rows || []).map(row => {
+      const revenue = Number(row.revenue_amount || 0);
+      const tax = vatMap.get(row.id) || 0;
+      const discount = discountMap.get(row.id) || 0;
+      const total = revenue + tax;
+      
+      return {
+        id: row.id,
+        entry_number: row.entry_number,
+        date: row.date,
+        description: row.description,
+        related_type: row.reference_type,
+        related_id: row.reference_id,
+        branch: row.branch,
+        revenue_amount: revenue,
+        amount: revenue, // For backward compatibility
+        tax_amount: tax,
+        discount_amount: discount,
+        total_sales: total
+      };
+    });
+    
+    const totalRevenue = items.reduce((s, i) => s + i.revenue_amount, 0);
+    const totalTax = items.reduce((s, i) => s + i.tax_amount, 0);
+    const totalDiscount = items.reduce((s, i) => s + i.discount_amount, 0);
+    const totalSales = items.reduce((s, i) => s + i.total_sales, 0);
     
     res.json({
       items,
+      invoices: items, // Alias for backward compatibility
       totals: {
-        gross: totalAmount,
-        net: totalAmount,
-        tax: 0,
-        discount: 0,
+        gross: totalSales,
+        net: totalRevenue,
+        tax: totalTax,
+        discount: totalDiscount,
         count: items.length
       },
       date,
