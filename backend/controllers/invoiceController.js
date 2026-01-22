@@ -8,7 +8,7 @@ import { parseIntStrict, getBranchId } from '../utils/validation.js';
  */
 export async function list(req, res) {
   try {
-    const { type, partner_id, status, from, to, branch, due, order_id } = req.query || {};
+    const { type, partner_id, status, from, to, branch, due } = req.query || {};
     
     let conditions = [];
     let params = [];
@@ -61,13 +61,6 @@ export async function list(req, res) {
       paramIndex++;
     }
     
-    // Filter by order_id
-    if (order_id) {
-      conditions.push(`i.order_id = $${paramIndex}`);
-      params.push(Number(order_id));
-      paramIndex++;
-    }
-    
     // Due invoices filter
     if (due === '1') {
       conditions.push(`(i.status = 'open' OR i.status = 'partial')`);
@@ -94,7 +87,6 @@ export async function list(req, res) {
         i.status, 
         i.branch, 
         i.journal_entry_id,
-        i.order_id,
         i.type,
         i.created_at,
         p.name as partner_name,
@@ -133,7 +125,6 @@ export async function list(req, res) {
       status: row.status,
       branch: row.branch,
       journal_entry_id: row.journal_entry_id,
-      order_id: row.order_id,
       type: row.type || 'sale',
       created_at: row.created_at,
       // Determine if cash by ledger
