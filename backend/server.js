@@ -5591,8 +5591,97 @@ app.delete("/api/expenses/:id", authenticateToken, authorize("expenses","delete"
 // Supplier Invoices
 async function handleGetSupplierInvoices(req, res) {
   try {
-    const { rows } = await pool.query('SELECT id, number, date, due_date, supplier_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, created_at FROM supplier_invoices ORDER BY id DESC');
-    res.json({ items: rows || [] });
+    const { partner_id, status, branch } = req.query || {};
+    
+    let whereConditions = ['1=1'];
+    const params = [];
+    let paramIndex = 1;
+    
+    if (partner_id) {
+      whereConditions.push(`si.supplier_id = $${paramIndex++}`);
+      params.push(partner_id);
+    }
+    if (status) {
+      whereConditions.push(`si.status = $${paramIndex++}`);
+      params.push(status);
+    }
+    if (branch) {
+      whereConditions.push(`si.branch = $${paramIndex++}`);
+      params.push(branch);
+    }
+    
+    const query = `
+      SELECT 
+        si.id,
+        si.number as invoice_number,
+        si.date,
+        si.due_date,
+        si.supplier_id as partner_id,
+        si.subtotal,
+        si.discount_pct,
+        si.discount_amount,
+        si.tax_pct,
+        si.tax_amount,
+        si.total,
+        si.payment_method,
+        si.status,
+        si.branch,
+        si.created_at,
+        p.name as partner_name,
+        p.name_en as partner_name_en,
+        COALESCE((
+          SELECT SUM(pay.amount) 
+          FROM payments pay 
+          WHERE pay.invoice_id = si.id AND pay.party_type = 'supplier'
+        ), 0) as paid_amount,
+        COALESCE(si.total, 0) - COALESCE((
+          SELECT SUM(pay.amount) 
+          FROM payments pay 
+          WHERE pay.invoice_id = si.id AND pay.party_type = 'supplier'
+        ), 0) as outstanding_amount,
+        si.discount_amount as discount_total,
+        si.tax_amount as tax,
+        si.journal_entry_id,
+        (si.journal_entry_id IS NOT NULL) as has_posted_journal
+      FROM supplier_invoices si
+      LEFT JOIN partners p ON si.supplier_id = p.id
+      WHERE ${whereConditions.join(' AND ')}
+      ORDER BY si.id DESC
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    // Format dates and map response
+    const items = (rows || []).map(row => ({
+      id: row.id,
+      invoice_number: row.invoice_number || row.number || `SI-${row.id}`,
+      number: row.invoice_number || row.number || `SI-${row.id}`,
+      date: row.date ? new Date(row.date).toISOString().split('T')[0] : null,
+      due_date: row.due_date ? new Date(row.due_date).toISOString().split('T')[0] : null,
+      partner_id: row.partner_id,
+      partner: row.partner_name ? {
+        id: row.partner_id,
+        name: row.partner_name,
+        name_en: row.partner_name_en
+      } : null,
+      subtotal: Number(row.subtotal || 0),
+      discount_pct: Number(row.discount_pct || 0),
+      discount_amount: Number(row.discount_amount || 0),
+      discount_total: Number(row.discount_total || row.discount_amount || 0),
+      tax_pct: Number(row.tax_pct || 0),
+      tax_amount: Number(row.tax_amount || 0),
+      tax: Number(row.tax || row.tax_amount || 0),
+      total: Number(row.total || 0),
+      payment_method: row.payment_method,
+      status: row.status || 'draft',
+      branch: row.branch,
+      paid_amount: Number(row.paid_amount || 0),
+      outstanding_amount: Math.max(0, Number(row.outstanding_amount || 0)),
+      has_posted_journal: row.has_posted_journal || false,
+      created_at: row.created_at
+    }));
+    
+    res.json({ items });
   } catch (e) { 
     console.error('[SUPPLIER INVOICES] Error listing:', e);
     res.json({ items: [] }); 
