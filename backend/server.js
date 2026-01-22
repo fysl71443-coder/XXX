@@ -5754,8 +5754,108 @@ async function handleGetSupplierInvoiceNextNumber(req, res) {
 app.get("/supplier-invoices/next-number", authenticateToken, authorize("purchases","create"), handleGetSupplierInvoiceNextNumber);
 app.get("/api/supplier-invoices/next-number", authenticateToken, authorize("purchases","create"), handleGetSupplierInvoiceNextNumber);
 // Supplier Invoices - both /supplier-invoices and /api/supplier-invoices
-async function handleCreateSupplierInvoice(req, res) {
+// Create journal entry for supplier invoice
+async function createSupplierInvoiceJournalEntry(invoiceId, supplierId, subtotal, discount, tax, total, paymentMethod, branch, client = null) {
   try {
+    const db = client || pool;
+    
+    // Get next entry number
+    const entryNumber = await getNextEntryNumber();
+    
+    const postings = [];
+    
+    // Determine payment account based on payment method
+    let paymentAccountNumber = '1111'; // Default: Cash (1111)
+    if (paymentMethod && String(paymentMethod).toLowerCase() === 'bank') {
+      paymentAccountNumber = '1121'; // Bank account
+    }
+    
+    // Get supplier account (2111 - موردون)
+    const supplierAccountId = await getAccountIdByNumber('2111');
+    if (!supplierAccountId) {
+      throw new Error('JOURNAL_CREATION_FAILED: Supplier account (2111) not found');
+    }
+    
+    // Get purchases account (5100 series)
+    const purchasesAccountId = await getAccountIdByNumber('5100') || await getAccountIdByNumber('5101') || await getAccountIdByNumber('5102');
+    if (!purchasesAccountId) {
+      throw new Error('JOURNAL_CREATION_FAILED: Purchases account (5100/5101/5102) not found');
+    }
+    
+    // Determine if credit (unpaid) or cash payment
+    const isCredit = !paymentMethod || String(paymentMethod).toLowerCase() === 'credit' || String(paymentMethod).toLowerCase() === 'unpaid';
+    
+    // Debit: Purchases (net amount after discount)
+    postings.push({ account_id: purchasesAccountId, debit: subtotal - discount, credit: 0 });
+    
+    if (isCredit) {
+      // Credit purchase - Credit: Supplier Payable (2111)
+      postings.push({ account_id: supplierAccountId, debit: 0, credit: total });
+    } else {
+      // Cash/Bank payment - Credit: Cash/Bank
+      const paymentAccountId = await getAccountIdByNumber(paymentAccountNumber);
+      if (!paymentAccountId) {
+        throw new Error(`JOURNAL_CREATION_FAILED: Payment account (${paymentAccountNumber}) not found`);
+      }
+      postings.push({ account_id: paymentAccountId, debit: 0, credit: total });
+    }
+    
+    // Debit: VAT Input (2141) if tax > 0
+    // Note: 2141 is VAT Output, but we'll use it for both input and output for simplicity
+    // In a proper system, there should be separate accounts for VAT Input and Output
+    if (tax > 0) {
+      const vatAccountId = await getAccountIdByNumber('2141');
+      if (!vatAccountId) {
+        throw new Error('JOURNAL_CREATION_FAILED: VAT account (2141) not found');
+      }
+      // For supplier invoices, VAT is input tax (debit)
+      postings.push({ account_id: vatAccountId, debit: tax, credit: 0 });
+    }
+    
+    // Validate postings balance
+    const totalDebit = postings.reduce((sum, p) => sum + Number(p.debit || 0), 0);
+    const totalCredit = postings.reduce((sum, p) => sum + Number(p.credit || 0), 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      console.error('[ACCOUNTING] Supplier invoice journal entry unbalanced:', { totalDebit, totalCredit, postings });
+      throw new Error(`JOURNAL_CREATION_FAILED: Unbalanced entry (Debit: ${totalDebit}, Credit: ${totalCredit})`);
+    }
+    
+    // Extract period from date
+    const entryDate = new Date();
+    const period = entryDate.toISOString().slice(0, 7); // YYYY-MM
+    
+    // Create journal entry with status='posted'
+    const { rows: entryRows } = await db.query(
+      'INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+      [entryNumber, `فاتورة مورد #${invoiceId}`, entryDate, period, 'supplier_invoice', invoiceId, 'posted', branch || 'china_town']
+    );
+    
+    const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
+    if (!entryId) {
+      throw new Error('JOURNAL_CREATION_FAILED: Failed to create journal entry record');
+    }
+    
+    // Create postings
+    for (const posting of postings) {
+      await db.query(
+        'INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit) VALUES ($1,$2,$3,$4)',
+        [entryId, posting.account_id, posting.debit, posting.credit]
+      );
+    }
+    
+    console.log(`[ACCOUNTING] Created journal entry #${entryNumber} (ID: ${entryId}) for supplier invoice ${invoiceId}`);
+    return entryId;
+  } catch (e) {
+    console.error('[ACCOUNTING] Error creating journal entry for supplier invoice:', invoiceId, e?.message || e);
+    throw e;
+  }
+}
+
+async function handleCreateSupplierInvoice(req, res) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
     console.log('[SUPPLIER INVOICE] Creating invoice | userId=', req.user?.id, 'email=', req.user?.email);
     const b = req.body || {};
     console.log('[SUPPLIER INVOICE BODY]', JSON.stringify({ 
@@ -5768,29 +5868,99 @@ async function handleCreateSupplierInvoice(req, res) {
     }));
     
     const lines = Array.isArray(b.lines) ? b.lines : [];
-    const subtotal = Number(b.subtotal||0);
-    const discount_pct = Number(b.discount_pct||0);
-    const discount_amount = Number(b.discount_amount||0);
-    const tax_pct = Number(b.tax_pct||0);
-    const tax_amount = Number(b.tax_amount||0);
-    const total = Number(b.total||0);
+    
+    // Calculate totals from lines if not provided
+    let subtotal = Number(b.subtotal||0);
+    let discount_pct = Number(b.discount_pct||0);
+    let discount_amount = Number(b.discount_amount||0);
+    let tax_pct = Number(b.tax_pct||0);
+    let tax_amount = Number(b.tax_amount||0);
+    let total = Number(b.total||0);
+    
+    // If totals not provided, calculate from lines
+    if ((subtotal === 0 || !b.subtotal) && lines.length > 0) {
+      subtotal = lines.reduce((sum, l) => sum + (Number(l.qty||0) * Number(l.unit_price||0)), 0);
+      discount_amount = lines.reduce((sum, l) => sum + Number(l.discount||0), 0);
+      tax_amount = lines.reduce((sum, l) => {
+        const lineTotal = (Number(l.qty||0) * Number(l.unit_price||0)) - Number(l.discount||0);
+        return sum + (lineTotal * Number(l.tax||0.15));
+      }, 0);
+      total = subtotal - discount_amount + tax_amount;
+      discount_pct = subtotal > 0 ? (discount_amount / subtotal) * 100 : 0;
+      tax_pct = (subtotal - discount_amount) > 0 ? (tax_amount / (subtotal - discount_amount)) * 100 : 0;
+    }
+    
     const branch = b.branch || req.user?.default_branch || 'china_town';
+    const paymentMethod = b.payment_method || (b.payment_type === 'credit' ? null : (b.payment_type || 'cash'));
     
     // CRITICAL: Stringify lines array for JSONB storage
     const linesJson = JSON.stringify(lines);
     
     console.log('[SUPPLIER INVOICE] Executing INSERT...');
-    const { rows } = await pool.query(
+    const { rows } = await client.query(
       'INSERT INTO supplier_invoices(number, date, due_date, supplier_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch',
-      [b.number||null, b.date||null, b.due_date||null, b.supplier_id||null, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, b.payment_method||null, b.status||'draft', branch]
+      [b.invoice_number||b.number||null, b.date||null, b.due_date||null, b.partner_id||b.supplier_id||null, linesJson, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, paymentMethod, 'posted', branch]
     );
     
-    console.log('[SUPPLIER INVOICE] SUCCESS | id=', rows?.[0]?.id);
-    res.status(201).json(rows && rows[0]);
+    const invoice = rows && rows[0];
+    if (!invoice) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "server_error", details: "Failed to create supplier invoice" });
+    }
+    
+    console.log('[SUPPLIER INVOICE] SUCCESS | id=', invoice.id);
+    
+    // Create journal entry automatically (always posted)
+    let journalEntryId = null;
+    if (total > 0) {
+      try {
+        journalEntryId = await createSupplierInvoiceJournalEntry(
+          invoice.id,
+          b.partner_id || b.supplier_id,
+          subtotal,
+          discount_amount,
+          tax_amount,
+          total,
+          paymentMethod,
+          branch,
+          client // Pass client for transaction
+        );
+        
+        // CRITICAL: Link journal entry to invoice
+        if (journalEntryId) {
+          await client.query(
+            'UPDATE supplier_invoices SET journal_entry_id = $1, status = $2 WHERE id = $3',
+            [journalEntryId, 'posted', invoice.id]
+          );
+          console.log(`[ACCOUNTING] Linked journal entry ${journalEntryId} to supplier invoice ${invoice.id}`);
+        }
+      } catch (journalError) {
+        console.error('[ACCOUNTING] CRITICAL: Failed to create journal entry for supplier invoice:', invoice.id, journalError);
+        await client.query('ROLLBACK');
+        return res.status(500).json({ 
+          error: "journal_creation_failed", 
+          details: journalError?.message || "Failed to create journal entry for supplier invoice",
+          invoice_id: invoice.id
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch complete invoice with journal_entry_id
+    const { rows: finalRows } = await client.query(
+      'SELECT id, number, date, due_date, supplier_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at FROM supplier_invoices WHERE id = $1',
+      [invoice.id]
+    );
+    
+    res.status(201).json(finalRows && finalRows[0] || invoice);
   } catch (e) { 
+    await client.query('ROLLBACK');
     console.error('[SUPPLIER INVOICE ERROR]', e);
     console.error('[SUPPLIER INVOICE ERROR STACK]', e?.stack);
     res.status(500).json({ error: "server_error", details: e?.message||"unknown" }); 
+  } finally {
+    client.release();
   }
 }
 app.post("/supplier-invoices", authenticateToken, authorize("purchases","create", { branchFrom: r => (r.body?.branch || null) }), handleCreateSupplierInvoice);
