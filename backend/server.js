@@ -2089,16 +2089,21 @@ app.post("/journal/:id/return-to-draft", authenticateToken, authorize("journal",
     // Update journal entry status to draft
     await client.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['draft', id]);
     
-    // CRITICAL: Update related reference (expense/invoice) to draft
+    // CRITICAL: Update related reference (expense/invoice/payroll) to draft
+    // Rule: Returning journal entry to draft means returning the operation to draft
     if (entry.reference_type && entry.reference_id) {
       if (entry.reference_type === 'expense') {
-        // Update expense status to draft
-        await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        // Update expense status to draft and clear journal_entry_id
+        await client.query('UPDATE expenses SET status = $1, journal_entry_id = NULL WHERE id = $2', ['draft', entry.reference_id]);
         console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated expense ${entry.reference_id} to draft`);
       } else if (entry.reference_type === 'invoice') {
-        // Update invoice status to draft
-        await client.query('UPDATE invoices SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        // Update invoice status to draft and clear journal_entry_id
+        await client.query('UPDATE invoices SET status = $1, journal_entry_id = NULL WHERE id = $2', ['draft', entry.reference_id]);
         console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated invoice ${entry.reference_id} to draft`);
+      } else if (entry.reference_type === 'payroll') {
+        // Update payroll run status to draft and clear journal_entry_id
+        await client.query('UPDATE payroll_runs SET status = $1, journal_entry_id = NULL, posted_at = NULL WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated payroll run ${entry.reference_id} to draft`);
       }
     }
     
@@ -2141,16 +2146,21 @@ app.post("/api/journal/:id/return-to-draft", authenticateToken, authorize("journ
     // Update journal entry status to draft
     await client.query('UPDATE journal_entries SET status = $1 WHERE id = $2', ['draft', id]);
     
-    // CRITICAL: Update related reference (expense/invoice) to draft
+    // CRITICAL: Update related reference (expense/invoice/payroll) to draft
+    // Rule: Returning journal entry to draft means returning the operation to draft
     if (entry.reference_type && entry.reference_id) {
       if (entry.reference_type === 'expense') {
-        // Update expense status to draft
-        await client.query('UPDATE expenses SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        // Update expense status to draft and clear journal_entry_id
+        await client.query('UPDATE expenses SET status = $1, journal_entry_id = NULL WHERE id = $2', ['draft', entry.reference_id]);
         console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated expense ${entry.reference_id} to draft`);
       } else if (entry.reference_type === 'invoice') {
-        // Update invoice status to draft
-        await client.query('UPDATE invoices SET status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        // Update invoice status to draft and clear journal_entry_id
+        await client.query('UPDATE invoices SET status = $1, journal_entry_id = NULL WHERE id = $2', ['draft', entry.reference_id]);
         console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated invoice ${entry.reference_id} to draft`);
+      } else if (entry.reference_type === 'payroll') {
+        // Update payroll run status to draft and clear journal_entry_id
+        await client.query('UPDATE payroll_runs SET status = $1, journal_entry_id = NULL, posted_at = NULL WHERE id = $2', ['draft', entry.reference_id]);
+        console.log(`[JOURNAL] Returned journal entry ${id} to draft, updated payroll run ${entry.reference_id} to draft`);
       }
     }
     
@@ -2195,8 +2205,9 @@ app.delete("/journal/:id", authenticateToken, authorize("journal", "delete"), as
       });
     }
     
-    // CRITICAL: Delete related reference (expense/invoice) if exists
+    // CRITICAL: Delete related reference (expense/invoice/payroll) if exists
     // This ensures single source of truth - journal entries are the source
+    // Rule: Deleting a journal entry means deleting the entire operation
     if (entry.reference_type && entry.reference_id) {
       if (entry.reference_type === 'expense') {
         // Delete expense and clear journal_entry_id reference
@@ -2208,6 +2219,12 @@ app.delete("/journal/:id", authenticateToken, authorize("journal", "delete"), as
         await client.query('UPDATE invoices SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
         await client.query('DELETE FROM invoices WHERE id = $1', [entry.reference_id]);
         console.log(`[JOURNAL] Deleted journal entry ${id}, deleted invoice ${entry.reference_id}`);
+      } else if (entry.reference_type === 'payroll') {
+        // Delete payroll run and clear journal_entry_id reference
+        await client.query('UPDATE payroll_runs SET journal_entry_id = NULL, status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        await client.query('DELETE FROM payroll_run_items WHERE run_id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM payroll_runs WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted payroll run ${entry.reference_id}`);
       }
     }
     
@@ -2261,8 +2278,9 @@ app.delete("/api/journal/:id", authenticateToken, authorize("journal", "delete")
       });
     }
     
-    // CRITICAL: Delete related reference (expense/invoice) if exists
+    // CRITICAL: Delete related reference (expense/invoice/payroll) if exists
     // This ensures single source of truth - journal entries are the source
+    // Rule: Deleting a journal entry means deleting the entire operation
     if (entry.reference_type && entry.reference_id) {
       if (entry.reference_type === 'expense') {
         // Delete expense and clear journal_entry_id reference
@@ -2274,6 +2292,12 @@ app.delete("/api/journal/:id", authenticateToken, authorize("journal", "delete")
         await client.query('UPDATE invoices SET journal_entry_id = NULL WHERE id = $1', [entry.reference_id]);
         await client.query('DELETE FROM invoices WHERE id = $1', [entry.reference_id]);
         console.log(`[JOURNAL] Deleted journal entry ${id}, deleted invoice ${entry.reference_id}`);
+      } else if (entry.reference_type === 'payroll') {
+        // Delete payroll run and clear journal_entry_id reference
+        await client.query('UPDATE payroll_runs SET journal_entry_id = NULL, status = $1 WHERE id = $2', ['draft', entry.reference_id]);
+        await client.query('DELETE FROM payroll_run_items WHERE run_id = $1', [entry.reference_id]);
+        await client.query('DELETE FROM payroll_runs WHERE id = $1', [entry.reference_id]);
+        console.log(`[JOURNAL] Deleted journal entry ${id}, deleted payroll run ${entry.reference_id}`);
       }
     }
     
@@ -4192,21 +4216,51 @@ app.post("/api/payroll/run/:id/approve", authenticateToken, authorize("payroll",
 });
 
 // POST /api/payroll/run/:id/draft - Revert a run to draft
+// CRITICAL: If payroll has journal_entry_id, delete the journal entry first (rule: deleting journal entry = deleting operation)
 app.post("/api/payroll/run/:id/draft", authenticateToken, authorize("payroll","edit"), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const runId = Number(req.params.id || 0);
-    const { rows: check } = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
-    if (!check.length) return res.status(404).json({ error: 'not_found' });
-    if (check[0].journal_entry_id) return res.status(400).json({ error: 'cannot_revert_posted' });
+    const { rows: check } = await client.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
+    if (!check.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'not_found' });
+    }
     
-    const { rows } = await pool.query(
-      "UPDATE payroll_runs SET status = 'draft', approved_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *",
+    // If payroll has a journal entry, delete it first (rule: deleting journal entry = deleting operation)
+    if (check[0].journal_entry_id) {
+      const journalEntryId = check[0].journal_entry_id;
+      
+      // Check if journal entry exists and is posted
+      const { rows: jeRows } = await client.query(
+        'SELECT id, status FROM journal_entries WHERE id = $1',
+        [journalEntryId]
+      );
+      
+      if (jeRows && jeRows.length > 0) {
+        // Delete journal postings first (foreign key constraint)
+        await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [journalEntryId]);
+        // Delete journal entry
+        await client.query('DELETE FROM journal_entries WHERE id = $1', [journalEntryId]);
+        console.log(`[PAYROLL] Reverted payroll run ${runId} to draft, deleted journal entry ${journalEntryId}`);
+      }
+    }
+    
+    // Update payroll run to draft and clear journal_entry_id
+    const { rows } = await client.query(
+      "UPDATE payroll_runs SET status = 'draft', journal_entry_id = NULL, approved_at = NULL, posted_at = NULL, updated_at = NOW() WHERE id = $1 RETURNING *",
       [runId]
     );
+    
+    await client.query('COMMIT');
     res.json({ ok: true, run: rows[0] });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[PAYROLL] Error reverting to draft:', e);
-    res.status(500).json({ error: "server_error" });
+    res.status(500).json({ error: "server_error", details: e?.message });
+  } finally {
+    client.release();
   }
 });
 
