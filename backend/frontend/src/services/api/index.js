@@ -249,6 +249,10 @@ export const reports = {
     return request(`/reports/business-day-sales${query ? `?${query}` : ''}`)
   },
   sendBusinessDaySales: (data = {}) => request('/reports/send-business-day-sales', { method: 'POST', body: JSON.stringify(data) }),
+  cashFlow: (params = {}) => {
+    const query = new URLSearchParams(params).toString()
+    return request(`/reports/cash-flow${query ? `?${query}` : ''}`)
+  },
   trialBalance: (params = {}) => {
     const query = new URLSearchParams(params).toString()
     return request(`/reports/trial-balance${query ? `?${query}` : ''}`)

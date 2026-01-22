@@ -7999,11 +7999,21 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
       return res.json({ items: [], totals: { gross: 0, net: 0, tax: 0, discount: 0, count: 0 } });
     }
     
+    // Use date range to handle timezone correctly
+    // Convert input date to UTC range: from 00:00:00 UTC to 23:59:59 UTC of the target date
+    // But since dates are stored in UTC, we need to account for timezone offset
+    // For Saudi Arabia (UTC+3), a local date like 2026-01-22 means UTC range 2026-01-21 21:00:00 to 2026-01-22 20:59:59
+    // Simpler approach: use date range from date 00:00:00 to date+1 00:00:00 (exclusive)
+    const dateStart = new Date(date + 'T00:00:00Z').toISOString();
+    const dateEnd = new Date(new Date(date + 'T00:00:00Z').getTime() + 24 * 60 * 60 * 1000).toISOString();
+    
     let whereConditions = [
       `je.status = 'posted'`,
       `jp.account_id = ANY($1::int[])`,
-      `je.date = $2::date`
+      `je.date >= $2::timestamptz AND je.date < $3::timestamptz`
     ];
+    const params = [salesAccountIds, dateStart, dateEnd];
+    let paramIndex = 4;
     const params = [salesAccountIds, date];
     let paramIndex = 3;
     
@@ -8065,6 +8075,98 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
 // Legacy endpoint
 app.get("/reports/business-day-sales", authenticateToken, authorize("reports","view"), async (req, res) => {
   return res.redirect(307, `/api/reports/business-day-sales?${new URLSearchParams(req.query).toString()}`);
+});
+
+// GET /api/reports/cash-flow - Get cash flow report
+app.get("/api/reports/cash-flow", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { from, to, branch } = req.query || {};
+    
+    // CRITICAL: Use journal entries (posted) to compute cash flow
+    // Cash accounts: 1111 (Main Cash), 1121 (Bank), and other cash/bank accounts
+    // Cash flow = Cash inflows (debit to cash accounts) - Cash outflows (credit to cash accounts)
+    
+    // Get cash/bank account IDs (type = 'cash' or 'bank', or account_code starts with 11)
+    const { rows: cashAccountRows } = await pool.query(
+      `SELECT id, account_code, account_number, name, type 
+       FROM accounts 
+       WHERE (type IN ('cash', 'bank') OR account_code LIKE '11%' OR account_number LIKE '11%')
+       AND (account_code IN ('1111', '1112', '1121', '1122', '1123', '1124') 
+            OR account_number IN ('1111', '1112', '1121', '1122', '1123', '1124'))`
+    );
+    const cashAccountIds = cashAccountRows.map(r => r.id);
+    
+    if (cashAccountIds.length === 0) {
+      return res.json({ items: [], total: 0 });
+    }
+    
+    let whereConditions = [
+      `je.status = 'posted'`,
+      `jp.account_id = ANY($1::int[])`
+    ];
+    const params = [cashAccountIds];
+    let paramIndex = 2;
+    
+    if (from) {
+      whereConditions.push(`je.date >= $${paramIndex++}::date`);
+      params.push(from);
+    }
+    if (to) {
+      whereConditions.push(`je.date <= $${paramIndex++}::date`);
+      params.push(to);
+    }
+    if (branch && branch !== 'all' && branch !== 'كل الفروع') {
+      whereConditions.push(`je.branch = $${paramIndex++}`);
+      params.push(branch);
+    }
+    
+    // Cash flow = Debit (inflow) - Credit (outflow) for cash accounts
+    const query = `
+      SELECT 
+        a.account_code,
+        a.account_number,
+        COALESCE(a.name, a.name_en, '') as name,
+        COALESCE(SUM(jp.debit), 0) as inflow,
+        COALESCE(SUM(jp.credit), 0) as outflow,
+        COALESCE(SUM(jp.debit - jp.credit), 0) as net_flow
+      FROM journal_entries je
+      JOIN journal_postings jp ON jp.journal_entry_id = je.id
+      JOIN accounts a ON a.id = jp.account_id
+      WHERE ${whereConditions.join(' AND ')}
+      GROUP BY a.id, a.account_code, a.account_number, a.name, a.name_en
+      HAVING COALESCE(SUM(jp.debit - jp.credit), 0) != 0
+      ORDER BY a.account_code
+    `;
+    
+    const { rows } = await pool.query(query, params);
+    
+    const items = (rows || []).map(row => ({
+      account_code: row.account_code || row.account_number,
+      account_number: row.account_number,
+      name: row.name,
+      inflow: Number(row.inflow || 0),
+      outflow: Number(row.outflow || 0),
+      net_flow: Number(row.net_flow || 0)
+    }));
+    
+    const total = items.reduce((sum, item) => sum + item.net_flow, 0);
+    
+    res.json({ 
+      items,
+      total,
+      from: from || null,
+      to: to || null,
+      branch: branch || 'all'
+    });
+  } catch (e) {
+    console.error('[REPORTS] Error getting cash flow:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Legacy endpoint for cash-flow
+app.get("/reports/cash-flow", authenticateToken, authorize("reports","view"), async (req, res) => {
+  return res.redirect(307, `/api/reports/cash-flow?${new URLSearchParams(req.query).toString()}`);
 });
 
 // POS Save Draft - both paths for compatibility
