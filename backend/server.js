@@ -130,7 +130,10 @@ app.use((req, res, next) => {
   const staticMatch = url.match(/\/static\/(js|css|media)\/.+/);
   if (staticMatch && !url.startsWith('/static/')) {
     const newUrl = url.substring(url.indexOf('/static/'));
-    console.log(`[STATIC REWRITE] ${url} -> ${newUrl}`);
+    // Only log in development to reduce noise in production
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[STATIC REWRITE] ${url} -> ${newUrl}`);
+    }
     req.url = newUrl;
   }
   next();
@@ -392,7 +395,10 @@ app.use((req, res, next) => {
   
   // All other routes are frontend SPA routes - serve index.html
   // This includes: /expenses, /clients, /accounting, /products, etc.
-  console.log(`[SPA FALLBACK] Serving index.html for frontend route: ${reqPath}`);
+  // Only log in development to reduce noise in production
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[SPA FALLBACK] Serving index.html for frontend route: ${reqPath}`);
+  }
   return res.sendFile(path.join(buildPath, 'index.html'));
 });
 

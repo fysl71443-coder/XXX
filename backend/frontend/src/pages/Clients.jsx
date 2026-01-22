@@ -120,8 +120,22 @@ export default function Clients() {
       return;
     }
     load() 
-  }, [authLoading, isLoggedIn])
-  useEffect(()=>{ (async()=>{ try { const d = new Date(); const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; if (typeof periods?.get === 'function') { const s = await periods.get(per); setPeriodStatus(String(s?.status||'open')) } } catch {} })() },[])
+  }, [authLoading, isLoggedIn, load])
+  
+  // Load period status - only once on mount, after auth is ready
+  useEffect(()=>{ 
+    if (authLoading || !isLoggedIn) return;
+    (async()=>{ 
+      try { 
+        const d = new Date(); 
+        const per = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; 
+        if (typeof periods?.get === 'function') { 
+          const s = await periods.get(per); 
+          setPeriodStatus(String(s?.status||'open')) 
+        } 
+      } catch {} 
+    })() 
+  },[authLoading, isLoggedIn])
   async function ensureWalkInPartnerId(){
     try {
       const list = await partners.list({ type: 'customer' })

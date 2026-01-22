@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { FaFileInvoice, FaTrash, FaTimes, FaSearch, FaPrint } from 'react-icons/fa'
-import { products as apiProducts, partners as apiPartners, audit as apiAudit, invoices as apiInvoices, payments as apiPayments, journal as apiJournal, settings as apiSettings } from '../services/api'
+import { products as apiProducts, partners as apiPartners, audit as apiAudit, invoices as apiInvoices, payments as apiPayments, journal as apiJournal, settings as apiSettings, orders as apiOrders } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { createPDF, ensureImageDataUrl } from '../utils/pdfUtils'
 import { print } from '@/printing'
@@ -83,9 +83,12 @@ export default function SalesOrderDetail(){
 
   useEffect(()=>{
     return ()=>{
-      if (status==='draft' && !order?.customer_id && order?.id){ fetch(`${API_BASE}/api/orders/${order.id}`, { method: 'DELETE' }).catch(()=>{}) }
+      if (status==='draft' && !order?.customer_id && order?.id){ 
+        // Use API client instead of direct fetch
+        apiOrders.remove(order.id).catch(()=>{});
+      }
     }
-  },[status, order, API_BASE])
+  },[status, order])
 
   async function openProductPicker(){
     setPickerOpen(true)
@@ -205,8 +208,11 @@ export default function SalesOrderDetail(){
   }
 
   function markInProgress(){ setStatus('in_progress') }
-  function cancelOrder(){
-    if (order?.id && lines.length===0){ fetch(`${API_BASE}/api/orders/${order.id}`, { method: 'DELETE' }).catch(()=>{}) }
+  async function cancelOrder(){
+    if (order?.id && lines.length===0){ 
+      // Use API client instead of direct fetch
+      apiOrders.remove(order.id).catch(()=>{});
+    }
     setOrder(null)
     navigate('/orders')
   }
