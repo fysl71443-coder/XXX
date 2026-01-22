@@ -8014,8 +8014,6 @@ app.get("/api/reports/business-day-sales", authenticateToken, authorize("reports
     ];
     const params = [salesAccountIds, dateStart, dateEnd];
     let paramIndex = 4;
-    const params = [salesAccountIds, date];
-    let paramIndex = 3;
     
     if (branch && branch !== 'all' && branch !== 'كل الفروع') {
       whereConditions.push(`je.branch = $${paramIndex++}`);
