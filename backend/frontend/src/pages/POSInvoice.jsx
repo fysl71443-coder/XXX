@@ -1772,11 +1772,13 @@ export default function POSInvoice(){
         const receiptHtml2 = await print({ type: 'thermal', template: 'posInvoice', data: { ...data, returnHtml: true }, autoPrint: false })
         // Print the receipt
         await print({ type: 'thermal', template: 'posInvoice', data, autoPrint: true })
-        // Save receipt HTML if we have an order ID
-        if (res?.order_id || res?.id) {
+        // Save receipt HTML if we have an invoice ID
+        // Note: For credit invoices, we use inv.id (from res2) instead of order_id
+        const invoiceId = inv?.id || res2?.id
+        if (invoiceId) {
           try {
             const token = localStorage.getItem('token')
-            await fetch(`/api/receipts/${res.order_id || res.id}/mark-printed`, {
+            await fetch(`/api/receipts/${invoiceId}/mark-printed`, {
               method: 'POST',
               headers: { 
                 'Authorization': `Bearer ${token}`,
