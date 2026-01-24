@@ -132,11 +132,25 @@ export async function get(req, res) {
  * POST /api/fiscal-years/:id/open
  */
 export async function openYear(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = parseInt(req.params.id, 10);
     const userId = req.user?.id;
 
-    const { rows } = await pool.query(`
+    // CRITICAL: Get old status before update
+    const { rows: oldRows } = await client.query('SELECT status FROM fiscal_years WHERE id = $1', [id]);
+    const oldStatus = oldRows && oldRows[0] ? oldRows[0].status : null;
+
+    // CRITICAL: Close any other open years before opening this one
+    // Ensure only one year can be open at a time
+    await client.query(`
+      UPDATE fiscal_years
+      SET status = 'closed', temporary_open = FALSE, updated_at = NOW()
+      WHERE status = 'open' AND id != $1
+    `, [id]);
+
+    const { rows } = await client.query(`
       UPDATE fiscal_years
       SET status = 'open', temporary_open = FALSE, updated_at = NOW()
       WHERE id = $1
@@ -144,19 +158,25 @@ export async function openYear(req, res) {
     `, [id]);
 
     if (!rows || rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'not_found' });
     }
 
-    // Log activity
-    await logActivity(id, 'open', 'تم فتح السنة المالية', {}, userId, req.ip);
+    // Log activity with old_status and new_status
+    await logActivity(id, 'open', 'تم فتح السنة المالية', { old_status: oldStatus, new_status: 'open' }, userId, req.ip, oldStatus, 'open');
+
+    await client.query('COMMIT');
 
     // Clear cache
     invalidateCache();
 
     res.json({ ...rows[0], message: 'تم فتح السنة المالية بنجاح' });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[FISCAL_YEAR] Error opening:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
+  } finally {
+    client.release();
   }
 }
 
@@ -165,12 +185,18 @@ export async function openYear(req, res) {
  * POST /api/fiscal-years/:id/close
  */
 export async function closeYear(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = parseInt(req.params.id, 10);
     const userId = req.user?.id;
     const { notes } = req.body || {};
 
-    const { rows } = await pool.query(`
+    // CRITICAL: Get old status before update
+    const { rows: oldRows } = await client.query('SELECT status FROM fiscal_years WHERE id = $1', [id]);
+    const oldStatus = oldRows && oldRows[0] ? oldRows[0].status : null;
+
+    const { rows } = await client.query(`
       UPDATE fiscal_years
       SET 
         status = 'closed', 
@@ -184,19 +210,25 @@ export async function closeYear(req, res) {
     `, [id, userId, notes]);
 
     if (!rows || rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'not_found' });
     }
 
-    // Log activity
-    await logActivity(id, 'close', 'تم إغلاق السنة المالية', { notes }, userId, req.ip);
+    // Log activity with old_status and new_status
+    await logActivity(id, 'close', 'تم إغلاق السنة المالية', { notes, old_status: oldStatus, new_status: 'closed' }, userId, req.ip, oldStatus, 'closed');
+
+    await client.query('COMMIT');
 
     // Clear cache
     invalidateCache();
 
     res.json({ ...rows[0], message: 'تم إغلاق السنة المالية بنجاح' });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[FISCAL_YEAR] Error closing:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
+  } finally {
+    client.release();
   }
 }
 
@@ -205,16 +237,24 @@ export async function closeYear(req, res) {
  * POST /api/fiscal-years/:id/temporary-open
  */
 export async function temporaryOpen(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = parseInt(req.params.id, 10);
     const userId = req.user?.id;
     const { reason } = req.body || {};
 
     if (!reason) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'validation_error', message: 'يرجى إدخال سبب الفتح المؤقت' });
     }
 
-    const { rows } = await pool.query(`
+    // CRITICAL: Get old status before update
+    const { rows: oldRows } = await client.query('SELECT status, temporary_open FROM fiscal_years WHERE id = $1', [id]);
+    const oldStatus = oldRows && oldRows[0] ? oldRows[0].status : null;
+    const oldTempOpen = oldRows && oldRows[0] ? oldRows[0].temporary_open : false;
+
+    const { rows } = await client.query(`
       UPDATE fiscal_years
       SET 
         temporary_open = TRUE,
@@ -227,19 +267,25 @@ export async function temporaryOpen(req, res) {
     `, [id, userId, reason]);
 
     if (!rows || rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'not_found', message: 'السنة المالية غير موجودة أو ليست مغلقة' });
     }
 
-    // Log activity
-    await logActivity(id, 'temporary_open', 'تم فتح السنة المالية مؤقتاً', { reason }, userId, req.ip);
+    // Log activity with old_status and new_status
+    await logActivity(id, 'temporary_open', 'تم فتح السنة المالية مؤقتاً', { reason, old_status: oldStatus, old_temporary_open: oldTempOpen, new_temporary_open: true }, userId, req.ip, oldStatus, oldStatus); // Status remains 'closed'
+
+    await client.query('COMMIT');
 
     // Clear cache
     invalidateCache();
 
     res.json({ ...rows[0], message: 'تم فتح السنة المالية مؤقتاً بنجاح' });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[FISCAL_YEAR] Error temporary opening:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
+  } finally {
+    client.release();
   }
 }
 
@@ -248,11 +294,18 @@ export async function temporaryOpen(req, res) {
  * POST /api/fiscal-years/:id/temporary-close
  */
 export async function temporaryClose(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = parseInt(req.params.id, 10);
     const userId = req.user?.id;
 
-    const { rows } = await pool.query(`
+    // CRITICAL: Get old status before update
+    const { rows: oldRows } = await client.query('SELECT status, temporary_open FROM fiscal_years WHERE id = $1', [id]);
+    const oldStatus = oldRows && oldRows[0] ? oldRows[0].status : null;
+    const oldTempOpen = oldRows && oldRows[0] ? oldRows[0].temporary_open : false;
+
+    const { rows } = await client.query(`
       UPDATE fiscal_years
       SET 
         temporary_open = FALSE,
@@ -262,19 +315,25 @@ export async function temporaryClose(req, res) {
     `, [id]);
 
     if (!rows || rows.length === 0) {
+      await client.query('ROLLBACK');
       return res.status(404).json({ error: 'not_found', message: 'السنة المالية غير مفتوحة مؤقتاً' });
     }
 
-    // Log activity
-    await logActivity(id, 'temporary_close', 'تم إغلاق الفتح المؤقت', {}, userId, req.ip);
+    // Log activity with old_status and new_status
+    await logActivity(id, 'temporary_close', 'تم إغلاق الفتح المؤقت', { old_status: oldStatus, old_temporary_open: oldTempOpen, new_temporary_open: false }, userId, req.ip, oldStatus, oldStatus); // Status remains 'closed'
+
+    await client.query('COMMIT');
 
     // Clear cache
     invalidateCache();
 
     res.json({ ...rows[0], message: 'تم إغلاق الفتح المؤقت بنجاح' });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[FISCAL_YEAR] Error temporary closing:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
+  } finally {
+    client.release();
   }
 }
 
@@ -392,6 +451,14 @@ export async function getStats(req, res) {
   try {
     const id = parseInt(req.params.id, 10);
 
+    // PERFORMANCE: Check cache first (cache for 5 minutes)
+    const cacheKey = `fiscal_year_stats_${id}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log(`[FISCAL_YEAR] Stats cache hit for year ${id}`);
+      return res.json(cached);
+    }
+
     // Get fiscal year
     const { rows: fyRows } = await pool.query('SELECT * FROM fiscal_years WHERE id = $1', [id]);
     if (!fyRows || fyRows.length === 0) {
@@ -422,7 +489,7 @@ export async function getStats(req, res) {
       `, [fy.start_date, fy.end_date])
     ]);
 
-    res.json({
+    const result = {
       fiscalYear: {
         ...fy,
         statusInfo: getStatusInfo(fy)
@@ -441,7 +508,12 @@ export async function getStats(req, res) {
           totalAmount: parseFloat(expenseCount.rows[0]?.total_amount || 0)
         }
       }
-    });
+    };
+
+    // Cache for 5 minutes
+    cache.set(cacheKey, result, 5 * 60 * 1000);
+
+    res.json(result);
   } catch (e) {
     console.error('[FISCAL_YEAR] Error getting stats:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
@@ -453,36 +525,52 @@ export async function getStats(req, res) {
  * POST /api/fiscal-years
  */
 export async function create(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const { year, start_date, end_date, notes } = req.body || {};
     const userId = req.user?.id;
 
     if (!year) {
+      await client.query('ROLLBACK');
       return res.status(400).json({ error: 'validation_error', message: 'يرجى تحديد السنة' });
     }
+
+    // CRITICAL: Close any other open years before creating new one
+    // Ensure only one year can be open at a time
+    await client.query(`
+      UPDATE fiscal_years
+      SET status = 'closed', temporary_open = FALSE, updated_at = NOW()
+      WHERE status = 'open'
+    `);
 
     const startDate = start_date || `${year}-01-01`;
     const endDate = end_date || `${year}-12-31`;
 
-    const { rows } = await pool.query(`
+    const { rows } = await client.query(`
       INSERT INTO fiscal_years (year, status, start_date, end_date, notes)
       VALUES ($1, 'open', $2, $3, $4)
       RETURNING *
     `, [year, startDate, endDate, notes || `السنة المالية ${year}`]);
 
-    // Log activity
-    await logActivity(rows[0].id, 'create', 'تم إنشاء السنة المالية', { year }, userId, req.ip);
+    // Log activity with old_status and new_status
+    await logActivity(rows[0].id, 'create', 'تم إنشاء السنة المالية', { year }, userId, req.ip, null, 'open');
+
+    await client.query('COMMIT');
 
     // Clear cache
     invalidateCache();
 
     res.status(201).json(rows[0]);
   } catch (e) {
+    await client.query('ROLLBACK');
     if (e.code === '23505') {
       return res.status(409).json({ error: 'duplicate', message: 'السنة المالية موجودة بالفعل' });
     }
     console.error('[FISCAL_YEAR] Error creating:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
+  } finally {
+    client.release();
   }
 }
 
@@ -495,7 +583,7 @@ export async function rollover(req, res) {
   try {
     const sourceYearId = parseInt(req.params.id, 10);
     const userId = req.user?.id;
-    const { target_year } = req.body || {};
+    const { target_year, include_profit_loss = true } = req.body || {}; // New option: include_profit_loss
 
     // Get source fiscal year
     const { rows: sourceRows } = await pool.query(
@@ -543,6 +631,11 @@ export async function rollover(req, res) {
     }
 
     // Calculate closing balances for all accounts
+    // If include_profit_loss is false, exclude income/expense accounts (typically 4xxx and 5xxx)
+    const accountTypeFilter = include_profit_loss 
+      ? '' 
+      : `AND a.type NOT IN ('income', 'expense') AND a.account_number NOT LIKE '4%' AND a.account_number NOT LIKE '5%'`;
+    
     const { rows: balances } = await client.query(`
       SELECT 
         a.id as account_id,
@@ -553,8 +646,8 @@ export async function rollover(req, res) {
       FROM accounts a
       LEFT JOIN journal_postings jp ON jp.account_id = a.id
       LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id
-      WHERE je.date BETWEEN $1 AND $2
-        OR je.id IS NULL
+      WHERE (je.date BETWEEN $1 AND $2 OR je.id IS NULL)
+        ${accountTypeFilter}
       GROUP BY a.id, a.account_number, a.name, a.type
       HAVING COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) != 0
     `, [sourceYear.start_date, sourceYear.end_date]);
@@ -605,8 +698,9 @@ export async function rollover(req, res) {
         targetYear: targetYearNum,
         accountsCount: balances.length,
         totalDebits,
-        totalCredits
-      }, userId, req.ip);
+        totalCredits,
+        include_profit_loss
+      }, userId, req.ip, 'open', 'rollover');
     }
 
     // Update source year status to closed
@@ -614,6 +708,12 @@ export async function rollover(req, res) {
       'UPDATE fiscal_years SET status = $1, closed_by = $2, closed_at = NOW(), updated_at = NOW() WHERE id = $3',
       ['closed', userId, sourceYearId]
     );
+
+    // Log the status change
+    await logActivity(sourceYearId, 'close', 'تم إغلاق السنة المالية بعد الترحيل', {
+      targetYear: targetYearNum,
+      include_profit_loss
+    }, userId, req.ip, 'rollover', 'closed');
 
     await client.query('COMMIT');
 
@@ -650,6 +750,14 @@ export async function compareYears(req, res) {
 
     const y1 = parseInt(year1, 10);
     const y2 = parseInt(year2, 10);
+
+    // PERFORMANCE: Check cache first (cache for 10 minutes)
+    const cacheKey = `fiscal_year_compare_${y1}_${y2}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log(`[FISCAL_YEAR] Compare cache hit for years ${y1} vs ${y2}`);
+      return res.json(cached);
+    }
 
     // Get both fiscal years
     const { rows: fyRows } = await pool.query(`
@@ -778,7 +886,7 @@ export async function compareYears(req, res) {
     const exp1 = parseFloat(expenses1.rows[0]?.total || 0);
     const exp2 = parseFloat(expenses2.rows[0]?.total || 0);
 
-    res.json({
+    const result = {
       year1: { ...fy1, statusInfo: getStatusInfo(fy1) },
       year2: { ...fy2, statusInfo: getStatusInfo(fy2) },
       summary: {
@@ -804,7 +912,12 @@ export async function compareYears(req, res) {
         }
       },
       accountComparison
-    });
+    };
+
+    // Cache for 10 minutes
+    cache.set(cacheKey, result, 10 * 60 * 1000);
+
+    res.json(result);
   } catch (e) {
     console.error('[FISCAL_YEAR] Error comparing years:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
@@ -959,6 +1072,14 @@ export async function getChecklist(req, res) {
   try {
     const id = parseInt(req.params.id, 10);
 
+    // PERFORMANCE: Check cache first (cache for 2 minutes)
+    const cacheKey = `fiscal_year_checklist_${id}`;
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log(`[FISCAL_YEAR] Checklist cache hit for year ${id}`);
+      return res.json(cached);
+    }
+
     // Get fiscal year
     const { rows: fyRows } = await pool.query('SELECT * FROM fiscal_years WHERE id = $1', [id]);
     if (!fyRows || fyRows.length === 0) {
@@ -1055,7 +1176,7 @@ export async function getChecklist(req, res) {
     const completedCount = checklist.filter(c => c.completed).length;
     const canClose = checklist.slice(0, 3).every(c => c.completed); // First 3 are required
 
-    res.json({
+    const result = {
       fiscalYear: { ...fy, statusInfo: getStatusInfo(fy) },
       checklist,
       summary: {
@@ -1065,7 +1186,12 @@ export async function getChecklist(req, res) {
         canClose,
         recentActivity: parseInt(recentActivity.rows[0]?.count || 0, 10)
       }
-    });
+    };
+
+    // Cache for 2 minutes
+    cache.set(cacheKey, result, 2 * 60 * 1000);
+
+    res.json(result);
   } catch (e) {
     console.error('[FISCAL_YEAR] Error getting checklist:', e);
     res.status(500).json({ error: 'server_error', details: e?.message });
@@ -1131,12 +1257,12 @@ function getStatusInfo(fy) {
   };
 }
 
-async function logActivity(fiscalYearId, action, description, details, userId, ipAddress) {
+async function logActivity(fiscalYearId, action, description, details, userId, ipAddress, oldStatus = null, newStatus = null) {
   try {
     await pool.query(`
-      INSERT INTO fiscal_year_activities (fiscal_year_id, action, description, details, user_id, ip_address)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `, [fiscalYearId, action, description, JSON.stringify(details), userId, ipAddress]);
+      INSERT INTO fiscal_year_activities (fiscal_year_id, action, description, details, user_id, ip_address, old_status, new_status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [fiscalYearId, action, description, JSON.stringify(details), userId, ipAddress, oldStatus, newStatus]);
   } catch (e) {
     console.error('[FISCAL_YEAR] Error logging activity:', e);
   }
@@ -1145,4 +1271,7 @@ async function logActivity(fiscalYearId, action, description, details, userId, i
 function invalidateCache() {
   cache.delete(FISCAL_YEAR_CACHE_KEY);
   cache.delete(FISCAL_YEARS_CACHE_KEY);
+  // Invalidate stats, checklist, and compare caches
+  // Note: We can't delete all keys without knowing the IDs, so we rely on TTL expiration
+  // For production, consider using a cache key pattern like 'fiscal_year_*' or maintain a list of cache keys
 }

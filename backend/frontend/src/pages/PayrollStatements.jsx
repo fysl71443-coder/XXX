@@ -24,7 +24,26 @@ export default function PayrollStatements(){
   
   const [accs, setAccs] = useState([])
   useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])
-  useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_company'); setCompany(c||null) } catch {} try { const b = await apiSettings.get('settings_branding'); setBranding(b||null) } catch {} try { const f = await apiSettings.get('settings_footer'); setFooterCfg(f||null) } catch {} try { const rs = await apiPayroll.runs(); // CRITICAL: Only show runs with journal_entry_id (posted runs) // Backend already filters out orphaned runs, but we double-check here const posted = rs.filter(r=>{ const status = r.derived_status || r.status || 'draft'; return status === 'posted' && r.journal_entry_id !== null && r.journal_entry_id !== undefined; }); setRuns(posted); if (!runId && posted.length) setRunId(String(posted[0].id)) } catch {} try { const emps = await apiEmployees.list(); setEmployees(Array.isArray(emps)?emps:[]) } catch {} try { const t = await apiAccounts.tree(); setAccs(flatten(t||[])) } catch {} })() },[runId])
+  useEffect(()=>{ 
+    (async()=>{ 
+      try { const c = await apiSettings.get('settings_company'); setCompany(c||null) } catch {} 
+      try { const b = await apiSettings.get('settings_branding'); setBranding(b||null) } catch {} 
+      try { const f = await apiSettings.get('settings_footer'); setFooterCfg(f||null) } catch {} 
+      try { 
+        const rs = await apiPayroll.runs(); 
+        // CRITICAL: Only show runs with journal_entry_id (posted runs) 
+        // Backend already filters out orphaned runs, but we double-check here 
+        const posted = rs.filter(r=>{ 
+          const status = r.derived_status || r.status || 'draft'; 
+          return status === 'posted' && r.journal_entry_id !== null && r.journal_entry_id !== undefined; 
+        }); 
+        setRuns(posted); 
+        if (!runId && posted.length) setRunId(String(posted[0].id)); 
+      } catch {} 
+      try { const emps = await apiEmployees.list(); setEmployees(Array.isArray(emps)?emps:[]) } catch {} 
+      try { const t = await apiAccounts.tree(); setAccs(flatten(t||[])) } catch {} 
+    })() 
+  },[runId])
   useEffect(()=>{ (async()=>{ try { if (runId) { const its = await apiPayroll.items(runId); setItems(Array.isArray(its)?its:[]) } else { setItems([]) } } catch { setItems([]) } })() },[runId])
   
   function accountDisplay(code){
@@ -69,7 +88,26 @@ export default function PayrollStatements(){
           </div>
           <div className="flex items-center gap-2">
             <button className="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors" onClick={()=>navigate('/employees')}>{lang==='ar'?'رجوع':'Back'}</button>
-            <button className="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors" onClick={async()=>{ try { const rs = await apiPayroll.runs(); // CRITICAL: Only show runs with journal_entry_id (posted runs) const posted = rs.filter(r=>{ const status = r.derived_status || r.status || 'draft'; return status === 'posted' && r.journal_entry_id !== null && r.journal_entry_id !== undefined; }); setRuns(posted); if (!runId && posted.length) setRunId(String(posted[0].id)) } catch {} try { const its = runId ? await apiPayroll.items(runId) : []; setItems(its||[]) } catch {} try { const emps = await apiEmployees.list(); setEmployees(Array.isArray(emps)?emps:[]) } catch {} }}>{lang==='ar'?'تحديث':'Refresh'}</button>
+            <button className="px-3 py-2 bg-gray-100 rounded hover:bg-gray-200 transition-colors" onClick={async()=>{ 
+              try { 
+                const rs = await apiPayroll.runs(); 
+                // CRITICAL: Only show runs with journal_entry_id (posted runs) 
+                const posted = rs.filter(r=>{ 
+                  const status = r.derived_status || r.status || 'draft'; 
+                  return status === 'posted' && r.journal_entry_id !== null && r.journal_entry_id !== undefined; 
+                }); 
+                setRuns(posted); 
+                if (!runId && posted.length) setRunId(String(posted[0].id)) 
+              } catch {} 
+              try { 
+                const its = runId ? await apiPayroll.items(runId) : []; 
+                setItems(its||[]) 
+              } catch {} 
+              try { 
+                const emps = await apiEmployees.list(); 
+                setEmployees(Array.isArray(emps)?emps:[]) 
+              } catch {} 
+            }}>{lang==='ar'?'تحديث':'Refresh'}</button>
             <button className="px-3 py-2 bg-gray-800 text-white rounded hover:bg-gray-900 transition-colors" onClick={printHTML}>{lang==='ar'?'طباعة':'Print'}</button>
           </div>
         </div>
@@ -285,7 +323,21 @@ function RunsManager(){
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState('')
   useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])
-  useEffect(()=>{ (async()=>{ setLoading(true); try { const rows = await apiPayroll.runs(); // Backend already filters orphaned runs, but we ensure consistency const filtered = Array.isArray(rows) ? rows : []; setList(filtered) } catch { setList([]) } finally { setLoading(false) } })() },[])
+  useEffect(()=>{ 
+    (async()=>{ 
+      setLoading(true); 
+      try { 
+        const rows = await apiPayroll.runs(); 
+        // Backend already filters orphaned runs, but we ensure consistency 
+        const filtered = Array.isArray(rows) ? rows : []; 
+        setList(filtered); 
+      } catch { 
+        setList([]); 
+      } finally { 
+        setLoading(false); 
+      } 
+    })() 
+  },[])
   async function revertToDraft(id){
     setToast('')
     if (!window.confirm(lang==='ar'?'هل أنت متأكد من إعادة المسير إلى حالة مسودة؟':'Are you sure you want to revert to draft?')) return
