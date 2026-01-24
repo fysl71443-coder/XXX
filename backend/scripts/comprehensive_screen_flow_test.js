@@ -216,13 +216,39 @@ async function testSalesFlow() {
     
     // Step 3: Verify journal entry was created
     console.log('\n3️⃣ Verifying journal entry...');
-    const { rows: journalRows } = await client.query(
-      `SELECT je.* FROM journal_entries je 
-       WHERE je.reference_type = 'invoice' AND je.reference_id = $1 AND je.status = 'posted'`,
+    // Wait a bit for transaction to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Check if invoice has journal_entry_id first
+    const { rows: invoiceCheck } = await client.query(
+      'SELECT journal_entry_id FROM invoices WHERE id = $1',
       [invoiceId]
     );
-    logTest('Journal Entry Created', journalRows.length > 0,
-      journalRows.length > 0 ? `Found journal entry #${journalRows[0].id}` : 'No journal entry found');
+    
+    let journalRows = [];
+    if (invoiceCheck.length > 0 && invoiceCheck[0].journal_entry_id) {
+      // Invoice has journal_entry_id, verify the journal entry exists
+      const { rows } = await client.query(
+        `SELECT je.* FROM journal_entries je 
+         WHERE je.id = $1 AND je.reference_type = 'invoice' AND je.reference_id = $2 AND je.status = 'posted'`,
+        [invoiceCheck[0].journal_entry_id, invoiceId]
+      );
+      journalRows = rows;
+      logTest('Journal Entry Created', journalRows.length > 0,
+        journalRows.length > 0 ? `Found journal entry #${journalRows[0].id}` : 
+        `Invoice has journal_entry_id ${invoiceCheck[0].journal_entry_id} but journal entry not found`);
+    } else {
+      // Check if journal entry exists without journal_entry_id link
+      const { rows } = await client.query(
+        `SELECT je.* FROM journal_entries je 
+         WHERE je.reference_type = 'invoice' AND je.reference_id = $1 AND je.status = 'posted'`,
+        [invoiceId]
+      );
+      journalRows = rows;
+      logTest('Journal Entry Created', journalRows.length > 0,
+        journalRows.length > 0 ? `Found journal entry #${journalRows[0].id} (but invoice.journal_entry_id is NULL)` : 
+        'No journal entry found and invoice.journal_entry_id is NULL');
+    }
     
     if (journalRows.length > 0) {
       const journalEntryId = journalRows[0].id;
@@ -313,12 +339,21 @@ async function testExpensesFlow() {
     
     // Step 2: Create expense invoice
     console.log('\n2️⃣ Creating expense invoice...');
+    // Get account code for the expense account
+    const { rows: accountInfo } = await client.query(
+      'SELECT account_code FROM accounts WHERE id = $1',
+      [expenseAccountId]
+    );
+    const accountCode = accountInfo[0]?.account_code || '5000';
+    
     const expenseData = {
       date: new Date().toISOString().split('T')[0],
       description: 'Test Expense',
       amount: 500,
+      total: 500,
       payment_method: 'cash',
-      account_id: expenseAccountId
+      account_code: accountCode,
+      status: 'posted'
     };
     
     let expenseId;
@@ -345,13 +380,39 @@ async function testExpensesFlow() {
     
     // Step 4: Verify journal entry was created
     console.log('\n4️⃣ Verifying journal entry...');
-    const { rows: journalRows } = await client.query(
-      `SELECT je.* FROM journal_entries je 
-       WHERE (je.reference_type = 'expense_invoice' OR je.reference_type = 'expense') AND je.reference_id = $1 AND je.status = 'posted'`,
+    // Wait a bit for transaction to complete
+    await new Promise(resolve => setTimeout(resolve, 500));
+    
+    // Check if expense has journal_entry_id first
+    const { rows: expenseCheck } = await client.query(
+      'SELECT journal_entry_id FROM expenses WHERE id = $1',
       [expenseId]
     );
-    logTest('Journal Entry Created', journalRows.length > 0,
-      journalRows.length > 0 ? `Found journal entry #${journalRows[0].id}` : 'No journal entry found');
+    
+    let journalRows = [];
+    if (expenseCheck.length > 0 && expenseCheck[0].journal_entry_id) {
+      // Expense has journal_entry_id, verify the journal entry exists
+      const { rows } = await client.query(
+        `SELECT je.* FROM journal_entries je 
+         WHERE je.id = $1 AND (je.reference_type = 'expense_invoice' OR je.reference_type = 'expense') AND je.reference_id = $2 AND je.status = 'posted'`,
+        [expenseCheck[0].journal_entry_id, expenseId]
+      );
+      journalRows = rows;
+      logTest('Journal Entry Created', journalRows.length > 0,
+        journalRows.length > 0 ? `Found journal entry #${journalRows[0].id}` : 
+        `Expense has journal_entry_id ${expenseCheck[0].journal_entry_id} but journal entry not found`);
+    } else {
+      // Check if journal entry exists without journal_entry_id link
+      const { rows } = await client.query(
+        `SELECT je.* FROM journal_entries je 
+         WHERE (je.reference_type = 'expense_invoice' OR je.reference_type = 'expense') AND je.reference_id = $1 AND je.status = 'posted'`,
+        [expenseId]
+      );
+      journalRows = rows;
+      logTest('Journal Entry Created', journalRows.length > 0,
+        journalRows.length > 0 ? `Found journal entry #${journalRows[0].id} (but expense.journal_entry_id is NULL)` : 
+        'No journal entry found and expense.journal_entry_id is NULL');
+    }
     
     if (journalRows.length > 0) {
       // Step 5: Verify journal entry is balanced
@@ -420,7 +481,7 @@ async function testPayrollFlow() {
     // Step 1: Get employee
     console.log('\n1️⃣ Getting employee...');
     const { rows: employees } = await client.query(
-      'SELECT id FROM employees WHERE is_active = true LIMIT 1'
+      "SELECT id FROM employees WHERE status = 'active' LIMIT 1"
     );
     if (employees.length === 0) {
       logTest('Employee Available', false, 'No active employee found');
@@ -647,7 +708,7 @@ async function testCustomersFlow() {
     // Step 1: Get customer
     console.log('\n1️⃣ Getting customer...');
     const { rows: customers } = await client.query(
-      'SELECT id, account_id FROM partners WHERE type = $1 AND is_active = true LIMIT 1',
+      'SELECT id, account_id FROM partners WHERE type = $1 LIMIT 1',
       ['customer']
     );
     if (customers.length === 0) {

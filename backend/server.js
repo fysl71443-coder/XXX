@@ -5113,8 +5113,14 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
           }
         }
       } catch (journalError) {
-        console.error('[EXPENSES] Error creating journal entry:', journalError);
-        // Don't fail expense creation if journal entry fails - just log it
+        console.error('[EXPENSES] CRITICAL: Error creating journal entry:', journalError);
+        // CRITICAL: Fail expense creation if journal entry fails (Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود)
+        await client.query('ROLLBACK');
+        return res.status(500).json({ 
+          error: "journal_creation_failed", 
+          details: journalError?.message || "Failed to create journal entry for expense",
+          expense_id: expense.id
+        });
       }
     }
     
@@ -6385,6 +6391,8 @@ async function handleCreateSupplierInvoice(req, res) {
             [journalEntryId, 'posted', invoice.id]
           );
           console.log(`[ACCOUNTING] Linked journal entry ${journalEntryId} to supplier invoice ${invoice.id}`);
+        } else {
+          throw new Error('JOURNAL_CREATION_FAILED: Journal entry ID is null after creation');
         }
       } catch (journalError) {
         console.error('[ACCOUNTING] CRITICAL: Failed to create journal entry for supplier invoice:', invoice.id, journalError);
@@ -7761,7 +7769,7 @@ async function getNextInvoiceNumber() {
   }
 }
 
-async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discount, tax, total, paymentMethod, branch, client = null) {
+async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discount, tax, total, paymentMethod, branch, client = null, date = null) {
   try {
     // Use provided client (for transaction) or pool (standalone)
     const db = client || pool;
@@ -7825,14 +7833,15 @@ async function createInvoiceJournalEntry(invoiceId, customerId, subtotal, discou
     }
 
     // Extract period from date (YYYY-MM format)
-    const entryDate = new Date();
+    // Use provided date or current date
+    const entryDate = date ? new Date(date) : new Date();
     const period = entryDate.toISOString().slice(0, 7); // YYYY-MM
     
     // Create journal entry with period
     // CRITICAL FIX: Set status='posted' when creating journal entry
     const { rows: entryRows } = await db.query(
       'INSERT INTO journal_entries(entry_number, description, date, period, reference_type, reference_id, status, branch) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-      [entryNumber, `فاتورة مبيعات #${invoiceId}`, entryDate, period, 'invoice', invoiceId, 'posted', branch || 'china_town']
+      [entryNumber, `فاتورة مبيعات #${invoiceId}`, entryDate.toISOString().split('T')[0], period, 'invoice', invoiceId, 'posted', branch || 'china_town']
     );
 
     const entryId = entryRows && entryRows[0] ? entryRows[0].id : null;
