@@ -56,34 +56,42 @@ export default function EmployeesPayrollRunsTable({ runs, canPayrollWrite, canEm
             </tr>
           </thead>
           <tbody>
-            {runs.map(r => (
-              <tr key={r.id} className="border-b">
-                <td className="p-2">{r.period}</td>
-                <td className="p-2">
-                  <span className={r.status === 'posted' ? 'px-2 py-1 rounded text-xs bg-green-100 text-green-700' : (r.status === 'approved' ? 'px-2 py-1 rounded text-xs bg-blue-100 text-blue-700' : 'px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-700')}>
-                    {r.status}
-                  </span>
-                </td>
-                <td className="p-2">
-                  <div className="flex gap-2">
-                    <button
-                      className="px-2 py-1 bg-green-600 text-white rounded disabled:opacity-50"
-                      disabled={r.status !== 'draft' || !canPayrollWrite}
-                      onClick={() => handleApprove(r)}
-                    >
-                      {lang === 'ar' ? 'اعتماد' : 'Approve'}
-                    </button>
-                    <button
-                      className="px-2 py-1 bg-primary-600 text-white rounded disabled:opacity-50"
-                      disabled={r.status !== 'approved' || !canPayrollWrite}
-                      onClick={() => handlePost(r)}
-                    >
-                      {r.status === 'posted' ? (lang === 'ar' ? 'مُرحل' : 'Posted') : (lang === 'ar' ? 'ترحيل محاسبي' : 'Post')}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {runs.map(r => {
+              // Use derived_status if available, otherwise fall back to status
+              const displayStatus = r.derived_status || r.status;
+              const isPosted = displayStatus === 'posted';
+              const isApproved = displayStatus === 'approved';
+              const isDraft = displayStatus === 'draft';
+              
+              return (
+                <tr key={r.id} className="border-b">
+                  <td className="p-2">{r.period}</td>
+                  <td className="p-2">
+                    <span className={isPosted ? 'px-2 py-1 rounded text-xs bg-green-100 text-green-700' : (isApproved ? 'px-2 py-1 rounded text-xs bg-blue-100 text-blue-700' : 'px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-700')}>
+                      {lang === 'ar' ? (isPosted ? 'منشور' : (isApproved ? 'معتمد' : 'مسودة')) : displayStatus}
+                    </span>
+                  </td>
+                  <td className="p-2">
+                    <div className="flex gap-2">
+                      <button
+                        className="px-2 py-1 bg-green-600 text-white rounded disabled:opacity-50"
+                        disabled={!isDraft || !canPayrollWrite}
+                        onClick={() => handleApprove(r)}
+                      >
+                        {lang === 'ar' ? 'اعتماد' : 'Approve'}
+                      </button>
+                      <button
+                        className="px-2 py-1 bg-primary-600 text-white rounded disabled:opacity-50"
+                        disabled={!isApproved || !canPayrollWrite}
+                        onClick={() => handlePost(r)}
+                      >
+                        {isPosted ? (lang === 'ar' ? 'مُرحل' : 'Posted') : (lang === 'ar' ? 'ترحيل محاسبي' : 'Post')}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

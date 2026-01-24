@@ -21,7 +21,7 @@ export default function PayrollDues(){
   const [runId, setRunId] = useState('')
   const [outMonth, setOutMonth] = useState('')
   useEffect(()=>{ function onStorage(e){ if (e.key==='lang') setLang(e.newValue||'ar') } window.addEventListener('storage', onStorage); return ()=>window.removeEventListener('storage', onStorage) },[])
-  useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_company'); setCompany(c||null) } catch {} try { const emps = await apiEmployees.list(); setEmployees(Array.isArray(emps)?emps:[]) } catch {} try { const rs = await apiPayroll.runs(); const posted = rs.filter(r=>String(r.derived_status||'draft')==='posted'); setRuns(posted) } catch {} })() },[])
+  useEffect(()=>{ (async()=>{ try { const c = await apiSettings.get('settings_company'); setCompany(c||null) } catch {} try { const emps = await apiEmployees.list(); setEmployees(Array.isArray(emps)?emps:[]) } catch {} try { const rs = await apiPayroll.runs(); const posted = rs.filter(r=>String(r.derived_status||r.status||'draft')==='posted'); setRuns(posted) } catch {} })() },[])
   useEffect(()=>{ try { const q = new URLSearchParams(location.search); const empId = q.get('employee_id')||''; if (empId) setFilterEmp(empId) } catch {} },[location.search])
   useEffect(()=>{ (async()=>{ try { const params = {}; if (filterEmp) params.employee_id = filterEmp; const outs = await apiPayroll.outstanding(params); let arr = Array.isArray(outs)?outs:[]; if (runId) { const r = runs.find(x=>String(x.id)===String(runId)); const per = r?.period||''; arr = arr.filter(o => String(o.period||'')===String(per)) } setOutstanding(arr) } catch { setOutstanding([]) } })() },[filterEmp, runId, runs])
 

@@ -4108,6 +4108,8 @@ app.delete("/api/employees/:id", authenticateToken, authorize("employees","delet
 // GET /api/payroll/runs - List all payroll runs
 app.get("/api/payroll/runs", authenticateToken, authorize("payroll","view"), async (req, res) => {
   try {
+    // CRITICAL: Filter out orphaned payroll runs (posted/approved without journal_entry_id)
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
     const { rows } = await pool.query(`
       SELECT 
         pr.id, 
@@ -4119,7 +4121,7 @@ app.get("/api/payroll/runs", authenticateToken, authorize("payroll","view"), asy
         pr.created_at,
         CASE 
           WHEN pr.journal_entry_id IS NOT NULL THEN 'posted'
-          WHEN pr.status = 'approved' THEN 'approved'
+          WHEN pr.status = 'approved' AND pr.journal_entry_id IS NULL THEN 'approved'
           ELSE 'draft'
         END as derived_status,
         COALESCE(SUM(pri.net_salary), 0) as total_net_salary,
@@ -4127,6 +4129,10 @@ app.get("/api/payroll/runs", authenticateToken, authorize("payroll","view"), asy
         COUNT(CASE WHEN pri.paid_at IS NOT NULL THEN 1 END) as paid_count
       FROM payroll_runs pr
       LEFT JOIN payroll_run_items pri ON pri.run_id = pr.id
+      WHERE NOT (
+        (pr.status = 'posted' OR pr.status = 'approved')
+        AND pr.journal_entry_id IS NULL
+      )
       GROUP BY pr.id, pr.period, pr.status, pr.journal_entry_id, pr.approved_at, pr.posted_at, pr.created_at
       ORDER BY pr.period DESC, pr.id DESC
     `);
@@ -4154,8 +4160,12 @@ app.get("/api/payroll/runs", authenticateToken, authorize("payroll","view"), asy
         }
       }
       
+      // CRITICAL: Use derived_status for consistency
+      const finalStatus = r.derived_status || (r.journal_entry_id ? 'posted' : (r.status === 'approved' ? 'approved' : 'draft'));
+      
       return {
         ...r,
+        status: finalStatus, // Override status with derived_status for consistency
         total_net_salary: Number(r.total_net_salary || 0),
         items_count: totalCount,
         month,
@@ -4163,8 +4173,8 @@ app.get("/api/payroll/runs", authenticateToken, authorize("payroll","view"), asy
         payment_status,
         has_posted_journal: !!r.journal_entry_id,
         allowed_actions: {
-          edit: r.status === 'draft' && !r.journal_entry_id,
-          delete: r.status === 'draft' && !r.journal_entry_id,
+          edit: finalStatus === 'draft' && !r.journal_entry_id,
+          delete: finalStatus === 'draft' && !r.journal_entry_id,
           post: (r.status === 'approved' || r.status === 'draft') && !r.journal_entry_id,
           pay: r.journal_entry_id !== null
         }
