@@ -6849,14 +6849,15 @@ app.get("/ar/summary", authenticateToken, authorize("reports","view"), async (re
     }
     
     // Calculate balance for each customer from posted journal entries
+    // CRITICAL: Use journal_postings (not journal_entry_lines which doesn't exist)
     const items = [];
     for (const customer of customers) {
       const { rows: balanceRows } = await pool.query(`
         SELECT 
-          COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0) as balance
-        FROM journal_entry_lines jel
-        JOIN journal_entries je ON jel.entry_id = je.id
-        WHERE jel.account_id = $1 AND je.status = 'posted'
+          COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) as balance
+        FROM journal_postings jp
+        JOIN journal_entries je ON jp.journal_entry_id = je.id
+        WHERE jp.account_id = $1 AND je.status = 'posted'
       `, [customer.account_id]);
       
       const balance = parseFloat(balanceRows[0]?.balance || 0);
@@ -6864,9 +6865,9 @@ app.get("/ar/summary", authenticateToken, authorize("reports","view"), async (re
       // Get last payment date
       const { rows: lastPayment } = await pool.query(`
         SELECT je.date as last_payment_at
-        FROM journal_entry_lines jel
-        JOIN journal_entries je ON jel.entry_id = je.id
-        WHERE jel.account_id = $1 AND je.status = 'posted' AND jel.credit > 0
+        FROM journal_postings jp
+        JOIN journal_entries je ON jp.journal_entry_id = je.id
+        WHERE jp.account_id = $1 AND je.status = 'posted' AND jp.credit > 0
         ORDER BY je.date DESC LIMIT 1
       `, [customer.account_id]);
       
@@ -6886,9 +6887,12 @@ app.get("/ar/summary", authenticateToken, authorize("reports","view"), async (re
 });
 
 // GET /customers/aging - Aging Report for Customers (from posted journal entries only)
+// CRITICAL: Should use journal_entries instead of invoices directly for consistency
+// For now, keeping invoices for compatibility but should be refactored to use journal_entries
 app.get("/customers/aging", authenticateToken, authorize("reports","view"), async (req, res) => {
   try {
     // Get unpaid/partially paid invoices from posted journal entries
+    // NOTE: Currently uses invoices table directly - should be refactored to use journal_entries
     const { rows } = await pool.query(`
       SELECT 
         i.id,
@@ -6906,6 +6910,7 @@ app.get("/customers/aging", authenticateToken, authorize("reports","view"), asyn
       LEFT JOIN partners p ON i.partner_id = p.id
       WHERE i.type = 'sale'
         AND i.status IN ('posted', 'open', 'partial')
+        AND i.journal_entry_id IS NOT NULL  -- CRITICAL: Only invoices with journal entries
       ORDER BY i.date ASC
     `);
     
@@ -6945,6 +6950,115 @@ app.get("/customers/aging", authenticateToken, authorize("reports","view"), asyn
     res.json({ items: [] });
   }
 });
+
+// GET /api/reports/customer-ledger - Customer Ledger Report (from posted journal entries only)
+app.get("/api/reports/customer-ledger", authenticateToken, authorize("reports","view"), async (req, res) => {
+  try {
+    const { partner_id, from, to } = req.query || {};
+    
+    if (!partner_id) {
+      return res.status(400).json({ error: "missing_partner_id", details: "partner_id is required" });
+    }
+    
+    // Get partner's account_id
+    const { rows: partnerRows } = await pool.query(
+      'SELECT account_id, name FROM partners WHERE id = $1',
+      [Number(partner_id)]
+    );
+    
+    if (!partnerRows || !partnerRows[0]?.account_id) {
+      return res.json({ items: [], opening_balance: 0, closing_balance: 0 });
+    }
+    
+    const accountId = partnerRows[0].account_id;
+    const partnerName = partnerRows[0].name;
+    
+    // Calculate opening balance (before from date)
+    let openingBalance = 0;
+    if (from) {
+      const { rows: openingRows } = await pool.query(`
+        SELECT 
+          COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) as balance
+        FROM journal_postings jp
+        JOIN journal_entries je ON jp.journal_entry_id = je.id
+        WHERE jp.account_id = $1 
+          AND je.status = 'posted'
+          AND je.date < $2
+      `, [accountId, from]);
+      openingBalance = parseFloat(openingRows[0]?.balance || 0);
+    }
+    
+    // Build query for statement items from posted journal entries
+    let query = `
+      SELECT 
+        je.id as entry_id,
+        je.entry_number,
+        je.date,
+        je.description,
+        je.reference_type,
+        je.reference_id,
+        jp.debit,
+        jp.credit
+      FROM journal_postings jp
+      JOIN journal_entries je ON jp.journal_entry_id = je.id
+      WHERE jp.account_id = $1 AND je.status = 'posted'
+    `;
+    const params = [accountId];
+    let paramIndex = 2;
+    
+    if (from) {
+      query += ` AND je.date >= $${paramIndex}`;
+      params.push(from);
+      paramIndex++;
+    }
+    if (to) {
+      query += ` AND je.date <= $${paramIndex}`;
+      params.push(to);
+      paramIndex++;
+    }
+    
+    query += ' ORDER BY je.date ASC, je.id ASC';
+    
+    const { rows } = await pool.query(query, params);
+    
+    // Calculate closing balance
+    let runningBalance = openingBalance;
+    const items = (rows || []).map(row => {
+      const debit = parseFloat(row.debit || 0);
+      const credit = parseFloat(row.credit || 0);
+      runningBalance += debit - credit;
+      return {
+        id: row.entry_id,
+        entry_number: row.entry_number,
+        date: row.date,
+        description: row.description,
+        reference_type: row.reference_type,
+        reference_id: row.reference_id,
+        debit,
+        credit,
+        running_balance: runningBalance
+      };
+    });
+    
+    res.json({
+      partner_id: Number(partner_id),
+      partner_name: partnerName,
+      account_id: accountId,
+      opening_balance: openingBalance,
+      closing_balance: runningBalance,
+      items
+    });
+  } catch (e) {
+    console.error('[REPORTS] Error getting customer ledger:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  }
+});
+
+// Legacy endpoint (redirects to /api version)
+app.get("/reports/customer-ledger", authenticateToken, authorize("reports","view"), async (req, res) => {
+  return res.redirect(307, `/api/reports/customer-ledger?${new URLSearchParams(req.query).toString()}`);
+});
+
 // POS Tables Layout - both paths
 async function handleGetTablesLayout(req, res) {
   try {

@@ -1,263 +1,375 @@
-# تقرير فحص شامل للشاشات والاستعلامات
+# تقرير مراجعة شامل لجميع الشاشات (Comprehensive Screens Audit Report)
 
 **التاريخ:** 2026-01-22  
-**الحالة:** ✅ مكتمل
+**الهدف:** التأكد من أن جميع الشاشات تستخدم قيود اليومية المنشورة كمصدر الحقيقة الوحيد وأن جميع البيانات المعروضة صحيحة
 
 ---
 
-## ملخص تنفيذي
+## 1. ملخص تنفيذي
 
-تم إجراء فحص شامل لجميع الشاشات الرئيسية (العملاء، التقارير، المصروفات، المشتريات) للتحقق من:
-1. استخدام قيود اليومية المنشورة (`status='posted'`)
-2. وجود جميع الأعمدة المطلوبة في قاعدة البيانات
-3. صحة الاستعلامات SQL
+### ✅ الشاشات التي تستخدم journal_entries بشكل صحيح
+- ✅ **شاشة المحاسبة (Journal):** تستخدم `journal_entries` و `journal_postings` فقط
+- ✅ **شاشة التقارير (Reports):** معظم التقارير تستخدم `je.status = 'posted'`
+- ✅ **شاشة المصروفات (Expenses):** تعرض البيانات من `expenses` لكن الفلترة تستبعد الفواتير اليتيمة
 
----
-
-## 1. ✅ التحقق من قاعدة البيانات
-
-### الأعمدة المطلوبة - جميعها موجودة:
-
-| الجدول | العمود | الحالة |
-|--------|--------|--------|
-| `invoices` | `journal_entry_id` | ✅ موجود |
-| `invoices` | `status` | ✅ موجود |
-| `invoices` | `branch` | ✅ موجود |
-| `invoices` | `type` | ✅ موجود |
-| `expenses` | `journal_entry_id` | ✅ موجود |
-| `expenses` | `status` | ✅ موجود |
-| `expenses` | `branch` | ✅ موجود |
-| `supplier_invoices` | `journal_entry_id` | ✅ موجود |
-| `supplier_invoices` | `status` | ✅ موجود |
-| `supplier_invoices` | `branch` | ✅ موجود |
-| `journal_entries` | `status` | ✅ موجود |
-| `journal_entries` | `period` | ✅ موجود |
-| `journal_entries` | `branch` | ✅ موجود |
-| `journal_entries` | `reference_type` | ✅ موجود |
-| `journal_entries` | `reference_id` | ✅ موجود |
-
-### الإحصائيات:
-- ✅ قيود اليومية المنشورة: 1
-- ✅ فواتير مرتبطة بقيود: 1
-- ✅ مصروفات مرتبطة بقيود: 0
-- ✅ فواتير موردين مرتبطة بقيود: 0
+### ⚠️ المشاكل المكتشفة
+- 🔴 **مشكلة حرجة:** `/ar/summary` يستخدم `journal_entry_lines` (جدول غير موجود) بدلاً من `journal_postings`
+- ⚠️ **مشكلة محتملة:** `/customers/aging` يستخدم `invoices` مباشرة بدلاً من `journal_entries`
+- ⚠️ **مشكلة محتملة:** شاشة العملاء تستخدم `invoices.list()` و `payments.list()` مباشرة
+- ⚠️ **مشكلة محتملة:** شاشة الموردين تستخدم `supplier_invoices.list()` مباشرة
+- ⚠️ **مشكلة محتملة:** شاشة المبيعات تستخدم `invoices.list()` مباشرة
 
 ---
 
-## 2. ✅ شاشة العملاء (Clients)
+## 2. فحص شاشة الموظفين (Employees)
 
-### الملفات المراجعة:
-- `backend/frontend/src/pages/Clients.jsx`
-- `backend/frontend/src/pages/ClientsInvoicesAll.jsx`
-- `backend/frontend/src/pages/ClientsInvoicesPaid.jsx`
-- `backend/controllers/invoiceController.js`
-- `backend/controllers/paymentController.js`
-- `backend/controllers/partnerController.js`
+### 2.1 Frontend (Employees.jsx)
+- ✅ **Route:** `/employees`
+- ✅ **API Calls:** `employees.list()`, `payroll.runs()`
+- ✅ **البيانات المالية:** لا توجد بيانات مالية مباشرة (إدارة الموظفين فقط)
+- ✅ **Payroll Runs:** تستخدم `payroll.runs` API
 
-### الاستعلامات المستخدمة:
+### 2.2 Backend API
+- ✅ **GET /api/employees:** يستخدم `employees` table فقط (لا بيانات مالية)
+- ✅ **GET /api/employees/:id/advance-balance:** يستخدم `journal_postings` مع `je.status = 'posted'` ✅
 
-#### 2.1 فواتير المبيعات (`invoices.list`)
-- **الملف:** `backend/controllers/invoiceController.js`
-- **الحالة:** ✅ صحيح
-- **الملاحظات:**
-  - يستخدم `SELECT ... FROM invoices i LEFT JOIN partners p`
-  - يحتوي على `i.journal_entry_id` في SELECT
-  - **⚠️ لا يستخدم قيود اليومية مباشرة** - يعتمد على `invoices` table
-  - هذا صحيح لأن شاشة العملاء تحتاج عرض جميع الفواتير (draft و posted)
-
-#### 2.2 المدفوعات (`payments.list`)
-- **الملف:** `backend/controllers/paymentController.js` (يجب التحقق)
-- **الحالة:** ⚠️ يحتاج فحص
-- **الملاحظات:**
-  - يجب التحقق من أن `payments` table يحتوي على `journal_entry_id` (إن وجد)
-
-#### 2.3 كشف حساب العميل (`reports.customerLedger`)
-- **الملف:** `backend/controllers/partnerController.js` (السطور 137-200)
-- **الحالة:** ✅ صحيح
-- **الاستعلام:**
-  ```sql
-  WHERE jel.account_id = $1 AND je.status = 'posted'
-  ```
-- **الملاحظات:**
-  - ✅ يستخدم `je.status = 'posted'` بشكل صحيح
-  - ✅ يعتمد على `journal_entries` وليس على `invoices` مباشرة
-
-### النتيجة: ✅ جميع الاستعلامات صحيحة
+**الخلاصة:** ✅ شاشة الموظفين لا تحتاج فحص مالي (إدارة الموظفين فقط)
 
 ---
 
-## 3. ✅ شاشة التقارير (Reports)
+## 3. فحص شاشة العملاء (Clients/Customers)
 
-### الملفات المراجعة:
-- `backend/frontend/src/components/GeneralLedger.jsx`
-- `backend/frontend/src/pages/Reports.jsx`
-- `backend/controllers/reportController.js`
-- `backend/controllers/journalController.js`
+### 3.1 Frontend (Clients.jsx)
 
-### التقارير المراجعة:
+#### API Calls:
+```javascript
+// Load customers
+const data = await partners.list({ type: 'customer' })  // ✅ صحيح
 
-#### 3.1 ميزان المراجعة (`trialBalance`)
-- **الملف:** `backend/controllers/reportController.js` (السطر 40)
-- **الحالة:** ✅ صحيح
-- **الاستعلام:**
-  ```sql
-  LEFT JOIN journal_entries je ON je.id = jp.journal_entry_id AND je.status = 'posted'
-  ```
-- **الملاحظات:**
-  - ✅ يستخدم `je.status = 'posted'` بشكل صحيح
+// Load invoices
+const res = await invoices.list({ type: 'sale', ... })  // ⚠️ يستخدم invoices مباشرة
 
-#### 3.2 المبيعات مقابل المصروفات (`salesVsExpenses`)
-- **الملف:** `backend/controllers/reportController.js` (السطور 99-100)
-- **الحالة:** ✅ صحيح
-- **الاستعلام:**
-  ```sql
-  WHERE je.status = 'posted' AND jp.account_id = ANY($1::int[])
-  ```
-- **الملاحظات:**
-  - ✅ يستخدم `je.status = 'posted'` بشكل صحيح
-  - ✅ يعتمد على `journal_entries` وليس على `invoices` أو `expenses` مباشرة
+// Load payments
+const res = await payments.list({ ...params, party_type: 'customer' })  // ⚠️ يستخدم payments مباشرة
 
-#### 3.3 المبيعات حسب الفرع (`salesByBranch`)
-- **الملف:** `backend/controllers/reportController.js` (السطر 217)
-- **الحالة:** ✅ صحيح
-- **الاستعلام:**
-  ```sql
-  WHERE je.status = 'posted' AND jp.account_id = ANY($1::int[])
-  ```
-- **الملاحظات:**
-  - ✅ يستخدم `je.status = 'posted'` بشكل صحيح
+// Load receivables (Customer Ledger)
+const res = await reports.customerLedger({ ... })  // ✅ يستخدم reports API
+```
 
-#### 3.4 المصروفات حسب الفرع (`expensesByBranch`)
-- **الملف:** `backend/controllers/reportController.js` (السطر 306)
-- **الحالة:** ✅ صحيح
-- **الاستعلام:**
-  ```sql
-  WHERE je.status = 'posted' AND jp.account_id = ANY($1::int[])
-  ```
-- **الملاحظات:**
-  - ✅ يستخدم `je.status = 'posted'` بشكل صحيح
+#### المشاكل:
+- ⚠️ **شاشة الفواتير:** تستخدم `invoices.list()` مباشرة بدلاً من `journal_entries`
+- ⚠️ **شاشة المدفوعات:** تستخدم `payments.list()` مباشرة
+- ✅ **شاشة المستحقات (Receivables):** تستخدم `reports.customerLedger()` (يجب التحقق من Backend)
 
-#### 3.5 قيود اليومية (`journal.list`)
-- **الملف:** `backend/controllers/journalController.js` (السطور 48-51)
-- **الحالة:** ✅ صحيح
-- **الاستعلام:**
-  ```sql
-  WHERE 1=1
-  AND je.status = $1  -- يتم تمرير 'posted' من frontend
-  ```
-- **الملاحظات:**
-  - ✅ يدعم فلترة حسب `status`
-  - ✅ Frontend يمرر `status: 'posted'` في `GeneralLedger.jsx` (السطر 52)
+### 3.2 Backend API
 
-### النتيجة: ✅ جميع التقارير تستخدم `status='posted'` بشكل صحيح
+#### GET /api/partners
+- ✅ **مصدر الحقيقة:** `partners` table فقط (لا بيانات مالية)
+
+#### GET /ar/summary
+- 🔴 **مشكلة حرجة:** يستخدم `journal_entry_lines` (جدول غير موجود!)
+```sql
+FROM journal_entry_lines jel  -- ❌ خطأ: الجدول الصحيح هو journal_postings
+JOIN journal_entries je ON jel.entry_id = je.id  -- ❌ خطأ: يجب أن يكون je.id = jp.journal_entry_id
+```
+- ✅ **يجب تغييره إلى:**
+```sql
+FROM journal_postings jp
+JOIN journal_entries je ON jp.journal_entry_id = je.id
+WHERE jp.account_id = $1 AND je.status = 'posted'
+```
+
+#### GET /customers/aging
+- ⚠️ **مشكلة:** يستخدم `invoices` مباشرة بدلاً من `journal_entries`
+```sql
+FROM invoices i
+WHERE i.type = 'sale' AND i.status IN ('posted', 'open', 'partial')
+```
+- ⚠️ **يجب استخدام:** `journal_entries` مع `reference_type = 'invoice'` و `status = 'posted'`
+
+#### GET /partners/:id/statement
+- ⚠️ **يجب التحقق:** من وجود هذا endpoint
+
+#### GET /partners/:id/balance
+- ⚠️ **يجب التحقق:** من وجود هذا endpoint
 
 ---
 
-## 4. ✅ شاشة المصروفات (Expenses)
+## 4. فحص شاشة الموردين (Suppliers)
 
-### الملفات المراجعة:
-- `backend/frontend/src/pages/Expenses.jsx`
-- `backend/controllers/expenseController.js`
+### 4.1 Frontend (Suppliers.jsx)
 
-### الاستعلامات المستخدمة:
+#### API Calls:
+```javascript
+// Load suppliers
+const data = await partners.list({ type: 'supplier' })  // ✅ صحيح
 
-#### 4.1 قائمة المصروفات (`expenses.list`)
-- **الملف:** `backend/controllers/expenseController.js` (السطر 10)
-- **الحالة:** ✅ صحيح
-- **الاستعلام:**
-  ```sql
-  SELECT ..., journal_entry_id, ... FROM expenses
-  ```
-- **الملاحظات:**
-  - ✅ يحتوي على `journal_entry_id` في SELECT
-  - **⚠️ لا يستخدم قيود اليومية مباشرة** - يعتمد على `expenses` table
-  - هذا صحيح لأن شاشة المصروفات تحتاج عرض جميع المصروفات (draft و posted)
+// Load supplier invoices
+const res1 = await supplierInvoices.list(params)  // ⚠️ يستخدم supplier_invoices مباشرة
+const res2 = await supplierInvoices.list({ ...params, status: 'draft' })  // ⚠️
+```
 
-#### 4.2 التقارير التي تعتمد على المصروفات
-- **الملف:** `backend/controllers/reportController.js` (`expensesByBranch`)
-- **الحالة:** ✅ صحيح
-- **الملاحظات:**
-  - ✅ يستخدم `je.status = 'posted'` في تقارير المصروفات
+#### المشاكل:
+- ⚠️ **شاشة فواتير الموردين:** تستخدم `supplierInvoices.list()` مباشرة بدلاً من `journal_entries`
 
-### النتيجة: ✅ جميع الاستعلامات صحيحة
+### 4.2 Backend API
 
----
-
-## 5. ✅ شاشة المشتريات مع الموردين (Suppliers)
-
-### الملفات المراجعة:
-- `backend/frontend/src/pages/Suppliers.jsx`
-- `backend/frontend/src/services/api/index.js` (supplierInvoices)
-
-### الاستعلامات المستخدمة:
-
-#### 5.1 فواتير الموردين (`supplierInvoices.list`)
-- **الملف:** يجب التحقق من controller (يبدو أنه في `server.js`)
-- **الحالة:** ⚠️ يحتاج فحص
-- **الملاحظات:**
-  - يجب التحقق من أن الاستعلام يحتوي على `journal_entry_id`
-  - يجب التحقق من أن التقارير تستخدم `journal_entries` مع `status='posted'`
-
-#### 5.2 المدفوعات للموردين (`payments.list({ party_type: 'supplier' })`)
-- **الحالة:** ⚠️ يحتاج فحص
-- **الملاحظات:**
-  - يجب التحقق من أن `payments` table يحتوي على `journal_entry_id` (إن وجد)
-
-### النتيجة: ⚠️ يحتاج فحص إضافي
+#### GET /api/supplier-invoices
+- ⚠️ **مشكلة:** يستخدم `supplier_invoices` مباشرة
+```sql
+SELECT ... FROM supplier_invoices si
+WHERE ...
+```
+- ✅ **الفلترة:** تم إضافة فلترة للفواتير اليتيمة (posted/reversed بدون journal_entry_id)
+- ⚠️ **يجب استخدام:** `journal_entries` مع `reference_type = 'supplier_invoice'` و `status = 'posted'` للعرض المالي
 
 ---
 
-## 6. ✅ قائمة التحقق النهائية
+## 5. فحص شاشة المصروفات (Expenses)
 
-### شاشة العملاء:
-- [x] ✅ جميع الاستعلامات تعمل بدون أخطاء
-- [x] ✅ الفواتير المرتبطة بقيود تظهر بشكل صحيح
-- [x] ✅ كشف حساب العميل يستخدم قيود اليومية المنشورة
+### 5.1 Frontend (Expenses.jsx)
 
-### شاشة التقارير:
-- [x] ✅ جميع التقارير تستخدم `status='posted'`
-- [x] ✅ جميع الأعمدة المطلوبة موجودة
-- [x] ✅ لا توجد أخطاء SQL
+#### API Calls:
+```javascript
+// Load expenses
+const res = await apiExpenses.list(filters)  // ⚠️ يستخدم expenses مباشرة
+```
 
-### شاشة المصروفات:
-- [x] ✅ جدول المصروفات يحتوي على `journal_entry_id`
-- [x] ✅ التقارير تستخدم قيود اليومية المنشورة
-- [x] ✅ جميع الأعمدة المطلوبة موجودة
+#### المشاكل:
+- ⚠️ **شاشة المصروفات:** تستخدم `expenses.list()` مباشرة بدلاً من `journal_entries`
 
-### شاشة المشتريات:
-- [x] ✅ جدول فواتير الموردين يحتوي على `journal_entry_id`
-- [ ] ⚠️ يجب التحقق من أن التقارير تستخدم قيود اليومية المنشورة
-- [x] ✅ جميع الأعمدة المطلوبة موجودة
+### 5.2 Backend API
 
----
-
-## 7. التوصيات
-
-### ✅ ما تم بشكل صحيح:
-1. جميع الجداول تحتوي على `journal_entry_id`
-2. جميع التقارير المالية تستخدم `journal_entries` مع `status='posted'`
-3. جميع الأعمدة المطلوبة موجودة في قاعدة البيانات
-
-### ⚠️ ما يحتاج فحص إضافي:
-1. **فواتير الموردين:** يجب التحقق من controller وطريقة الاستعلام
-2. **المدفوعات:** يجب التحقق من أن `payments` table يحتوي على `journal_entry_id` (إن كان مطلوباً)
-
-### 📝 ملاحظات مهمة:
-- **شاشات الإدارة (العملاء، المصروفات، المشتريات):** تستخدم الجداول الأصلية (`invoices`, `expenses`, `supplier_invoices`) لعرض جميع السجلات (draft و posted) - هذا صحيح ✅
-- **التقارير المالية:** تستخدم `journal_entries` مع `status='posted'` فقط - هذا صحيح ✅
-- **كشف حساب العميل:** يستخدم `journal_entries` مع `status='posted'` - هذا صحيح ✅
+#### GET /api/expenses
+- ✅ **الفلترة:** تم إضافة فلترة للفواتير اليتيمة (posted/reversed بدون journal_entry_id)
+```sql
+WHERE NOT (
+  (status = 'posted' OR status = 'reversed') 
+  AND journal_entry_id IS NULL
+)
+```
+- ⚠️ **يجب استخدام:** `journal_entries` مع `reference_type = 'expense'` و `status = 'posted'` للعرض المالي
 
 ---
 
-## 8. الخلاصة
+## 6. فحص شاشة المبيعات (Sales/Invoices)
 
-✅ **النتيجة العامة: ممتاز**
+### 6.1 Frontend
 
-جميع الشاشات الرئيسية تعمل بشكل صحيح:
-- ✅ قاعدة البيانات تحتوي على جميع الأعمدة المطلوبة
-- ✅ جميع التقارير المالية تستخدم قيود اليومية المنشورة
-- ✅ جميع الاستعلامات SQL صحيحة
-- ⚠️ يحتاج فحص إضافي لـ supplier invoices controller
+#### API Calls:
+```javascript
+// Load invoices
+const res = await invoices.list({ type: 'sale', ... })  // ⚠️ يستخدم invoices مباشرة
+```
 
-**التاريخ:** 2026-01-22  
-**الحالة:** ✅ مكتمل مع ملاحظات بسيطة
+#### المشاكل:
+- ⚠️ **شاشة المبيعات:** تستخدم `invoices.list()` مباشرة بدلاً من `journal_entries`
+
+### 6.2 Backend API
+
+#### GET /api/invoices
+- ⚠️ **مشكلة:** يستخدم `invoices` مباشرة
+```sql
+SELECT ... FROM invoices
+WHERE ...
+```
+- ⚠️ **يجب استخدام:** `journal_entries` مع `reference_type = 'invoice'` و `status = 'posted'` للعرض المالي
+
+---
+
+## 7. فحص شاشة التقارير (Reports)
+
+### 7.1 Frontend (Reports.jsx)
+
+#### API Calls:
+```javascript
+// Sales vs Expenses
+const res = await apiReports.salesVsExpenses(params)  // ✅ يستخدم reports API
+
+// Sales by Branch
+const res = await apiReports.salesByBranch(params)  // ✅ يستخدم reports API
+
+// Expenses by Branch
+const res = await apiReports.expensesByBranch(params)  // ✅ يستخدم reports API
+
+// Business Day Sales
+const res = await apiReports.businessDaySales(params)  // ✅ يستخدم reports API
+
+// Cash Flow
+const res = await apiReports.cashFlow(params)  // ✅ يستخدم reports API
+
+// Trial Balance
+const res = await apiReports.trialBalance(params)  // ✅ يستخدم reports API
+
+// Income Statement
+const res = await apiReports.incomeStatement(params)  // ✅ يستخدم reports API
+
+// Customer Ledger
+const res = await apiReports.customerLedger(params)  // ✅ يستخدم reports API
+```
+
+### 7.2 Backend API
+
+#### ✅ التقارير التي تستخدم journal_entries بشكل صحيح:
+1. **GET /api/reports/sales-vs-expenses:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+2. **GET /api/reports/sales-by-branch:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+3. **GET /api/reports/expenses-by-branch:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+4. **GET /api/reports/business-day-sales:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+5. **GET /api/reports/cash-flow:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+6. **GET /api/reports/trial-balance:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+7. **GET /api/reports/income-statement:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+8. **GET /api/reports/ledger-summary:**
+   - ✅ يستخدم `journal_entries` مع `je.status = 'posted'`
+   - ✅ يستخدم `journal_postings` للحسابات
+
+#### ⚠️ التقارير التي تحتاج فحص:
+1. **GET /customers/aging:**
+   - ⚠️ يستخدم `invoices` مباشرة بدلاً من `journal_entries`
+   - يجب استخدام `journal_entries` مع `reference_type = 'invoice'` و `status = 'posted'`
+
+2. **GET /ar/summary:**
+   - 🔴 **مشكلة حرجة:** يستخدم `journal_entry_lines` (جدول غير موجود!)
+   - يجب استخدام `journal_postings` بدلاً من `journal_entry_lines`
+
+3. **GET /api/reports/customer-ledger:**
+   - ✅ **تم إضافة:** endpoint `/api/reports/customer-ledger` الذي يستخدم `journal_postings` و `journal_entries` مع `je.status = 'posted'`
+   - ✅ **يستخدم:** `journal_postings` بشكل صحيح (ليس `journal_entry_lines`)
+   - ✅ **يحسب:** opening_balance و closing_balance من القيود المنشورة فقط
+
+---
+
+## 8. المشاكل الحرجة التي تحتاج إصلاح فوري
+
+### 8.1 🔴 مشكلة حرجة: `/ar/summary` يستخدم جدول غير موجود
+
+**الموقع:** `backend/server.js:6854-6860`
+
+**المشكلة:**
+```sql
+FROM journal_entry_lines jel  -- ❌ جدول غير موجود!
+JOIN journal_entries je ON jel.entry_id = je.id  -- ❌ علاقة خاطئة
+```
+
+**الحل:**
+```sql
+FROM journal_postings jp
+JOIN journal_entries je ON jp.journal_entry_id = je.id
+WHERE jp.account_id = $1 AND je.status = 'posted'
+```
+
+### 8.2 ⚠️ مشكلة: `/customers/aging` يستخدم `invoices` مباشرة
+
+**الموقع:** `backend/server.js:6889-6910`
+
+**المشكلة:**
+```sql
+FROM invoices i
+WHERE i.type = 'sale' AND i.status IN ('posted', 'open', 'partial')
+```
+
+**الحل المقترح:**
+```sql
+SELECT 
+  je.reference_id as invoice_id,
+  je.description,
+  je.date,
+  COALESCE(SUM(jp.debit), 0) as total,
+  COALESCE(SUM(jp.credit), 0) as paid_amount,
+  p.id as partner_id,
+  p.name as partner_name
+FROM journal_entries je
+JOIN journal_postings jp ON jp.journal_entry_id = je.id
+JOIN accounts a ON a.id = jp.account_id
+LEFT JOIN partners p ON p.account_id = a.id
+WHERE je.reference_type = 'invoice'
+  AND je.status = 'posted'
+  AND a.account_code = '1210'  -- Accounts Receivable
+GROUP BY je.id, je.reference_id, je.description, je.date, p.id, p.name
+HAVING COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) > 0
+```
+
+---
+
+## 9. التوصيات
+
+### 9.1 ✅ تم إصلاح المشاكل الحرجة
+
+1. **✅ تم إصلاح `/ar/summary`:**
+   - تم تغيير `journal_entry_lines` إلى `journal_postings`
+   - تم تصحيح العلاقة بين الجداول
+
+2. **✅ تم إصلاح `/api/partners/:id/balance` و `/api/partners/:id/statement`:**
+   - تم تغيير `journal_entry_lines` إلى `journal_postings`
+   - تم تصحيح العلاقة بين الجداول
+
+3. **✅ تم إضافة `/api/reports/customer-ledger`:**
+   - تم إضافة endpoint جديد يستخدم `journal_postings` و `journal_entries`
+   - يستخدم `je.status = 'posted'` فقط
+
+4. **✅ تم تحسين `/customers/aging`:**
+   - تم إضافة فلترة `journal_entry_id IS NOT NULL` لضمان وجود قيد
+
+### 9.2 ⚠️ تحسينات مقترحة
+
+1. **شاشة العملاء:**
+   - استخدام `journal_entries` للعرض المالي بدلاً من `invoices` مباشرة
+   - استخدام `journal_entries` لحساب الأرصدة بدلاً من `payments` مباشرة
+
+2. **شاشة الموردين:**
+   - استخدام `journal_entries` للعرض المالي بدلاً من `supplier_invoices` مباشرة
+
+3. **شاشة المصروفات:**
+   - استخدام `journal_entries` للعرض المالي بدلاً من `expenses` مباشرة
+
+4. **شاشة المبيعات:**
+   - استخدام `journal_entries` للعرض المالي بدلاً من `invoices` مباشرة
+
+### 9.3 ✅ لا توجد مشاكل
+
+- ✅ **شاشة الموظفين:** لا تحتاج فحص مالي
+- ✅ **شاشة التقارير:** معظم التقارير تستخدم `journal_entries` بشكل صحيح
+
+---
+
+## 10. الخلاصة
+
+### ✅ النقاط الإيجابية
+- شاشة المحاسبة تستخدم `journal_entries` كمصدر الحقيقة الوحيد بشكل صحيح
+- معظم التقارير تستخدم `journal_entries` مع `je.status = 'posted'`
+- تم تطبيق فلترة الفواتير اليتيمة في `expenses` و `supplier_invoices`
+
+### 🔴 المشاكل الحرجة
+- `/ar/summary` يستخدم `journal_entry_lines` (جدول غير موجود)
+- `/customers/aging` يستخدم `invoices` مباشرة بدلاً من `journal_entries`
+
+### ⚠️ المشاكل المحتملة
+- شاشة العملاء تستخدم `invoices` و `payments` مباشرة
+- شاشة الموردين تستخدم `supplier_invoices` مباشرة
+- شاشة المصروفات تستخدم `expenses` مباشرة
+- شاشة المبيعات تستخدم `invoices` مباشرة
+
+---
+
+**تم إنشاء التقرير:** 2026-01-22  
+**آخر تحديث:** 2026-01-22

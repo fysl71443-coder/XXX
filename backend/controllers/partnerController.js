@@ -129,12 +129,13 @@ export async function balance(req, res) {
     const accountId = partnerRows[0].account_id;
     
     // Calculate balance from posted journal entries only
+    // CRITICAL: Use journal_postings (not journal_entry_lines which doesn't exist)
     const { rows: balanceRows } = await pool.query(`
       SELECT 
-        COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0) as balance
-      FROM journal_entry_lines jel
-      JOIN journal_entries je ON jel.entry_id = je.id
-      WHERE jel.account_id = $1 AND je.status = 'posted'
+        COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) as balance
+      FROM journal_postings jp
+      JOIN journal_entries je ON jp.journal_entry_id = je.id
+      WHERE jp.account_id = $1 AND je.status = 'posted'
     `, [accountId]);
     
     const balance = parseFloat(balanceRows[0]?.balance || 0);
@@ -170,14 +171,15 @@ export async function statement(req, res) {
     const partnerName = partnerRows[0].name;
     
     // Calculate opening balance (before from date)
+    // CRITICAL: Use journal_postings (not journal_entry_lines which doesn't exist)
     let openingBalance = 0;
     if (from) {
       const { rows: openingRows } = await pool.query(`
         SELECT 
-          COALESCE(SUM(jel.debit), 0) - COALESCE(SUM(jel.credit), 0) as balance
-        FROM journal_entry_lines jel
-        JOIN journal_entries je ON jel.entry_id = je.id
-        WHERE jel.account_id = $1 
+          COALESCE(SUM(jp.debit), 0) - COALESCE(SUM(jp.credit), 0) as balance
+        FROM journal_postings jp
+        JOIN journal_entries je ON jp.journal_entry_id = je.id
+        WHERE jp.account_id = $1 
           AND je.status = 'posted'
           AND je.date < $2
       `, [accountId, from]);
@@ -185,6 +187,7 @@ export async function statement(req, res) {
     }
     
     // Build query for statement items
+    // CRITICAL: Use journal_postings (not journal_entry_lines which doesn't exist)
     let query = `
       SELECT 
         je.id as entry_id,
@@ -193,11 +196,11 @@ export async function statement(req, res) {
         je.description,
         je.reference_type,
         je.reference_id,
-        jel.debit,
-        jel.credit
-      FROM journal_entry_lines jel
-      JOIN journal_entries je ON jel.entry_id = je.id
-      WHERE jel.account_id = $1 AND je.status = 'posted'
+        jp.debit,
+        jp.credit
+      FROM journal_postings jp
+      JOIN journal_entries je ON jp.journal_entry_id = je.id
+      WHERE jp.account_id = $1 AND je.status = 'posted'
     `;
     const params = [accountId];
     let paramIndex = 2;
