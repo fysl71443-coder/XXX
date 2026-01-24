@@ -14,6 +14,7 @@ import { pool } from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
 import { authorize } from "./middleware/authorize.js";
 import { checkAccountingPeriod } from "./middleware/checkAccountingPeriod.js";
+import { validateFiscalYear } from "./middleware/fiscalYearCheck.js";
 import { isAdminUser } from "./utils/auth.js";
 import { cache } from "./utils/cache.js";
 import routes from "./routes/index.js";
@@ -1756,7 +1757,7 @@ app.get("/api/journal/:id", authenticateToken, authorize("journal", "view"), asy
 });
 
 // Create journal entry (draft)
-app.post("/journal", authenticateToken, authorize("journal", "create"), async (req, res) => {
+app.post("/journal", authenticateToken, authorize("journal", "create"), validateFiscalYear('body.date'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -1830,7 +1831,7 @@ app.post("/journal", authenticateToken, authorize("journal", "create"), async (r
   }
 });
 
-app.post("/api/journal", authenticateToken, authorize("journal", "create"), async (req, res) => {
+app.post("/api/journal", authenticateToken, authorize("journal", "create"), validateFiscalYear('body.date'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -4971,7 +4972,7 @@ app.get("/api/expenses/:id", authenticateToken, async (req, res) => {
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
   }
 });
-app.post("/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
+app.post("/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), validateFiscalYear('body.date'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -5127,7 +5128,7 @@ app.post("/expenses", authenticateToken, authorize("expenses","create", { branch
     client.release();
   }
 });
-app.post("/api/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
+app.post("/api/expenses", authenticateToken, authorize("expenses","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), validateFiscalYear('body.date'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
@@ -6704,7 +6705,7 @@ app.post("/invoices", authenticateToken, authorize("sales","create", { branchFro
     client.release();
   }
 });
-app.post("/api/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
+app.post("/api/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), validateFiscalYear('body.date'), async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
