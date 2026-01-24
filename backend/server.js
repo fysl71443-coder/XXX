@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import pg from "pg";
 import compression from "compression";
 import rateLimit from "express-rate-limit";
+import { withTransaction } from "./utils/transaction.js";
 import { createAdmin } from "./createAdmin.js";
 import { pool } from "./db.js";
 import { authenticateToken } from "./middleware/auth.js";
