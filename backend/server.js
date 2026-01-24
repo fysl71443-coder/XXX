@@ -2203,6 +2203,85 @@ app.post("/api/journal/:id/return-to-draft", authenticateToken, authorize("journ
   }
 });
 
+// Reverse journal entry - Create reverse journal entry to cancel the effect
+app.post("/api/journal/:id/reverse", authenticateToken, authorize("journal", "reverse"), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const id = Number(req.params.id || 0);
+    
+    // Get journal entry with postings
+    const { rows: entryRows } = await client.query(
+      'SELECT id, entry_number, description, date, status, reference_type, reference_id, branch FROM journal_entries WHERE id = $1',
+      [id]
+    );
+    
+    if (!entryRows || entryRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Journal entry not found" });
+    }
+    
+    const entry = entryRows[0];
+    
+    // Only allow reversing posted entries
+    if (entry.status !== 'posted') {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "invalid_status", details: "Only posted entries can be reversed" });
+    }
+    
+    // Get original postings
+    const { rows: postingRows } = await client.query(
+      'SELECT account_id, debit, credit FROM journal_postings WHERE journal_entry_id = $1',
+      [id]
+    );
+    
+    if (!postingRows || postingRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: "no_postings", details: "Journal entry has no postings" });
+    }
+    
+    // Create reverse entry - swap debit and credit
+    const entryNumber = await getNextEntryNumber();
+    const reverseDescription = `عكس ${entry.description || `قيد #${entry.entry_number}`}`;
+    
+    const { rows: reverseEntryRows } = await client.query(
+      `INSERT INTO journal_entries(entry_number, description, date, reference_type, reference_id, status, branch)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, entry_number`,
+      [entryNumber, reverseDescription, entry.date || new Date(), entry.reference_type || 'reversal', entry.reference_id || id, 'posted', entry.branch || null]
+    );
+    
+    const reverseEntryId = reverseEntryRows && reverseEntryRows[0] ? reverseEntryRows[0].id : null;
+    
+    if (!reverseEntryId) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "create_failed", details: "Failed to create reverse journal entry" });
+    }
+    
+    // Create reverse postings (swap debit and credit)
+    for (const posting of postingRows) {
+      await client.query(
+        `INSERT INTO journal_postings(journal_entry_id, account_id, debit, credit)
+         VALUES ($1, $2, $3, $4)`,
+        [reverseEntryId, posting.account_id, posting.credit, posting.debit] // Swapped
+      );
+    }
+    
+    // Mark original entry as reversed (optional - you can keep it as 'posted' or add a 'reversed' status)
+    // For now, we'll keep it as 'posted' and the reverse entry will cancel its effect
+    
+    await client.query('COMMIT');
+    
+    console.log(`[JOURNAL] Created reverse entry ${reverseEntryId} (entry_number: ${entryNumber}) for journal entry ${id}`);
+    res.json({ ok: true, reverse_entry_id: reverseEntryId, reverse_entry_number: entryNumber });
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[JOURNAL] Error reversing entry:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+
 // Delete journal entry
 app.delete("/journal/:id", authenticateToken, authorize("journal", "delete"), async (req, res) => {
   const client = await pool.connect();
