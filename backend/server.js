@@ -8364,6 +8364,12 @@ app.get("/journal/account/:id", authenticateToken, authorize("journal","view"), 
       params.push(to);
     }
     
+    // Optional filter: exclude opening balance entries for operational reports only
+    const excludeOpening = req.query.exclude_opening === 'true' || req.query.operational_only === 'true';
+    if (excludeOpening) {
+      query += ` AND (je.reference_type IS NULL OR je.reference_type != 'opening')`;
+    }
+    
     query += ` ORDER BY je.date DESC, je.entry_number DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
     params.push(limit, offset);
     
@@ -8396,6 +8402,9 @@ app.get("/api/journal/account/:id", authenticateToken, authorize("journal","view
     const limit = Math.min(Number(pageSize) || 20, 500);
     const offset = (Number(page) || 1 - 1) * limit;
     
+    // Optional filter: exclude opening balance entries for operational reports only
+    const excludeOpening = req.query.exclude_opening === 'true' || req.query.operational_only === 'true';
+    
     let query = `
       SELECT jp.id, jp.journal_entry_id, jp.account_id, jp.debit, jp.credit,
              je.entry_number, je.description, je.date, je.status,
@@ -8415,6 +8424,9 @@ app.get("/api/journal/account/:id", authenticateToken, authorize("journal","view
     if (to) {
       query += ` AND je.date <= $${paramIndex++}`;
       params.push(to);
+    }
+    if (excludeOpening) {
+      query += ` AND (je.reference_type IS NULL OR je.reference_type != 'opening')`;
     }
     
     query += ` ORDER BY je.date DESC, je.entry_number DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++}`;
@@ -8448,6 +8460,9 @@ app.get("/reports/trial-balance", authenticateToken, authorize("reports","view")
   try {
     const { from, to, period } = req.query || {};
     
+    // Optional filter: exclude opening balance entries for operational reports only
+    const excludeOpening = req.query.exclude_opening === 'true' || req.query.operational_only === 'true';
+    
     let query = `
       SELECT 
         a.id as account_id,
@@ -8463,6 +8478,11 @@ app.get("/reports/trial-balance", authenticateToken, authorize("reports","view")
       WHERE 1=1
     `;
     const params = [from || '1970-01-01', to || null];
+    
+    // Add filter to exclude opening balance entries if requested
+    if (excludeOpening) {
+      query += ` AND (je.reference_type IS NULL OR je.reference_type != 'opening')`;
+    }
     
     query += ` GROUP BY a.id, a.account_number, a.name
                HAVING COALESCE(SUM(jp.debit), 0) + COALESCE(SUM(jp.credit), 0) > 0
@@ -8512,6 +8532,9 @@ app.get("/api/reports/trial-balance", authenticateToken, authorize("reports","vi
     // Use a very early date as default for beginning balance calculation if fromDate is null
     const effectiveFromDate = fromDate || '1970-01-01';
     
+    // Optional filter: exclude opening balance entries for operational reports only
+    const excludeOpening = req.query.exclude_opening === 'true' || req.query.operational_only === 'true';
+    
     let query = `
       SELECT 
         a.id as account_id,
@@ -8530,6 +8553,11 @@ app.get("/api/reports/trial-balance", authenticateToken, authorize("reports","vi
       WHERE 1=1
     `;
     const params = [effectiveFromDate, toDate];
+    
+    // Add filter to exclude opening balance entries if requested
+    if (excludeOpening) {
+      query += ` AND (je.reference_type IS NULL OR je.reference_type != 'opening')`;
+    }
     
     query += ` GROUP BY a.id, a.account_number, a.name
                HAVING COALESCE(SUM(jp.debit), 0) + COALESCE(SUM(jp.credit), 0) > 0
@@ -8752,6 +8780,9 @@ app.get("/api/reports/sales-by-branch", authenticateToken, authorize("reports","
       return res.json({ items: [], totals: { invoice_count: 0, total_sales: 0, gross_total: 0, net_total: 0, tax_total: 0, discount_total: 0 } });
     }
     
+    // Optional filter: exclude opening balance entries for operational reports only
+    const excludeOpening = req.query.exclude_opening === 'true' || req.query.operational_only === 'true';
+    
     // Build query using journal entries (posted only)
     whereConditions.push(`je.status = 'posted'`);
     whereConditions.push(`jp.account_id = ANY($${paramIndex++}::int[])`);
@@ -8768,6 +8799,9 @@ app.get("/api/reports/sales-by-branch", authenticateToken, authorize("reports","
     if (branch && branch !== 'كل الفروع') {
       whereConditions.push(`je.branch = $${paramIndex++}`);
       params.push(branch);
+    }
+    if (excludeOpening) {
+      whereConditions.push(`(je.reference_type IS NULL OR je.reference_type != 'opening')`);
     }
     
     // Get sales from journal entries - credit side of sales accounts
