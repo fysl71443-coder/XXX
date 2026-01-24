@@ -6270,6 +6270,20 @@ async function createSupplierInvoiceJournalEntry(invoiceId, supplierId, subtotal
 async function handleCreateSupplierInvoice(req, res) {
   const client = await pool.connect();
   try {
+    // CRITICAL: Validate fiscal year before creating invoice
+    const { checkFiscalYearForDate } = await import('./middleware/fiscalYearCheck.js');
+    const date = req.body?.date;
+    if (date) {
+      const fiscalCheck = await checkFiscalYearForDate(date);
+      if (!fiscalCheck.canCreate) {
+        return res.status(403).json({
+          error: 'fiscal_year_closed',
+          message: fiscalCheck.reason || 'السنة المالية مغلقة',
+          fiscalYear: fiscalCheck.fiscalYear
+        });
+      }
+    }
+    
     await client.query('BEGIN');
     
     console.log('[SUPPLIER INVOICE] Creating invoice | userId=', req.user?.id, 'email=', req.user?.email);
