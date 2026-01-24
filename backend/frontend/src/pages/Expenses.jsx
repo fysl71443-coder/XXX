@@ -590,33 +590,53 @@ export default function Expenses(){
       }
       
       if (editingId) {
-        await apiExpenses.update(editingId, payload)
-        setToast(lang==='ar'?'تم تعديل الفاتورة':'Invoice updated')
-        setEditingId(null)
+        try {
+          await apiExpenses.update(editingId, payload)
+          setToast(lang==='ar'?'تم تعديل فاتورة المصروف بنجاح':'Expense invoice updated successfully')
+          setEditingId(null)
+        } catch (updateError) {
+          console.error('[Expenses] Error updating expense:', updateError)
+          const errorDetails = updateError?.response?.data?.details || updateError?.response?.data?.error || updateError?.message || 'unknown'
+          setError(lang==='ar'?`فشل تعديل فاتورة المصروف: ${errorDetails}`:`Failed to update expense invoice: ${errorDetails}`)
+          return
+        }
       } else {
         // ✅ Backend handles: create as draft → post automatically → delete if posting fails
         try {
           const createdExpense = await apiExpenses.create(payload)
           
-          if (!createdExpense || !createdExpense.id) {
-            setError(lang==='ar'?'فشل إنشاء المصروف':'Failed to create expense')
+          // CRITICAL: Check if response is valid - it should be an object with id
+          if (!createdExpense) {
+            setError(lang==='ar'?'فشل إنشاء المصروف: لم يتم استلام استجابة من الخادم':'Failed to create expense: No response from server')
             return
           }
+          
+          // Check if response has id (could be nested in data property or directly)
+          const expenseId = createdExpense.id || createdExpense.data?.id || null
+          if (!expenseId) {
+            console.error('[Expenses] Invalid response structure:', createdExpense)
+            setError(lang==='ar'?'فشل إنشاء المصروف: استجابة غير صحيحة من الخادم':'Failed to create expense: Invalid server response')
+            return
+          }
+          
+          // Use the expense object (normalize if needed)
+          const expense = createdExpense.id ? createdExpense : (createdExpense.data || createdExpense)
           
           // ✅ Backend already posted the expense automatically
           // If posting failed, backend deleted the expense and returned error
           // Check both status and journal_entry_id to confirm posting
-          const isPosted = createdExpense.status === 'posted' || createdExpense.journal_entry_id != null
+          const isPosted = expense.status === 'posted' || expense.journal_entry_id != null
           
           if (isPosted) {
             setToast(lang==='ar'?'تم إنشاء وترحيل المصروف بنجاح':'Expense created and posted successfully')
           } else {
             // If expense was created but not posted, show warning (should not happen with autoPost=true)
-            console.warn('[Expenses] Expense created but not posted:', createdExpense)
+            console.warn('[Expenses] Expense created but not posted:', expense)
             setToast(lang==='ar'?'تم إنشاء المصروف':'Expense created')
           }
         } catch (createError) {
           // Backend already deleted expense if posting failed
+          console.error('[Expenses] Error creating expense:', createError)
           const errorDetails = createError?.response?.data?.details || createError?.response?.data?.error || createError?.message || 'unknown'
           setError(lang==='ar'?`فشل إنشاء/ترحيل المصروف: ${errorDetails}`:`Failed to create/post expense: ${errorDetails}`)
           return

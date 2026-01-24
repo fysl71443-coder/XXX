@@ -301,7 +301,10 @@ export async function request(path, options = {}) {
                             path.includes('/pos/issueInvoice') ||
                             path.includes('/pos/issue-invoice') ||
                             path.includes('/issueInvoice') ||
-                            (/^\/invoices\/\d+$/.test(path) && !path.includes('?')); // Single invoice GET like /invoices/12
+                            (path.includes('/expenses') && method === 'POST') || // POST /expenses returns single expense object
+                            (path.includes('/expenses/') && method !== 'GET') || // PUT/DELETE/POST /expenses/:id returns object
+                            (/^\/invoices\/\d+$/.test(path) && !path.includes('?')) || // Single invoice GET like /invoices/12
+                            (/^\/expenses\/\d+$/.test(path) && !path.includes('?')); // Single expense GET like /expenses/12
     if (isObjectResponse) {
       // These endpoints return objects (e.g., { token, user, ... }) - return as-is
       return response.data;

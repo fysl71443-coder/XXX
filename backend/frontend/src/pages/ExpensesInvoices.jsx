@@ -68,21 +68,33 @@ export default function ExpensesInvoices(){
   useEffect(()=>{ setSelectedIds(prev => prev.filter(id => (list||[]).some(r => r.id === id))) },[list])
 
   async function handleAction(action, id) {
-    if (!window.confirm(lang === 'ar' ? 'هل أنت متأكد؟' : 'Are you sure?')) return
+    const actionLabels = {
+      delete: { ar: 'حذف', en: 'delete' },
+      post: { ar: 'ترحيل', en: 'post' },
+      reverse: { ar: 'عكس', en: 'reverse' }
+    }
+    const label = actionLabels[action] || { ar: 'تنفيذ', en: 'execute' }
+    if (!window.confirm(lang === 'ar' ? `هل أنت متأكد من ${label.ar} فاتورة المصروف؟` : `Are you sure you want to ${label.en} this expense invoice?`)) return
     try {
-      if (action === 'delete') await apiExpenses.remove(id)
-      if (action === 'post') await apiExpenses.post(id)
-      if (action === 'reverse') await apiExpenses.reverse(id)
-      
-      setToast(lang === 'ar' ? 'تمت العملية بنجاح' : 'Operation successful')
+      if (action === 'delete') {
+        await apiExpenses.remove(id)
+        setToast(lang === 'ar' ? 'تم حذف فاتورة المصروف بنجاح' : 'Expense invoice deleted successfully')
+      } else if (action === 'post') {
+        await apiExpenses.post(id)
+        setToast(lang === 'ar' ? 'تم ترحيل فاتورة المصروف بنجاح' : 'Expense invoice posted successfully')
+      } else if (action === 'reverse') {
+        await apiExpenses.reverse(id)
+        setToast(lang === 'ar' ? 'تم عكس فاتورة المصروف بنجاح' : 'Expense invoice reversed successfully')
+      }
       setTimeout(() => setToast(''), 3000)
       const res = await apiExpenses.list(filters)
-      setList(res || [])
+      setList(res?.items || res || [])
     } catch (err) {
-      console.error(err)
-      const msg = err.response?.data?.error || err.code || err.message || 'unknown_error'
-      setToast(lang === 'ar' ? 'فشلت العملية: ' + msg : 'Operation failed: ' + msg)
-      setTimeout(() => setToast(''), 3000)
+      console.error('[ExpensesInvoices] Error in handleAction:', err)
+      const errorDetails = err?.response?.data?.details || err?.response?.data?.error || err?.message || 'unknown_error'
+      const actionLabel = actionLabels[action] || { ar: 'العملية', en: 'operation' }
+      setToast(lang === 'ar' ? `فشل ${actionLabel.ar} فاتورة المصروف: ${errorDetails}` : `Failed to ${label.en} expense invoice: ${errorDetails}`)
+      setTimeout(() => setToast(''), 5000)
     }
   }
 
