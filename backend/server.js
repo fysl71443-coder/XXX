@@ -622,6 +622,11 @@ async function ensureSchema() {
     await pool.query('ALTER TABLE expenses ADD COLUMN IF NOT EXISTS invoice_number TEXT');
     await pool.query('ALTER TABLE expenses ADD COLUMN IF NOT EXISTS total NUMERIC(18,2) DEFAULT 0');
     await pool.query('ALTER TABLE expenses ADD COLUMN IF NOT EXISTS items JSONB');
+    // CRITICAL: Add journal_entry_id column for linking expenses to journal entries
+    await pool.query(`
+      ALTER TABLE expenses 
+      ADD COLUMN IF NOT EXISTS journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE SET NULL
+    `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS supplier_invoices (
         id SERIAL PRIMARY KEY,
@@ -639,9 +644,15 @@ async function ensureSchema() {
         payment_method TEXT,
         status TEXT DEFAULT 'draft',
         branch TEXT,
+        journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE SET NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
+    `);
+    // CRITICAL: Add journal_entry_id column if it doesn't exist (for existing databases)
+    await pool.query(`
+      ALTER TABLE supplier_invoices 
+      ADD COLUMN IF NOT EXISTS journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE SET NULL
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS invoices (
@@ -659,9 +670,15 @@ async function ensureSchema() {
         payment_method TEXT,
         status TEXT DEFAULT 'draft',
         branch TEXT,
+        journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE SET NULL,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       )
+    `);
+    // CRITICAL: Add journal_entry_id column if it doesn't exist (for existing databases)
+    await pool.query(`
+      ALTER TABLE invoices 
+      ADD COLUMN IF NOT EXISTS journal_entry_id INTEGER REFERENCES journal_entries(id) ON DELETE SET NULL
     `);
     await pool.query(`
       CREATE TABLE IF NOT EXISTS orders (
@@ -4515,18 +4532,46 @@ app.post("/api/payroll/run/:id/post", authenticateToken, authorize("payroll","po
 
 // DELETE /api/payroll/run/:id - Delete a payroll run
 app.delete("/api/payroll/run/:id", authenticateToken, authorize("payroll","delete"), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const runId = Number(req.params.id || 0);
-    const { rows: check } = await pool.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
-    if (!check.length) return res.status(404).json({ error: 'not_found' });
-    if (check[0].journal_entry_id) return res.status(400).json({ error: 'cannot_delete_posted' });
     
-    await pool.query('DELETE FROM payroll_run_items WHERE run_id = $1', [runId]);
-    await pool.query('DELETE FROM payroll_runs WHERE id = $1', [runId]);
+    const { rows: check } = await client.query('SELECT * FROM payroll_runs WHERE id = $1', [runId]);
+    if (!check.length) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'not_found' });
+    }
+    
+    const payrollRun = check[0];
+    const journalEntryId = payrollRun.journal_entry_id;
+    
+    // CRITICAL: If payroll run is posted, delete journal entry first
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    if (payrollRun.status === 'posted' && journalEntryId) {
+      console.log(`[PAYROLL] Deleting posted payroll run ${runId}, removing journal entry ${journalEntryId}`);
+      
+      // Delete journal postings first (foreign key constraint)
+      await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [journalEntryId]);
+      
+      // Delete journal entry
+      await client.query('DELETE FROM journal_entries WHERE id = $1', [journalEntryId]);
+      
+      console.log(`[PAYROLL] Deleted journal entry ${journalEntryId} for payroll run ${runId}`);
+    }
+    
+    // Delete payroll run items and run
+    await client.query('DELETE FROM payroll_run_items WHERE run_id = $1', [runId]);
+    await client.query('DELETE FROM payroll_runs WHERE id = $1', [runId]);
+    
+    await client.query('COMMIT');
     res.json({ ok: true });
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[PAYROLL] Error deleting run:', e);
-    res.status(500).json({ error: "server_error" });
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
   }
 });
 
@@ -5952,6 +5997,13 @@ async function handleGetSupplierInvoices(req, res) {
       params.push(branch);
     }
     
+    // CRITICAL: Filter out orphaned supplier invoices (posted/reversed without journal_entry_id)
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    whereConditions.push(`NOT (
+      (si.status = 'posted' OR si.status = 'reversed')
+      AND si.journal_entry_id IS NULL
+    )`);
+    
     const query = `
       SELECT 
         si.id,
@@ -6340,26 +6392,79 @@ app.post("/supplier-invoices/:id/post", authenticateToken, authorize("purchases"
 app.post("/api/supplier-invoices/:id/post", authenticateToken, authorize("purchases","edit"), handlePostSupplierInvoice);
 
 async function handleDeleteSupplierInvoice(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id||0);
-    await pool.query('DELETE FROM supplier_invoices WHERE id=$1', [id]);
+    
+    // Get supplier invoice to check journal_entry_id
+    const { rows: invoiceRows } = await client.query('SELECT id, status, journal_entry_id FROM supplier_invoices WHERE id = $1', [id]);
+    if (!invoiceRows || !invoiceRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Supplier invoice not found" });
+    }
+    
+    const invoice = invoiceRows[0];
+    const journalEntryId = invoice.journal_entry_id;
+    
+    // CRITICAL: If invoice is posted, delete journal entry first
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    if (invoice.status === 'posted' && journalEntryId) {
+      console.log(`[SUPPLIER INVOICES] Deleting posted invoice ${id}, removing journal entry ${journalEntryId}`);
+      
+      // Delete journal postings first (foreign key constraint)
+      await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [journalEntryId]);
+      
+      // Delete journal entry
+      await client.query('DELETE FROM journal_entries WHERE id = $1', [journalEntryId]);
+      
+      console.log(`[SUPPLIER INVOICES] Deleted journal entry ${journalEntryId} for supplier invoice ${id}`);
+    }
+    
+    // Delete supplier invoice
+    await client.query('DELETE FROM supplier_invoices WHERE id=$1', [id]);
+    
+    await client.query('COMMIT');
     res.json({ ok: true, id });
   } catch (e) { 
+    await client.query('ROLLBACK');
     console.error('[SUPPLIER INVOICES] Error deleting:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+  } finally {
+    client.release();
   }
 }
 app.delete("/supplier-invoices/:id", authenticateToken, authorize("purchases","delete"), handleDeleteSupplierInvoice);
 app.delete("/api/supplier-invoices/:id", authenticateToken, authorize("purchases","delete"), handleDeleteSupplierInvoice);
 app.get("/invoices", authenticateToken, authorize("sales","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at FROM invoices ORDER BY id DESC');
+    // CRITICAL: Filter out orphaned invoices (posted/reversed/open/partial without journal_entry_id)
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    const { rows } = await pool.query(`
+      SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at 
+      FROM invoices 
+      WHERE NOT (
+        (status = 'posted' OR status = 'reversed' OR status = 'open' OR status = 'partial')
+        AND journal_entry_id IS NULL
+      )
+      ORDER BY id DESC
+    `);
     res.json({ items: rows || [] });
   } catch (e) { res.json({ items: [] }); }
 });
 app.get("/api/invoices", authenticateToken, authorize("sales","view", { branchFrom: r => (r.query.branch || null) }), async (req, res) => {
   try {
-    const { rows } = await pool.query('SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at FROM invoices ORDER BY id DESC');
+    // CRITICAL: Filter out orphaned invoices (posted/reversed/open/partial without journal_entry_id)
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    const { rows } = await pool.query(`
+      SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, journal_entry_id, created_at 
+      FROM invoices 
+      WHERE NOT (
+        (status = 'posted' OR status = 'reversed' OR status = 'open' OR status = 'partial')
+        AND journal_entry_id IS NULL
+      )
+      ORDER BY id DESC
+    `);
     res.json({ items: rows || [] });
   } catch (e) { res.json({ items: [] }); }
 });
@@ -6388,33 +6493,168 @@ app.get("/invoices/next-number", authenticateToken, authorize("sales","create"),
   } catch (e) { res.json({ next: null }); }
 });
 app.post("/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const b = req.body || {};
     const lines = Array.isArray(b.lines) ? b.lines : [];
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const invoiceType = b.type || 'sale'; // Default to 'sale' for sales invoices
-    const { rows } = await pool.query(
+    const status = String(b.status||'draft');
+    const subtotal = Number(b.subtotal||0);
+    const discount_amount = Number(b.discount_amount||0);
+    const tax_amount = Number(b.tax_amount||0);
+    const total = Number(b.total||0);
+    const customer_id = b.customer_id || null;
+    const payment_method = b.payment_method || null;
+    
+    const { rows } = await client.query(
       'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, type) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch, type',
-      [b.number||null, b.date||null, b.customer_id||null, lines, Number(b.subtotal||0), Number(b.discount_pct||0), Number(b.discount_amount||0), Number(b.tax_pct||0), Number(b.tax_amount||0), Number(b.total||0), b.payment_method||null, String(b.status||'draft'), branch, invoiceType]
+      [b.number||null, b.date||null, customer_id, lines, subtotal, Number(b.discount_pct||0), discount_amount, Number(b.tax_pct||0), tax_amount, total, payment_method, status, branch, invoiceType]
     );
-    res.json(rows && rows[0]);
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
-});
-app.post("/api/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
-  try {
-    const b = req.body || {};
-    const lines = Array.isArray(b.lines) ? b.lines : [];
-    const branch = b.branch || req.user?.default_branch || 'china_town';
-    const invoiceType = b.type || 'sale'; // Default to 'sale' for sales invoices
-    const linesJson = lines.length > 0 ? JSON.stringify(lines) : null;
-    const { rows } = await pool.query(
-      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, type) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch, type',
-      [b.number||null, b.date||null, b.customer_id||null, linesJson, Number(b.subtotal||0), Number(b.discount_pct||0), Number(b.discount_amount||0), Number(b.tax_pct||0), Number(b.tax_amount||0), Number(b.total||0), b.payment_method||null, String(b.status||'draft'), branch, invoiceType]
+    
+    const invoice = rows && rows[0];
+    if (!invoice) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "server_error", details: "Failed to create invoice" });
+    }
+    
+    // CRITICAL: Create journal entry automatically if status='posted' and total>0
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    let journalEntryId = null;
+    if (status === 'posted' && total > 0) {
+      try {
+        journalEntryId = await createInvoiceJournalEntry(
+          invoice.id,
+          customer_id,
+          subtotal,
+          discount_amount,
+          tax_amount,
+          total,
+          payment_method,
+          branch,
+          client // Pass client for transaction
+        );
+        
+        // CRITICAL: Link journal entry to invoice
+        if (journalEntryId) {
+          await client.query(
+            'UPDATE invoices SET journal_entry_id = $1 WHERE id = $2',
+            [journalEntryId, invoice.id]
+          );
+          console.log(`[ACCOUNTING] Linked journal entry ${journalEntryId} to invoice ${invoice.id}`);
+        } else {
+          throw new Error('JOURNAL_CREATION_FAILED: Journal entry ID is null after creation');
+        }
+      } catch (journalError) {
+        console.error('[ACCOUNTING] CRITICAL: Failed to create journal entry for invoice:', invoice.id, journalError);
+        await client.query('ROLLBACK');
+        return res.status(500).json({ 
+          error: "journal_creation_failed", 
+          details: journalError?.message || "Failed to create journal entry for invoice",
+          invoice_id: invoice.id
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch complete invoice with journal_entry_id
+    const { rows: finalRows } = await client.query(
+      'SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, type, journal_entry_id, created_at FROM invoices WHERE id = $1',
+      [invoice.id]
     );
-    res.json(rows && rows[0]);
+    
+    res.status(201).json(finalRows && finalRows[0] || invoice);
   } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[INVOICES] Error creating invoice:', e);
     res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
+});
+app.post("/api/invoices", authenticateToken, authorize("sales","create", { branchFrom: r => (r.body?.branch || null) }), checkAccountingPeriod(), async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const b = req.body || {};
+    const lines = Array.isArray(b.lines) ? b.lines : [];
+    const branch = b.branch || req.user?.default_branch || 'china_town';
+    const invoiceType = b.type || 'sale'; // Default to 'sale' for sales invoices
+    const status = String(b.status||'draft');
+    const subtotal = Number(b.subtotal||0);
+    const discount_amount = Number(b.discount_amount||0);
+    const tax_amount = Number(b.tax_amount||0);
+    const total = Number(b.total||0);
+    const customer_id = b.customer_id || null;
+    const payment_method = b.payment_method || null;
+    const linesJson = lines.length > 0 ? JSON.stringify(lines) : null;
+    
+    const { rows } = await client.query(
+      'INSERT INTO invoices(number, date, customer_id, lines, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, type) VALUES ($1,$2,$3,$4::jsonb,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, number, status, total, branch, type',
+      [b.number||null, b.date||null, customer_id, linesJson, subtotal, Number(b.discount_pct||0), discount_amount, Number(b.tax_pct||0), tax_amount, total, payment_method, status, branch, invoiceType]
+    );
+    
+    const invoice = rows && rows[0];
+    if (!invoice) {
+      await client.query('ROLLBACK');
+      return res.status(500).json({ error: "server_error", details: "Failed to create invoice" });
+    }
+    
+    // CRITICAL: Create journal entry automatically if status='posted' and total>0
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    let journalEntryId = null;
+    if (status === 'posted' && total > 0) {
+      try {
+        journalEntryId = await createInvoiceJournalEntry(
+          invoice.id,
+          customer_id,
+          subtotal,
+          discount_amount,
+          tax_amount,
+          total,
+          payment_method,
+          branch,
+          client // Pass client for transaction
+        );
+        
+        // CRITICAL: Link journal entry to invoice
+        if (journalEntryId) {
+          await client.query(
+            'UPDATE invoices SET journal_entry_id = $1 WHERE id = $2',
+            [journalEntryId, invoice.id]
+          );
+          console.log(`[ACCOUNTING] Linked journal entry ${journalEntryId} to invoice ${invoice.id}`);
+        } else {
+          throw new Error('JOURNAL_CREATION_FAILED: Journal entry ID is null after creation');
+        }
+      } catch (journalError) {
+        console.error('[ACCOUNTING] CRITICAL: Failed to create journal entry for invoice:', invoice.id, journalError);
+        await client.query('ROLLBACK');
+        return res.status(500).json({ 
+          error: "journal_creation_failed", 
+          details: journalError?.message || "Failed to create journal entry for invoice",
+          invoice_id: invoice.id
+        });
+      }
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch complete invoice with journal_entry_id
+    const { rows: finalRows } = await client.query(
+      'SELECT id, number, date, customer_id, subtotal, discount_pct, discount_amount, tax_pct, tax_amount, total, payment_method, status, branch, type, journal_entry_id, created_at FROM invoices WHERE id = $1',
+      [invoice.id]
+    );
+    
+    res.status(201).json(finalRows && finalRows[0] || invoice);
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[INVOICES] Error creating invoice:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
   }
 });
 app.put("/api/invoices/:id", authenticateToken, authorize("sales","edit", { branchFrom: r => (r.body?.branch || null) }), async (req, res) => {
@@ -6429,11 +6669,47 @@ app.put("/api/invoices/:id", authenticateToken, authorize("sales","edit", { bran
   } catch (e) { res.status(500).json({ error: "server_error" }); }
 });
 app.delete("/invoices/:id", authenticateToken, authorize("sales","delete"), async (req, res) => {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id||0);
-    await pool.query('DELETE FROM invoices WHERE id=$1', [id]);
+    
+    // Get invoice to check journal_entry_id
+    const { rows: invoiceRows } = await client.query('SELECT id, status, journal_entry_id FROM invoices WHERE id = $1', [id]);
+    if (!invoiceRows || !invoiceRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Invoice not found" });
+    }
+    
+    const invoice = invoiceRows[0];
+    const journalEntryId = invoice.journal_entry_id;
+    
+    // CRITICAL: If invoice is posted, delete journal entry first
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    if ((invoice.status === 'posted' || invoice.status === 'open' || invoice.status === 'partial') && journalEntryId) {
+      console.log(`[INVOICES] Deleting posted invoice ${id}, removing journal entry ${journalEntryId}`);
+      
+      // Delete journal postings first (foreign key constraint)
+      await client.query('DELETE FROM journal_postings WHERE journal_entry_id = $1', [journalEntryId]);
+      
+      // Delete journal entry
+      await client.query('DELETE FROM journal_entries WHERE id = $1', [journalEntryId]);
+      
+      console.log(`[INVOICES] Deleted journal entry ${journalEntryId} for invoice ${id}`);
+    }
+    
+    // Delete invoice
+    await client.query('DELETE FROM invoices WHERE id=$1', [id]);
+    
+    await client.query('COMMIT');
     res.json({ ok: true, id });
-  } catch (e) { res.status(500).json({ error: "server_error" }); }
+  } catch (e) {
+    await client.query('ROLLBACK');
+    console.error('[INVOICES] Error deleting:', e);
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
+  }
 });
 app.get("/invoice_items/:id", authenticateToken, authorize("sales","view"), async (req, res) => {
   try {
