@@ -5137,6 +5137,23 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
     const date = b.date || new Date().toISOString().slice(0, 10);
     const paymentMethod = b.payment_method || 'cash';
     
+    // Validate expense data
+    const { validateExpense } = await import('./utils/validators.js');
+    const validation = validateExpense({
+      account_code: accountCode,
+      total: total,
+      status: status,
+      items: items
+    });
+    
+    if (!validation.valid) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: "validation_failed", 
+        details: validation.errors 
+      });
+    }
+    
     // Insert expense
     const itemsJson = items.length > 0 ? JSON.stringify(items) : null;
     const { rows } = await client.query(
@@ -5267,21 +5284,14 @@ app.post("/api/expenses", authenticateToken, authorize("expenses","create", { br
         }
       } catch (journalError) {
         console.error('[EXPENSES] Error creating journal entry:', journalError);
-        // CRITICAL: If auto-post is enabled and journal entry fails, delete expense and return error
-        // Frontend expects expense to be deleted if posting fails
+        // CRITICAL: If auto-post is enabled and journal entry fails, rollback transaction
+        // Rollback automatically cancels the expense insertion, no need to delete manually
         await client.query('ROLLBACK');
-        console.error('[EXPENSES] Auto-post failed, deleting expense', expense.id);
-        // Try to delete expense (outside transaction since we already rolled back)
-        try {
-          await pool.query('DELETE FROM expenses WHERE id = $1', [expense.id]);
-        } catch (deleteErr) {
-          console.error('[EXPENSES] Failed to delete expense after journal error:', deleteErr);
-        }
-        return res.status(500).json({ 
+        console.error('[EXPENSES] Auto-post failed, transaction rolled back');
+        return res.status(400).json({ 
           error: "post_failed", 
           details: journalError?.message || "Failed to create journal entry",
-          code: journalError?.code,
-          detail: journalError?.detail
+          expense_id: expense?.id || null
         });
       }
     }
@@ -6261,6 +6271,27 @@ async function handleCreateSupplierInvoice(req, res) {
       total: b.total 
     }));
     
+    // Validate supplier invoice data
+    const { validateSupplierInvoice } = await import('./utils/validators.js');
+    const validation = validateSupplierInvoice({
+      supplier_id: b.supplier_id || b.partner_id,
+      date: b.date,
+      subtotal: Number(b.subtotal||0),
+      discount_amount: Number(b.discount_amount||0),
+      tax_amount: Number(b.tax_amount||0),
+      total: Number(b.total||0),
+      status: 'posted', // Supplier invoices are always posted
+      lines: Array.isArray(b.lines) ? b.lines : []
+    });
+    
+    if (!validation.valid) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: "validation_failed", 
+        details: validation.errors 
+      });
+    }
+    
     const lines = Array.isArray(b.lines) ? b.lines : [];
     
     // Calculate totals from lines if not provided
@@ -6379,13 +6410,78 @@ app.put("/supplier-invoices/:id", authenticateToken, authorize("purchases","edit
 app.put("/api/supplier-invoices/:id", authenticateToken, authorize("purchases","edit", { branchFrom: r => (r.body?.branch || null) }), handleUpdateSupplierInvoice);
 
 async function handlePostSupplierInvoice(req, res) {
+  const client = await pool.connect();
   try {
+    await client.query('BEGIN');
     const id = Number(req.params.id||0);
-    const { rows } = await pool.query('UPDATE supplier_invoices SET status=$1, updated_at=NOW() WHERE id=$2 RETURNING id, number, status', ['posted', id]);
-    res.json(rows && rows[0]);
-  } catch (e) { 
+    
+    // Get supplier invoice
+    const { rows: invoiceRows } = await client.query(
+      'SELECT id, supplier_id, subtotal, discount_amount, tax_amount, total, payment_method, branch, journal_entry_id FROM supplier_invoices WHERE id = $1',
+      [id]
+    );
+    
+    if (!invoiceRows || !invoiceRows[0]) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: "not_found", details: "Supplier invoice not found" });
+    }
+    
+    const invoice = invoiceRows[0];
+    
+    // CRITICAL: Create journal entry if not exists
+    // Rule: أي عملية أو فاتورة غير مرتبطة بقيد لا يجب أن يكون لها وجود
+    if (!invoice.journal_entry_id && invoice.total > 0) {
+      try {
+        const journalEntryId = await createSupplierInvoiceJournalEntry(
+          invoice.id,
+          invoice.supplier_id,
+          invoice.subtotal,
+          invoice.discount_amount,
+          invoice.tax_amount,
+          invoice.total,
+          invoice.payment_method,
+          invoice.branch,
+          client
+        );
+        
+        await client.query(
+          'UPDATE supplier_invoices SET journal_entry_id = $1, status = $2, updated_at = NOW() WHERE id = $3',
+          [journalEntryId, 'posted', id]
+        );
+        
+        console.log(`[SUPPLIER INVOICES] Posted invoice ${id}, created journal entry ${journalEntryId}`);
+      } catch (journalError) {
+        console.error('[SUPPLIER INVOICES] CRITICAL: Failed to create journal entry for invoice:', invoice.id, journalError);
+        await client.query('ROLLBACK');
+        return res.status(500).json({ 
+          error: "journal_creation_failed", 
+          details: journalError?.message || "Failed to create journal entry for supplier invoice",
+          invoice_id: invoice.id
+        });
+      }
+    } else {
+      // Invoice already has journal entry, just update status
+      await client.query(
+        'UPDATE supplier_invoices SET status = $1, updated_at = NOW() WHERE id = $2',
+        ['posted', id]
+      );
+    }
+    
+    await client.query('COMMIT');
+    
+    // Fetch complete invoice with journal_entry_id
+    const { rows: finalRows } = await client.query(
+      'SELECT id, number, status, journal_entry_id FROM supplier_invoices WHERE id = $1',
+      [id]
+    );
+    
+    res.json(finalRows && finalRows[0]);
+  } catch (e) {
+    await client.query('ROLLBACK');
     console.error('[SUPPLIER INVOICES] Error posting:', e);
-    res.status(500).json({ error: "server_error", details: e?.message || "unknown" }); 
+    res.status(500).json({ error: "server_error", details: e?.message || "unknown" });
+  } finally {
+    client.release();
   }
 }
 app.post("/supplier-invoices/:id/post", authenticateToken, authorize("purchases","edit"), handlePostSupplierInvoice);
@@ -6497,6 +6593,29 @@ app.post("/invoices", authenticateToken, authorize("sales","create", { branchFro
   try {
     await client.query('BEGIN');
     const b = req.body || {};
+    
+    // Validate invoice data
+    const { validateInvoice } = await import('./utils/validators.js');
+    const validation = validateInvoice({
+      number: b.number,
+      date: b.date,
+      subtotal: Number(b.subtotal||0),
+      discount_amount: Number(b.discount_amount||0),
+      tax_amount: Number(b.tax_amount||0),
+      total: Number(b.total||0),
+      status: String(b.status||'draft'),
+      customer_id: b.customer_id,
+      payment_method: b.payment_method
+    });
+    
+    if (!validation.valid) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: "validation_failed", 
+        details: validation.errors 
+      });
+    }
+    
     const lines = Array.isArray(b.lines) ? b.lines : [];
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const invoiceType = b.type || 'sale'; // Default to 'sale' for sales invoices
@@ -6579,6 +6698,29 @@ app.post("/api/invoices", authenticateToken, authorize("sales","create", { branc
   try {
     await client.query('BEGIN');
     const b = req.body || {};
+    
+    // Validate invoice data
+    const { validateInvoice } = await import('./utils/validators.js');
+    const validation = validateInvoice({
+      number: b.number,
+      date: b.date,
+      subtotal: Number(b.subtotal||0),
+      discount_amount: Number(b.discount_amount||0),
+      tax_amount: Number(b.tax_amount||0),
+      total: Number(b.total||0),
+      status: String(b.status||'draft'),
+      customer_id: b.customer_id,
+      payment_method: b.payment_method
+    });
+    
+    if (!validation.valid) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ 
+        error: "validation_failed", 
+        details: validation.errors 
+      });
+    }
+    
     const lines = Array.isArray(b.lines) ? b.lines : [];
     const branch = b.branch || req.user?.default_branch || 'china_town';
     const invoiceType = b.type || 'sale'; // Default to 'sale' for sales invoices
