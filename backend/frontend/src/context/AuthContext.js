@@ -228,15 +228,14 @@ export function AuthProvider({ children }) {
         setToken(tk);
         setPermissionsLoaded(false); // Reset permissions flag
         
-        try {
-          const data = await apiAuth.me();
-          if (!data || !data.id) {
-            throw new Error('Invalid user data from /auth/me');
-          }
-          setUser(data);
+        // CRITICAL: Use user data from login response if available, otherwise fetch from /auth/me
+        const loginUser = r?.user || r;
+        if (loginUser && loginUser.id) {
+          // Use user data from login response directly
+          setUser(loginUser);
           
           // Check if admin - skip permissions load
-          const isAdmin = isAdminUser(data);
+          const isAdmin = isAdminUser(loginUser);
           
           if (isAdmin) {
             console.log('[AuthContext] Admin user logged in - skipping permissions load');
@@ -245,7 +244,7 @@ export function AuthProvider({ children }) {
           } else {
             // Load permissions for non-admin users
             try {
-              const userId = data?.id || data?.user?.id;
+              const userId = loginUser?.id || loginUser?.user?.id;
               if (userId) {
                 console.log('[AuthContext] Loading permissions after login...');
                 const pm = await apiUsers.permissions(userId);
@@ -258,29 +257,47 @@ export function AuthProvider({ children }) {
               setPermissionsLoaded(false);
             }
           }
-          return data;
-        } catch (e) {
-          console.error('[AuthContext] Error in login flow:', e);
-          const fallbackUser = (r && (r.user || r)) || null
-          if (fallbackUser && fallbackUser.id) {
-            setUser(fallbackUser);
-            // Try to load permissions for fallback user
-            try {
-              const userId = fallbackUser?.id || fallbackUser?.user?.id;
-              if (userId) {
-                const pm = await apiUsers.permissions(userId);
-                setPermissionsMap(normalizePerms(pm || {}));
-                setPermissionsLoaded(true);
+          return loginUser;
+        }
+        
+        // Fallback: Try to fetch from /auth/me if user data not in login response
+        try {
+          const data = await apiAuth.me();
+          if (data && data.id) {
+            setUser(data);
+            
+            // Check if admin - skip permissions load
+            const isAdmin = isAdminUser(data);
+            
+            if (isAdmin) {
+              console.log('[AuthContext] Admin user logged in - skipping permissions load');
+              setPermissionsLoaded(true);
+              setPermissionsMap({});
+            } else {
+              // Load permissions for non-admin users
+              try {
+                const userId = data?.id || data?.user?.id;
+                if (userId) {
+                  console.log('[AuthContext] Loading permissions after login...');
+                  const pm = await apiUsers.permissions(userId);
+                  setPermissionsMap(normalizePerms(pm || {}));
+                  setPermissionsLoaded(true);
+                  console.log('[AuthContext] Permissions loaded after login');
+                }
+              } catch (permErr) {
+                console.error('[AuthContext] Error loading permissions after login:', permErr);
+                setPermissionsLoaded(false);
               }
-            } catch {}
-            return fallbackUser;
+            }
+            return data;
           }
-          // Clear token on error
-          localStorage.removeItem('token');
-          localStorage.removeItem('auth_user');
-          setToken(null);
-          setUser(null);
-          throw e;
+        } catch (meErr) {
+          console.warn('[AuthContext] /auth/me failed, using login response data:', meErr);
+          // If /auth/me fails, use login response data if available
+          if (loginUser && loginUser.id) {
+            setUser(loginUser);
+            return loginUser;
+          }
         }
       }
       // No token received - invalid credentials
@@ -298,7 +315,7 @@ export function AuthProvider({ children }) {
       setUser(null);
       
       // Re-throw with proper error code
-      if (err?.response?.data?.error === 'invalid_credentials' || err?.response?.status === 400) {
+      if (err?.response?.data?.error === 'invalid_credentials' || err?.response?.status === 400 || err?.response?.status === 401) {
         const e = new Error('invalid_credentials');
         e.code = 'invalid_credentials';
         e.response = err.response;
